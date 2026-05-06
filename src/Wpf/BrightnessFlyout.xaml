@@ -5,9 +5,10 @@
     xmlns:models="clr-namespace:BrightnessTrayAppWpf.Models"
     xmlns:local="clr-namespace:BrightnessTrayAppWpf"
     xmlns:utils="clr-namespace:BrightnessTrayAppWpf.Wpf.Utils"
+    xmlns:loc="clr-namespace:BrightnessTrayAppWpf.Localization"
     utils:KeyboardFocusBehavior.EnableKeyboardOnlyFocus="True"
     utils:KeyboardFocusBehavior.FocusStyle="{StaticResource KeyboardFocusVisualStyle}"
-    Title="Brightness"
+    Title="{loc:Loc Flyout_WindowTitle}"
     Width="330"
     SizeToContent="Height"
     WindowStyle="None"
@@ -591,13 +592,13 @@
                                     ToolTipService.ShowDuration="{x:Static local:TimeConstants.HardPowerOffTooltipShowDurationMs}">
                                 <Button.Style>
                                     <Style TargetType="Button" BasedOn="{StaticResource MonitorIconToggleStyle}">
-                                        <Setter Property="ToolTip" Value="Toggle control by All Displays"/>
+                                        <Setter Property="ToolTip" Value="{loc:Loc Flyout_MonitorIconToggle_ToggleControlTooltip}"/>
                                         <Style.Triggers>
                                             <DataTrigger Binding="{Binding IsMaster}" Value="True">
-                                                <Setter Property="ToolTip" Value="Sync all displays to master brightness&#x0A;Ctrl+click: sync all displays to the brightest individual"/>
+                                                <Setter Property="ToolTip" Value="{loc:Loc Flyout_MonitorIconToggle_MasterTooltip}"/>
                                             </DataTrigger>
                                             <DataTrigger Binding="{Binding IsNightLight}" Value="True">
-                                                <Setter Property="ToolTip" Value="Toggle night light"/>
+                                                <Setter Property="ToolTip" Value="{loc:Loc Flyout_MonitorIconToggle_NightLightTooltip}"/>
                                             </DataTrigger>
                                             <!-- Warning state.
                                                  Monitor was DDC-capable before but currently isn't responding.
@@ -789,11 +790,11 @@
                                         <Style.Triggers>
                                             <DataTrigger Binding="{Binding IsMaster}" Value="True">
                                                 <Setter Property="Visibility" Value="Visible"/>
-                                                <Setter Property="ToolTip" Value="Toggle brightness curve"/>
+                                                <Setter Property="ToolTip" Value="{loc:Loc Flyout_CurveToggle_BrightnessTooltip}"/>
                                             </DataTrigger>
                                             <DataTrigger Binding="{Binding IsNightLight}" Value="True">
                                                 <Setter Property="Visibility" Value="Visible"/>
-                                                <Setter Property="ToolTip" Value="Toggle night light curve"/>
+                                                <Setter Property="ToolTip" Value="{loc:Loc Flyout_CurveToggle_NightLightTooltip}"/>
                                             </DataTrigger>
                                         </Style.Triggers>
                                     </Style>
@@ -951,7 +952,7 @@
                                         MouseLeave="ProfileButton_PreviewLeave"
                                         GotKeyboardFocus="ProfileButton_PreviewEnter"
                                         LostKeyboardFocus="ProfileButton_PreviewLeave"
-                                        ToolTip="Switch to This Profile">
+                                        ToolTip="{loc:Loc Flyout_ProfileButton_Tooltip}">
                                     <Grid>
                                         <TextBlock Text="{Binding Glyph}"
                                                    FontFamily="Segoe UI"
@@ -989,7 +990,7 @@
                          the glyph opacity tracks dirty state (HasUnsavedChanges) via a DataTrigger. -->
                     <Button Style="{StaticResource ProfileButtonStyle}"
                             Click="SaveProfileButton_Click"
-                            ToolTip="Save to Selected Profile"
+                            ToolTip="{loc:Loc Flyout_SaveProfile_Tooltip}"
                             Visibility="{Binding IsManualSaveButtonVisible, Converter={StaticResource BoolToVisibility}, RelativeSource={RelativeSource AncestorType=Window}}">
                         <Grid>
                             <TextBlock FontFamily="Segoe Fluent Icons"
@@ -1029,7 +1030,7 @@
                          Glyph matches the per-row curve toggles (Equalizer ED3A). -->
                     <Button Style="{StaticResource FooterIconButtonStyle}"
                             Click="EnvironmentalCurvesToggle_Click"
-                            ToolTip="Toggle environmental curves"
+                            ToolTip="{loc:Loc Flyout_EnvironmentalCurvesToggle_Tooltip}"
                             Visibility="{Binding ShowEnvironmentalCurvesButton, Converter={StaticResource BoolToVisibility}, RelativeSource={RelativeSource AncestorType=Window}}">
                         <TextBlock Text="&#xED3A;"
                                    FontFamily="Segoe MDL2 Assets"
@@ -1058,7 +1059,7 @@
 
                     <!-- Footer Power Button (dummy) -->
                     <Button Click="FooterPowerButton_Click"
-                            ToolTip="Power"
+                            ToolTip="{loc:Loc Flyout_FooterPower_Tooltip}"
                             Visibility="{Binding ShowFlyoutFooterPowerButton, Converter={StaticResource BoolToVisibility}}">
                         <Button.Style>
                             <Style TargetType="Button" BasedOn="{StaticResource FooterIconButtonStyle}"/>
@@ -1071,7 +1072,7 @@
 
                     <!-- Display Settings Button -->
                     <Button Click="DisplaySettingsButton_Click"
-                            ToolTip="Display settings"
+                            ToolTip="{loc:Loc Flyout_DisplaySettings_Tooltip}"
                             Visibility="{Binding ShowFlyoutDisplaySettingsButton, Converter={StaticResource BoolToVisibility}}">
                         <Button.Style>
                             <Style TargetType="Button" BasedOn="{StaticResource FooterIconButtonStyle}"/>
@@ -1085,7 +1086,7 @@
                     <!-- Settings Button -->
                     <Button Style="{StaticResource FooterIconButtonStyle}"
                             Click="SettingsButton_Click"
-                            ToolTip="Settings">
+                            ToolTip="{loc:Loc Flyout_Settings_Tooltip}">
                         <TextBlock Text="{DynamicResource GlyphSettings}"
                                    FontFamily="Segoe Fluent Icons"
                                    FontSize="18"
@@ -1118,7 +1119,7 @@
                         MinWidth="260"
                         MaxWidth="290">
                     <StackPanel>
-                        <TextBlock Text="Warning, this action will power off the selected display. This warning will not show again."
+                        <TextBlock Text="{loc:Loc Flyout_HardPowerOff_WarningText}"
                                    Foreground="{DynamicResource ThemeForeground}"
                                    TextWrapping="Wrap"
                                    FontSize="13"
@@ -1126,12 +1127,12 @@
                         <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
                             <Button x:Name="HardPowerOffAbortButton"
                                     Style="{StaticResource SettingsButtonStyle}"
-                                    Content="Abort"
+                                    Content="{loc:Loc Flyout_HardPowerOff_Abort}"
                                     Margin="0,0,8,0"
                                     Click="HardPowerOffAbort_Click"/>
                             <Button x:Name="HardPowerOffConfirmButton"
                                     Style="{StaticResource SettingsButtonStyle}"
-                                    Content="Confirm"
+                                    Content="{loc:Loc Flyout_HardPowerOff_Confirm}"
                                     Click="HardPowerOffConfirm_Click"/>
                         </StackPanel>
                     </StackPanel>
@@ -1160,10 +1161,10 @@
                     Visibility="{Binding AllowFlyoutUndock, Converter={StaticResource BoolToVisibility}}">
                 <Button.Style>
                     <Style TargetType="Button" BasedOn="{StaticResource HeaderIconButtonStyle}">
-                        <Setter Property="ToolTip" Value="Undock"/>
+                        <Setter Property="ToolTip" Value="{loc:Loc Flyout_Undock_Tooltip}"/>
                         <Style.Triggers>
                             <DataTrigger Binding="{Binding IsUndocked, RelativeSource={RelativeSource AncestorType=Window}}" Value="True">
-                                <Setter Property="ToolTip" Value="Redock"/>
+                                <Setter Property="ToolTip" Value="{loc:Loc Flyout_Redock_Tooltip}"/>
                             </DataTrigger>
                         </Style.Triggers>
                     </Style>

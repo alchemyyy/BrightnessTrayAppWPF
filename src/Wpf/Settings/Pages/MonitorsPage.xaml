@@ -8,6 +8,7 @@
     xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
     xmlns:utils1="clr-namespace:BrightnessTrayAppWpf.Wpf.Utils"
+    xmlns:loc="clr-namespace:BrightnessTrayAppWpf.Localization"
     mc:Ignorable="d"
     d:DesignWidth="660"
     d:DesignHeight="594"
@@ -34,7 +35,7 @@
         </Style>
 
         <Style x:Key="MonitorOverrideDwellSpinnerStyle" TargetType="local:NumericSpinner">
-            <Setter Property="Suffix" Value="ms"/>
+            <Setter Property="Suffix" Value="{loc:Loc Settings_Monitors_Milliseconds_Suffix}"/>
             <Setter Property="Minimum" Value="0"/>
             <Setter Property="Maximum" Value="10000"/>
             <Setter Property="WheelStep" Value="10"/>
@@ -42,7 +43,7 @@
         </Style>
 
         <Style x:Key="MonitorOverrideBrightnessSpinnerStyle" TargetType="local:NumericSpinner">
-            <Setter Property="Suffix" Value="%"/>
+            <Setter Property="Suffix" Value="{loc:Loc Settings_Monitors_Percent_Suffix}"/>
             <Setter Property="Minimum" Value="0"/>
             <Setter Property="Maximum" Value="100"/>
             <Setter Property="WheelStep" Value="5"/>
@@ -50,26 +51,26 @@
         </Style>
     </UserControl.Resources>
     <StackPanel>
-        <TextBlock Style="{StaticResource SectionHeaderStyle}" Text="Monitor options"/>
+        <TextBlock Style="{StaticResource SectionHeaderStyle}" Text="{loc:Loc Settings_Monitors_SectionHeader}"/>
 
-        <utils:SettingsCard Title="Brightness update dwell"
-                               Description="How long a brightness value must be set before the app will try to apply it.">
+        <utils:SettingsCard Title="{loc:Loc Settings_Monitors_BrightnessRate_Title}"
+                               Description="{loc:Loc Settings_Monitors_BrightnessRate_Description}">
             <utils:SettingsCard.Control>
                 <local:NumericSpinner Style="{StaticResource DwellTimeSpinnerStyle}"
                                       x:Name="BrightnessRateBox"/>
             </utils:SettingsCard.Control>
         </utils:SettingsCard>
 
-        <utils:SettingsCard Title="Validation dwell"
-                               Description="How long to wait after a settled brightness write before reading it back to confirm it applied. Increase on slow-responding monitors.">
+        <utils:SettingsCard Title="{loc:Loc Settings_Monitors_ValidationDwell_Title}"
+                               Description="{loc:Loc Settings_Monitors_ValidationDwell_Description}">
             <utils:SettingsCard.Control>
                 <local:NumericSpinner Style="{StaticResource DwellTimeSpinnerStyle}"
                                       x:Name="ValidationDwellBox"/>
             </utils:SettingsCard.Control>
         </utils:SettingsCard>
 
-        <utils:SettingsCard Title="Validation attempts"
-                               Description="Number of times to retry a brightness read before giving up. Each retry waits one validation dwell, and the final attempt also refreshes the cached HMONITOR. Higher = more tolerant of transient I2C noise; lower = faster failure for genuinely stuck monitors.">
+        <utils:SettingsCard Title="{loc:Loc Settings_Monitors_ValidationAttempts_Title}"
+                               Description="{loc:Loc Settings_Monitors_ValidationAttempts_Description}">
             <utils:SettingsCard.Control>
                 <local:NumericSpinner Width="100" VerticalAlignment="Center"
                                       x:Name="ValidationAttemptsBox"
@@ -78,8 +79,8 @@
             </utils:SettingsCard.Control>
         </utils:SettingsCard>
 
-        <utils:SettingsCard Title="DDC operation timeout"
-                               Description="Maximum time any single DDC call is allowed to block before the app moves on. Defends against driver-layer hangs piling up threads or stalling shutdown. Lower = faster failure for stuck monitors; higher = more tolerant of slow-responding panels.">
+        <utils:SettingsCard Title="{loc:Loc Settings_Monitors_DDCOperationTimeout_Title}"
+                               Description="{loc:Loc Settings_Monitors_DDCOperationTimeout_Description}">
             <utils:SettingsCard.Control>
                 <local:NumericSpinner Style="{StaticResource DwellTimeSpinnerStyle}"
                                       x:Name="DDCOperationTimeoutBox"
@@ -87,45 +88,45 @@
             </utils:SettingsCard.Control>
         </utils:SettingsCard>
 
-        <utils:SettingsCard Title="Power off mode"
-                               Description="How the 'power off' action actually powers a monitor off. Sleep = standby (VCP 0x02), Soft = DPM off (0x04), Hard = write-only off (0x05). Some monitors ignore Soft; Hard will most likely require physical input to wake.">
+        <utils:SettingsCard Title="{loc:Loc Settings_Monitors_PowerOffMode_Title}"
+                               Description="{loc:Loc Settings_Monitors_PowerOffMode_Description}">
             <utils:SettingsCard.Control>
                 <ComboBox x:Name="PowerOffModeCombo"
                           Style="{StaticResource SettingsComboBoxStyle}"
                           VerticalAlignment="Center"
                           Tag="PowerOffMode" SelectionChanged="EnumCombo_Changed">
-                    <ComboBoxItem Tag="Sleep">Sleep</ComboBoxItem>
-                    <ComboBoxItem Tag="Soft">Power off (soft)</ComboBoxItem>
-                    <ComboBoxItem Tag="Hard">Power off (hard)</ComboBoxItem>
+                    <ComboBoxItem Tag="Sleep" Content="{loc:Loc Settings_Monitors_PowerOff_Sleep}"/>
+                    <ComboBoxItem Tag="Soft" Content="{loc:Loc Settings_Monitors_PowerOff_Soft}"/>
+                    <ComboBoxItem Tag="Hard" Content="{loc:Loc Settings_Monitors_PowerOff_Hard}"/>
                 </ComboBox>
             </utils:SettingsCard.Control>
         </utils:SettingsCard>
 
-        <utils:SettingsCard Title="Identify displays by"
-                               Description="Which attribute keys profiles, names, and ordering to each physical monitor. Changing this re-enumerates and may orphan saved profile entries.">
+        <utils:SettingsCard Title="{loc:Loc Settings_Monitors_IdentityStrategy_Title}"
+                               Description="{loc:Loc Settings_Monitors_IdentityStrategy_Description}">
             <utils:SettingsCard.Control>
                 <ComboBox x:Name="IdentityStrategyCombo"
                           Style="{StaticResource SettingsComboBoxStyle}"
                           VerticalAlignment="Center"
                           Tag="MonitorIdentityStrategy" SelectionChanged="EnumCombo_Changed">
-                    <ComboBoxItem Tag="DisplayNumber">Display number</ComboBoxItem>
-                    <ComboBoxItem Tag="HardwarePort">Hardware port</ComboBoxItem>
-                    <ComboBoxItem Tag="EDIDSerial">EDID serial</ComboBoxItem>
+                    <ComboBoxItem Tag="DisplayNumber" Content="{loc:Loc Settings_Monitors_Identity_DisplayNumber}"/>
+                    <ComboBoxItem Tag="HardwarePort" Content="{loc:Loc Settings_Monitors_Identity_HardwarePort}"/>
+                    <ComboBoxItem Tag="EDIDSerial" Content="{loc:Loc Settings_Monitors_Identity_EDIDSerial}"/>
                 </ComboBox>
             </utils:SettingsCard.Control>
         </utils:SettingsCard>
 
-        <utils:SettingsCard Title="Default display sort order"
-                               Description="Ordering used for displays that haven't been manually reordered. Applies on hot-plug.">
+        <utils:SettingsCard Title="{loc:Loc Settings_Monitors_DefaultSort_Title}"
+                               Description="{loc:Loc Settings_Monitors_DefaultSort_Description}">
             <utils:SettingsCard.Control>
                 <ComboBox x:Name="DefaultSortCombo"
                           Style="{StaticResource SettingsComboBoxStyle}"
                           VerticalAlignment="Center"
                           SelectionChanged="DefaultSort_Changed">
-                    <ComboBoxItem Tag="Arrangement">Arrangement</ComboBoxItem>
-                    <ComboBoxItem Tag="ArrangementRev">Arrangement (rev)</ComboBoxItem>
-                    <ComboBoxItem Tag="DisplayNumber">Display num</ComboBoxItem>
-                    <ComboBoxItem Tag="DisplayNumberRev">Display num (rev)</ComboBoxItem>
+                    <ComboBoxItem Tag="Arrangement" Content="{loc:Loc Settings_Monitors_Sort_Arrangement}"/>
+                    <ComboBoxItem Tag="ArrangementRev" Content="{loc:Loc Settings_Monitors_Sort_ArrangementRev}"/>
+                    <ComboBoxItem Tag="DisplayNumber" Content="{loc:Loc Settings_Monitors_Sort_DisplayNumber}"/>
+                    <ComboBoxItem Tag="DisplayNumberRev" Content="{loc:Loc Settings_Monitors_Sort_DisplayNumberRev}"/>
                 </ComboBox>
             </utils:SettingsCard.Control>
         </utils:SettingsCard>
@@ -137,24 +138,24 @@
                 <ColumnDefinition Width="Auto"/>
             </Grid.ColumnDefinitions>
             <StackPanel Style="{StaticResource SettingsCardTitlePanel}">
-                <TextBlock Text="Display order &amp; overrides"
+                <TextBlock Text="{loc:Loc Settings_Monitors_DisplayOrder_Title}"
                            Style="{StaticResource SettingTitleStyle}"
                            FontWeight="SemiBold"/>
                 <TextBlock Style="{StaticResource SettingDescriptionStyle}"
-                           Text="Rename, reorder, and set per-monitor DDC/CI overrides."
+                           Text="{loc:Loc Settings_Monitors_DisplayOrder_Description}"
                            Margin="0,4,0,0"/>
             </StackPanel>
             <Button Grid.Column="1"
                     x:Name="ClearDisplaysButton"
                     Style="{StaticResource SettingsButtonStyle}"
-                    Content="Clear Displays"
+                    Content="{loc:Loc Settings_Monitors_ClearDisplays_Button}"
                     VerticalAlignment="Center"
                     Margin="{StaticResource RightSpacerSmall}"
                     Click="ClearDisplays_Click"/>
             <Button Grid.Column="2"
                     x:Name="IdentifyDisplaysButton"
                     Style="{StaticResource SettingsButtonStyle}"
-                    Content="Identify Displays"
+                    Content="{loc:Loc Settings_Monitors_IdentifyDisplays_Button}"
                     VerticalAlignment="Center"
                     Click="IdentifyDisplays_Click"/>
         </Grid>
@@ -213,7 +214,7 @@
                                         </Grid.ColumnDefinitions>
                                         <DockPanel Grid.Column="0" Grid.ColumnSpan="2" LastChildFill="True">
                                             <TextBlock DockPanel.Dock="Right"
-                                                       Text="Name:"
+                                                       Text="{loc:Loc Settings_Monitors_Name_Label}"
                                                        Style="{StaticResource SettingDescriptionStyle}"
                                                        VerticalAlignment="Center"
                                                        Margin="0,0,6,0"/>
@@ -247,22 +248,22 @@
                                         </Grid.ColumnDefinitions>
 
                                         <StackPanel Grid.Column="0" Style="{StaticResource MonitorOverrideFieldColumnStyle}">
-                                            <TextBlock Text="Power off" Style="{StaticResource MonitorOverrideLabelStyle}"/>
+                                            <TextBlock Text="{loc:Loc Settings_Monitors_PowerOffOverride_Label}" Style="{StaticResource MonitorOverrideLabelStyle}"/>
                                             <ComboBox Style="{StaticResource SettingsComboBoxStyle}"
                                                       MinWidth="0"
                                                       HorizontalAlignment="Stretch"
                                                       Tag="{Binding EDIDKey}"
                                                       Loaded="MonitorPowerOffOverrideCombo_Loaded"
                                                       SelectionChanged="MonitorPowerOffOverride_Changed">
-                                                <ComboBoxItem Tag="">Default</ComboBoxItem>
-                                                <ComboBoxItem Tag="Sleep">Sleep</ComboBoxItem>
-                                                <ComboBoxItem Tag="Soft">Power off (soft)</ComboBoxItem>
-                                                <ComboBoxItem Tag="Hard">Power off (hard)</ComboBoxItem>
+                                                <ComboBoxItem Tag="" Content="{loc:Loc Settings_Monitors_PowerOff_Default}"/>
+                                                <ComboBoxItem Tag="Sleep" Content="{loc:Loc Settings_Monitors_PowerOff_Sleep}"/>
+                                                <ComboBoxItem Tag="Soft" Content="{loc:Loc Settings_Monitors_PowerOff_Soft}"/>
+                                                <ComboBoxItem Tag="Hard" Content="{loc:Loc Settings_Monitors_PowerOff_Hard}"/>
                                             </ComboBox>
                                         </StackPanel>
 
                                         <StackPanel Grid.Column="1" Style="{StaticResource MonitorOverrideFieldColumnStyle}">
-                                            <TextBlock Text="Validation dwell" Style="{StaticResource MonitorOverrideLabelStyle}"/>
+                                            <TextBlock Text="{loc:Loc Settings_Monitors_ValidationDwellOverride_Label}" Style="{StaticResource MonitorOverrideLabelStyle}"/>
                                             <local:NumericSpinner Style="{StaticResource MonitorOverrideDwellSpinnerStyle}"
                                                                   Value="{Binding ValidationDwellOverride, UpdateSourceTrigger=PropertyChanged}"
                                                                   Tag="ValidationDwell"
@@ -270,7 +271,7 @@
                                         </StackPanel>
 
                                         <StackPanel Grid.Column="2">
-                                            <TextBlock Text="Brightness dwell" Style="{StaticResource MonitorOverrideLabelStyle}"/>
+                                            <TextBlock Text="{loc:Loc Settings_Monitors_BrightnessDwellOverride_Label}" Style="{StaticResource MonitorOverrideLabelStyle}"/>
                                             <local:NumericSpinner Style="{StaticResource MonitorOverrideDwellSpinnerStyle}"
                                                                   Value="{Binding BrightnessDwellOverride, UpdateSourceTrigger=PropertyChanged}"
                                                                   Tag="BrightnessDwell"
@@ -287,7 +288,7 @@
                                         </Grid.ColumnDefinitions>
 
                                         <StackPanel Grid.Column="0" Style="{StaticResource MonitorOverrideFieldColumnStyle}">
-                                            <TextBlock Text="Min brightness" Style="{StaticResource MonitorOverrideLabelStyle}"/>
+                                            <TextBlock Text="{loc:Loc Settings_Monitors_MinBrightnessOverride_Label}" Style="{StaticResource MonitorOverrideLabelStyle}"/>
                                             <local:NumericSpinner Style="{StaticResource MonitorOverrideBrightnessSpinnerStyle}"
                                                                   Value="{Binding MinBrightnessOverride, UpdateSourceTrigger=PropertyChanged}"
                                                                   Tag="MinBrightness"
@@ -295,7 +296,7 @@
                                         </StackPanel>
 
                                         <StackPanel Grid.Column="1" Style="{StaticResource MonitorOverrideFieldColumnStyle}">
-                                            <TextBlock Text="Max brightness" Style="{StaticResource MonitorOverrideLabelStyle}"/>
+                                            <TextBlock Text="{loc:Loc Settings_Monitors_MaxBrightnessOverride_Label}" Style="{StaticResource MonitorOverrideLabelStyle}"/>
                                             <local:NumericSpinner Style="{StaticResource MonitorOverrideBrightnessSpinnerStyle}"
                                                                   Value="{Binding MaxBrightnessOverride, UpdateSourceTrigger=PropertyChanged}"
                                                                   Tag="MaxBrightness"
@@ -315,7 +316,7 @@
                                         PreviewMouseLeftButtonDown="Gripper_PreviewMouseLeftButtonDown"
                                         PreviewMouseMove="Gripper_PreviewMouseMove"
                                         Tag="{Binding EDIDKey}"
-                                        ToolTip="Drag to reorder">
+                                        ToolTip="{loc:Loc Settings_Monitors_DragToReorder_Tooltip}">
                                     <TextBlock Text="&#xE784;"
                                                FontFamily="Segoe Fluent Icons"
                                                FontSize="16"
@@ -345,7 +346,7 @@
                                 FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets"
                                 FontSize="11"
                                 Tag="{Binding EDIDKey}"
-                                ToolTip="Delete this saved display"
+                                ToolTip="{loc:Loc Settings_Monitors_DeleteSavedDisplay_Tooltip}"
                                 Visibility="{Binding IsInactive, Converter={StaticResource BoolToVisibility}}"
                                 Click="DeleteInactiveDisplay_Click"/>
                     </Grid>

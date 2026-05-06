@@ -4,6 +4,7 @@ using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Shapes;
 using System.Windows.Threading;
+using BrightnessTrayAppWpf.Localization;
 using BrightnessTrayAppWpf.Models;
 using BrightnessTrayAppWpf.SunriseSunset;
 using BrightnessTrayAppWpf.Utils;
@@ -942,11 +943,16 @@ public partial class CurveEditor : UserControl
         for (int i = 0; i < specs.Count; i++)
         {
             (Series series, LimitKind kind, double lineY, bool active) spec = specs[i];
-            string seriesWord = spec.series == Series.Brightness ? "brightness" : "night light";
-            string kindWord = spec.kind == LimitKind.Min ? "minimum" : "maximum";
+            string limitLabelKey = (spec.series, spec.kind) switch
+            {
+                (Series.Brightness, LimitKind.Min) => "Settings_CurveEditor_LimitLabel_MinBrightness",
+                (Series.Brightness, LimitKind.Max) => "Settings_CurveEditor_LimitLabel_MaxBrightness",
+                (Series.NightLight, LimitKind.Min) => "Settings_CurveEditor_LimitLabel_MinNightLight",
+                _ => "Settings_CurveEditor_LimitLabel_MaxNightLight",
+            };
             TextBlock tb = new()
             {
-                Text = $"{kindWord} {seriesWord}",
+                Text = LocalizationManager.Instance[limitLabelKey],
                 FontSize = TimeAxisLabelFontSize,
                 // Match the line: brighten when hovered/dragged, otherwise blend with grid chrome.
                 Foreground = spec.active ? Brushes.White : fg,
@@ -1070,7 +1076,9 @@ public partial class CurveEditor : UserControl
         {
             TextBlock tb = new()
             {
-                Text = (kind == LimitKind.Max ? "upper" : "lower") + " brightness offset degeneration",
+                Text = LocalizationManager.Instance[kind == LimitKind.Max
+                    ? "Settings_CurveEditor_DegenerationLabel_UpperBrightnessOffset"
+                    : "Settings_CurveEditor_DegenerationLabel_LowerBrightnessOffset"],
                 FontSize = TimeAxisLabelFontSize,
                 Foreground = fg,
                 Opacity = 0.45,
@@ -2043,8 +2051,10 @@ public partial class CurveEditor : UserControl
         }
 
         bool use24 = SystemUses24HourClock();
-        _nodeReadoutText.Text =
-            $"node: {FormatCursorTime(_selectedPoint.Time, use24)} {FormatCursorValue(_selectedPoint.Value)}";
+        _nodeReadoutText.Text = string.Format(
+            LocalizationManager.Instance["Settings_CurveEditor_NodeReadout_Format"],
+            FormatCursorTime(_selectedPoint.Time, use24),
+            FormatCursorValue(_selectedPoint.Value));
         _nodeReadoutText.Foreground = _selectedSeries == Series.Brightness
             ? GetBrightnessBrush()
             : GetNightLightBrush();

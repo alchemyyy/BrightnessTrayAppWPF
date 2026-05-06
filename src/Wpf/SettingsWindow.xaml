@@ -7,10 +7,11 @@
     xmlns:pages="clr-namespace:BrightnessTrayAppWpf.Wpf.Settings.Pages"
     xmlns:environmentalPageAddons="clr-namespace:BrightnessTrayAppWpf.Wpf.Settings.Pages.EnvironmentalPageAddons"
     xmlns:utils="clr-namespace:BrightnessTrayAppWpf.Wpf.Utils"
+    xmlns:loc="clr-namespace:BrightnessTrayAppWpf.Localization"
     utils:KeyboardFocusBehavior.EnableKeyboardOnlyFocus="True"
     utils:KeyboardFocusBehavior.FocusStyle="{StaticResource KeyboardFocusVisualStyle}"
     utils:SettingsKeyboardNavigation.Enable="True"
-    Title="Settings"
+    Title="{loc:Loc SettingsWindow_Title}"
     Width="960"
     Height="670"
     MinWidth="720"
@@ -148,17 +149,17 @@
                             Style="{StaticResource CaptionButtonStyle}"
                             Click="Minimize_Click"
                             Content="&#xE921;"
-                            ToolTip="Minimize"/>
+                            ToolTip="{loc:Loc SettingsWindow_Caption_Minimize}"/>
                     <Button x:Name="MaximizeButton"
                             Style="{StaticResource CaptionButtonStyle}"
                             Click="Maximize_Click"
                             Content="&#xE922;"
-                            ToolTip="Maximize"/>
+                            ToolTip="{loc:Loc SettingsWindow_Caption_Maximize}"/>
                     <Button x:Name="CloseButton"
                             Style="{StaticResource CaptionCloseButtonStyle}"
                             Click="Close_Click"
                             Content="&#xE8BB;"
-                            ToolTip="Close"/>
+                            ToolTip="{loc:Loc SettingsWindow_Caption_Close}"/>
                 </StackPanel>
             </Grid>
 
@@ -178,7 +179,7 @@
                     </Grid.RowDefinitions>
 
                     <TextBlock Grid.Row="0"
-                               Text="Settings"
+                               Text="{loc:Loc SettingsWindow_Header}"
                                FontSize="22"
                                FontWeight="SemiBold"
                                Foreground="{DynamicResource ThemeForeground}"
@@ -188,50 +189,50 @@
                                 utils:SettingsKeyboardNavigation.IsNavigationSidebar="True">
                         <RadioButton x:Name="NavGeneral"
                                      Style="{StaticResource NavItemStyle}"
-                                     Content="General"
+                                     Content="{loc:Loc Settings_Common_Tab_General}"
                                      IsChecked="True"
                                      Checked="NavItem_Checked"
                                      Tag="General"
                                      GroupName="SettingsNav"/>
                         <RadioButton x:Name="NavFlyout"
                                      Style="{StaticResource NavItemStyle}"
-                                     Content="Flyout"
+                                     Content="{loc:Loc Settings_Common_Tab_Flyout}"
                                      Checked="NavItem_Checked"
                                      Tag="Flyout"
                                      GroupName="SettingsNav"/>
                         <RadioButton x:Name="NavTrayIcon"
                                      Style="{StaticResource NavItemStyle}"
-                                     Content="Tray Icon"
+                                     Content="{loc:Loc Settings_Common_Tab_TrayIcon}"
                                      Checked="NavItem_Checked"
                                      Tag="TrayIcon"
                                      GroupName="SettingsNav"/>
                         <RadioButton x:Name="NavMonitors"
                                      Style="{StaticResource NavItemStyle}"
-                                     Content="Monitor options"
+                                     Content="{loc:Loc Settings_Common_Tab_Monitors}"
                                      Checked="NavItem_Checked"
                                      Tag="Monitors"
                                      GroupName="SettingsNav"/>
                         <RadioButton x:Name="NavHotkeys"
                                      Style="{StaticResource NavItemStyle}"
-                                     Content="Hotkeys"
+                                     Content="{loc:Loc Settings_Common_Tab_Hotkeys}"
                                      Checked="NavItem_Checked"
                                      Tag="Hotkeys"
                                      GroupName="SettingsNav"/>
                         <RadioButton x:Name="NavEnvironmental"
                                      Style="{StaticResource NavItemStyle}"
-                                     Content="Environmental"
+                                     Content="{loc:Loc Settings_Common_Tab_Environmental}"
                                      Checked="NavItem_Checked"
                                      Tag="Environmental"
                                      GroupName="SettingsNav"/>
                         <RadioButton x:Name="NavTheme"
                                      Style="{StaticResource NavItemStyle}"
-                                     Content="Theme"
+                                     Content="{loc:Loc Settings_Common_Tab_Theme}"
                                      Checked="NavItem_Checked"
                                      Tag="Theme"
                                      GroupName="SettingsNav"/>
                         <RadioButton x:Name="NavAbout"
                                      Style="{StaticResource NavItemStyle}"
-                                     Content="About"
+                                     Content="{loc:Loc Settings_Common_Tab_About}"
                                      Checked="NavItem_Checked"
                                      Tag="About"
                                      GroupName="SettingsNav"/>
@@ -240,7 +241,7 @@
                     <StackPanel Grid.Row="2" Margin="8,0,8,12">
                         <Button x:Name="OpenSettingsFolderButton"
                                 Style="{StaticResource NavActionStyle}"
-                                Content="Open settings folder"
+                                Content="{loc:Loc SettingsWindow_OpenSettingsFolder}"
                                 Click="OpenSettingsFolder_Click"
                                 utils:SettingsKeyboardNavigation.IsSidebarFooter="True"/>
                     </StackPanel>
@@ -295,25 +296,25 @@
                         MaxWidth="460">
                     <StackPanel>
                         <TextBlock x:Name="ConfirmOverlayTitle"
-                                   Text="Clear all saved display data?"
+                                   Text="{loc:Loc SettingsWindow_ConfirmOverlay_DefaultTitle}"
                                    FontSize="16"
                                    FontWeight="SemiBold"
                                    Foreground="{DynamicResource ThemeForeground}"
                                    Margin="0,0,0,8"
                                    TextWrapping="Wrap"/>
                         <TextBlock x:Name="ConfirmOverlayMessage"
-                                   Text="This deletes all name overrides, custom order, per-monitor overrides, and the known-displays history. The Display order &amp; overrides list will repopulate from currently-connected monitors."
+                                   Text="{loc:Loc SettingsWindow_ConfirmOverlay_DefaultMessage}"
                                    Style="{StaticResource SettingDescriptionStyle}"
                                    Margin="0,0,0,16"/>
                         <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
                             <Button x:Name="ConfirmOverlayCancelButton"
                                     Style="{StaticResource SettingsButtonStyle}"
-                                    Content="Cancel"
+                                    Content="{loc:Loc SettingsWindow_ConfirmOverlay_Cancel}"
                                     Margin="{StaticResource RightSpacerSmall}"
                                     Click="ConfirmOverlayCancel_Click"/>
                             <Button x:Name="ConfirmOverlayConfirmButton"
                                     Style="{StaticResource SettingsButtonStyle}"
-                                    Content="Clear"
+                                    Content="{loc:Loc SettingsWindow_ConfirmOverlay_Confirm}"
                                     Click="ConfirmOverlayConfirm_Click"/>
                         </StackPanel>
                     </StackPanel>

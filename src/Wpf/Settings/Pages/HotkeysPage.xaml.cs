@@ -3,6 +3,7 @@ using System.Globalization;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
+using BrightnessTrayAppWpf.Localization;
 using BrightnessTrayAppWpf.Models;
 using BrightnessTrayAppWpf.Services;
 using BrightnessTrayAppWpf.Wpf.Utils;
@@ -133,26 +134,36 @@ public partial class HotkeysPage : UserControl
             old.ParameterChanged -= OnRowParameterChanged;
         _hotkeyRows.Clear();
 
-        AddFixedActionRow(HotkeyAction.OpenFlyout, string.Empty, "Open flyout",
-            "Show the brightness flyout above the tray icon.");
-        AddFixedActionRow(HotkeyAction.OpenSettings, string.Empty, "Open settings",
-            "Open this settings window.");
-        AddFixedActionRow(HotkeyAction.FullBright, string.Empty, "Full bright",
-            "Set every monitor to 100%. Press again to restore the previous brightness.");
-        AddFixedActionRow(HotkeyAction.FullDim, string.Empty, "Full dim",
-            "Set every monitor to 0%. Press again to restore the previous brightness.");
-        AddFixedActionRow(HotkeyAction.IncrementMasterBrightness, string.Empty, "Increment master brightness",
-            "Raise every monitor's brightness by one step (matches one tray-scroll notch).");
-        AddFixedActionRow(HotkeyAction.DecrementMasterBrightness, string.Empty, "Decrement master brightness",
-            "Lower every monitor's brightness by one step (matches one tray-scroll notch).");
-        AddFixedActionRow(HotkeyAction.NormalizeBrightnesses, string.Empty, "Normalize brightnesses to master",
-            "Sync every monitor's brightness to the master slider's current value.");
-        AddFixedActionRow(HotkeyAction.ToggleNightLight, string.Empty, "Toggle night light",
-            "Turn Windows night light on or off.");
-        AddFixedActionRow(HotkeyAction.IncrementNightLight, string.Empty, "Increment night light",
-            "Raise night-light strength by one step (matches one tray-scroll notch).");
-        AddFixedActionRow(HotkeyAction.DecrementNightLight, string.Empty, "Decrement night light",
-            "Lower night-light strength by one step (matches one tray-scroll notch).");
+        AddFixedActionRow(HotkeyAction.OpenFlyout, string.Empty,
+            LocalizationManager.Instance["Settings_Hotkeys_OpenFlyout_Title"],
+            LocalizationManager.Instance["Settings_Hotkeys_OpenFlyout_Description"]);
+        AddFixedActionRow(HotkeyAction.OpenSettings, string.Empty,
+            LocalizationManager.Instance["Settings_Hotkeys_OpenSettings_Title"],
+            LocalizationManager.Instance["Settings_Hotkeys_OpenSettings_Description"]);
+        AddFixedActionRow(HotkeyAction.FullBright, string.Empty,
+            LocalizationManager.Instance["Settings_Hotkeys_FullBright_Title"],
+            LocalizationManager.Instance["Settings_Hotkeys_FullBright_Description"]);
+        AddFixedActionRow(HotkeyAction.FullDim, string.Empty,
+            LocalizationManager.Instance["Settings_Hotkeys_FullDim_Title"],
+            LocalizationManager.Instance["Settings_Hotkeys_FullDim_Description"]);
+        AddFixedActionRow(HotkeyAction.IncrementMasterBrightness, string.Empty,
+            LocalizationManager.Instance["Settings_Hotkeys_IncrementMasterBrightness_Title"],
+            LocalizationManager.Instance["Settings_Hotkeys_IncrementMasterBrightness_Description"]);
+        AddFixedActionRow(HotkeyAction.DecrementMasterBrightness, string.Empty,
+            LocalizationManager.Instance["Settings_Hotkeys_DecrementMasterBrightness_Title"],
+            LocalizationManager.Instance["Settings_Hotkeys_DecrementMasterBrightness_Description"]);
+        AddFixedActionRow(HotkeyAction.NormalizeBrightnesses, string.Empty,
+            LocalizationManager.Instance["Settings_Hotkeys_NormalizeBrightnesses_Title"],
+            LocalizationManager.Instance["Settings_Hotkeys_NormalizeBrightnesses_Description"]);
+        AddFixedActionRow(HotkeyAction.ToggleNightLight, string.Empty,
+            LocalizationManager.Instance["Settings_Hotkeys_ToggleNightLight_Title"],
+            LocalizationManager.Instance["Settings_Hotkeys_ToggleNightLight_Description"]);
+        AddFixedActionRow(HotkeyAction.IncrementNightLight, string.Empty,
+            LocalizationManager.Instance["Settings_Hotkeys_IncrementNightLight_Title"],
+            LocalizationManager.Instance["Settings_Hotkeys_IncrementNightLight_Description"]);
+        AddFixedActionRow(HotkeyAction.DecrementNightLight, string.Empty,
+            LocalizationManager.Instance["Settings_Hotkeys_DecrementNightLight_Title"],
+            LocalizationManager.Instance["Settings_Hotkeys_DecrementNightLight_Description"]);
 
         // One row per profile slot.
         if (_profileManager != null)
@@ -162,16 +173,17 @@ public partial class HotkeysPage : UserControl
             {
                 string name = _profileManager.GetName(i) is { } n && !string.IsNullOrWhiteSpace(n)
                     ? n
-                    : $"Profile {i + 1}";
+                    : string.Format(LocalizationManager.Instance["Settings_Hotkeys_DefaultProfileName_Format"], i + 1);
                 AddFixedActionRow(HotkeyAction.ProfileSelect,
                     i.ToString(CultureInfo.InvariantCulture),
-                    $"Select profile: {name}",
-                    "Switch to this profile slot.");
+                    string.Format(LocalizationManager.Instance["Settings_Hotkeys_SelectProfile_Title_Format"], name),
+                    LocalizationManager.Instance["Settings_Hotkeys_SelectProfile_Description"]);
             }
         }
 
-        AddFixedActionRow(HotkeyAction.PowerOffAllMonitors, string.Empty, "Power off all monitors",
-            "Turn every monitor off (uses the configured power-off mode).");
+        AddFixedActionRow(HotkeyAction.PowerOffAllMonitors, string.Empty,
+            LocalizationManager.Instance["Settings_Hotkeys_PowerOffAllMonitors_Title"],
+            LocalizationManager.Instance["Settings_Hotkeys_PowerOffAllMonitors_Description"]);
 
         // One row per existing MonitorOff Parameter (user-added). Group by Parameter so a single
         // physical target only contributes one row even if it has multiple bound chords.
@@ -201,8 +213,8 @@ public partial class HotkeysPage : UserControl
         if (_settings == null) return;
 
         HotkeyRowViewModel row = new(HotkeyAction.MonitorOff, parameter,
-            "Power off specific monitor",
-            "Turn off the monitor selected in the dropdown.",
+            LocalizationManager.Instance["Settings_Hotkeys_PowerOffSpecificMonitor_Title"],
+            LocalizationManager.Instance["Settings_Hotkeys_PowerOffSpecificMonitor_Description"],
             showsTarget: true, showsRemove: true);
         foreach (HotkeyBinding b in _settings.Hotkeys
             .Where(b => b.Matches(HotkeyAction.MonitorOff, parameter))
@@ -278,7 +290,7 @@ public partial class HotkeysPage : UserControl
             foreach (HotkeyEntryViewModel entry in row.Entries)
             {
                 entry.Status = HotkeyStatus.Conflict;
-                entry.StatusTooltip = "Hotkey service not available.";
+                entry.StatusTooltip = LocalizationManager.Instance["Settings_Hotkeys_Status_HotkeyServiceUnavailable"];
             }
             return;
         }
@@ -310,7 +322,7 @@ public partial class HotkeysPage : UserControl
             else
             {
                 entry.Status = HotkeyStatus.Registered;
-                entry.StatusTooltip = "Registered.";
+                entry.StatusTooltip = LocalizationManager.Instance["Settings_Hotkeys_Status_Registered"];
             }
         }
     }
@@ -339,7 +351,7 @@ public partial class HotkeysPage : UserControl
         {
             HotkeyMonitorTargets.Add(new MonitorTargetOption
             {
-                Label = $"Display #{n} (whichever is plugged in)",
+                Label = string.Format(LocalizationManager.Instance["Settings_Hotkeys_DisplayNumber_Format"], n),
                 Value = HotkeyTarget.ForDisplayNumber(n),
             });
         }
@@ -349,11 +361,15 @@ public partial class HotkeysPage : UserControl
         {
             if (string.IsNullOrEmpty(kd.EDIDKey)) continue;
 
-            string baseLabel = !string.IsNullOrEmpty(kd.OriginalName) ? kd.OriginalName : "Display";
+            string baseLabel = !string.IsNullOrEmpty(kd.OriginalName)
+                ? kd.OriginalName
+                : LocalizationManager.Instance["Settings_Hotkeys_DisplayFallbackName"];
             string serial = string.IsNullOrEmpty(kd.EDIDSerial) ? "" : $": {kd.EDIDSerial}";
             MonitorInfo? activeMatch = live.FirstOrDefault(m => !m.IsMaster && m.EDIDKey == kd.EDIDKey);
             string activeSuffix = activeMatch is { DisplayNumber: > 0 }
-                ? $"  (currently #{activeMatch.DisplayNumber})"
+                ? string.Format(
+                    LocalizationManager.Instance["Settings_Hotkeys_CurrentlyDisplayNumber_Format"],
+                    activeMatch.DisplayNumber)
                 : "";
             HotkeyMonitorTargets.Add(new MonitorTargetOption
             {
@@ -515,8 +531,8 @@ public partial class HotkeysPage : UserControl
         string param = HotkeyMonitorTargets.FirstOrDefault()?.Value ?? string.Empty;
 
         HotkeyRowViewModel row = new(HotkeyAction.MonitorOff, param,
-            "Power off specific monitor",
-            "Turn off the monitor selected in the dropdown.",
+            LocalizationManager.Instance["Settings_Hotkeys_PowerOffSpecificMonitor_Title"],
+            LocalizationManager.Instance["Settings_Hotkeys_PowerOffSpecificMonitor_Description"],
             showsTarget: true, showsRemove: true);
         AddRow(row);
     }

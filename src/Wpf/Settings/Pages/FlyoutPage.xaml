@@ -5,6 +5,7 @@
     xmlns:local="clr-namespace:BrightnessTrayAppWpf.Wpf"
     xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    xmlns:loc="clr-namespace:BrightnessTrayAppWpf.Localization"
     xmlns:utils="clr-namespace:BrightnessTrayAppWpf.Wpf.Settings.Utils"
     xmlns:utils1="clr-namespace:BrightnessTrayAppWpf.Wpf.Utils"
     mc:Ignorable="d"
@@ -13,10 +14,10 @@
     d:Background="#1F1F1F"
     utils1:SettingsKeyboardNavigation.IsContentSection="True">
     <StackPanel>
-        <TextBlock Style="{StaticResource SectionHeaderStyle}" Text="Flyout"/>
+        <TextBlock Style="{StaticResource SectionHeaderStyle}" Text="{loc:Loc Settings_Flyout_SectionHeader}"/>
 
-        <utils:SettingsCard Title="Restore undock state on startup"
-                            Description="When the app launches, restore the flyout's docked or undocked state from the previous session. When off, the flyout always opens docked.">
+        <utils:SettingsCard Title="{loc:Loc Settings_Flyout_RestoreUndockState_Title}"
+                            Description="{loc:Loc Settings_Flyout_RestoreUndockState_Description}">
           <utils:SettingsCard.Control>
             <CheckBox x:Name="RestoreFlyoutUndockedOnStartupToggle"
                       Style="{StaticResource ToggleSwitchStyle}"
@@ -25,11 +26,11 @@
           </utils:SettingsCard.Control>
         </utils:SettingsCard>
 
-        <TextBlock Text="Visibility"
+        <TextBlock Text="{loc:Loc Settings_Flyout_Visibility_Header}"
                    Style="{StaticResource SubsectionHeaderStyle}"/>
 
-        <utils:SettingsCard Title="Show undock button"
-                               Description="Show the undock button in the flyout. When off, the flyout always stays anchored to the tray.">
+        <utils:SettingsCard Title="{loc:Loc Settings_Flyout_ShowUndockButton_Title}"
+                               Description="{loc:Loc Settings_Flyout_ShowUndockButton_Description}">
             <utils:SettingsCard.Control>
                 <CheckBox x:Name="AllowFlyoutUndockToggle"
                           Style="{StaticResource ToggleSwitchStyle}"
@@ -38,8 +39,8 @@
             </utils:SettingsCard.Control>
         </utils:SettingsCard>
 
-        <utils:SettingsCard Title="Show monitor power buttons"
-                               Description="Display a per-monitor power off button next to each monitor in the brightness flyout.">
+        <utils:SettingsCard Title="{loc:Loc Settings_Flyout_ShowMonitorPowerButtons_Title}"
+                               Description="{loc:Loc Settings_Flyout_ShowMonitorPowerButtons_Description}">
             <utils:SettingsCard.Control>
                 <CheckBox x:Name="ShowFlyoutMonitorPowerToggle"
                           Style="{StaticResource ToggleSwitchStyle}"
@@ -48,8 +49,8 @@
             </utils:SettingsCard.Control>
         </utils:SettingsCard>
 
-        <utils:SettingsCard Title="Show display number on monitor icons"
-                               Description="Overlay the OS-assigned display number inside each monitor icon in the brightness flyout.">
+        <utils:SettingsCard Title="{loc:Loc Settings_Flyout_ShowDisplayNumberBadge_Title}"
+                               Description="{loc:Loc Settings_Flyout_ShowDisplayNumberBadge_Description}">
             <utils:SettingsCard.Control>
                 <CheckBox x:Name="ShowFlyoutMonitorNumberBadgeToggle"
                           Style="{StaticResource ToggleSwitchStyle}"
@@ -58,8 +59,8 @@
             </utils:SettingsCard.Control>
         </utils:SettingsCard>
 
-        <utils:SettingsCard Title="Show display settings button"
-                               Description="Show the link to Windows display settings in the brightness flyout footer.">
+        <utils:SettingsCard Title="{loc:Loc Settings_Flyout_ShowDisplaySettingsButton_Title}"
+                               Description="{loc:Loc Settings_Flyout_ShowDisplaySettingsButton_Description}">
             <utils:SettingsCard.Control>
                 <CheckBox x:Name="ShowFlyoutDisplaySettingsButtonToggle"
                           Style="{StaticResource ToggleSwitchStyle}"
@@ -68,8 +69,8 @@
             </utils:SettingsCard.Control>
         </utils:SettingsCard>
 
-        <utils:SettingsCard Title="Show power button"
-                               Description="Show a power button in the brightness flyout footer.">
+        <utils:SettingsCard Title="{loc:Loc Settings_Flyout_ShowPowerButton_Title}"
+                               Description="{loc:Loc Settings_Flyout_ShowPowerButton_Description}">
             <utils:SettingsCard.Control>
                 <CheckBox x:Name="ShowFlyoutFooterPowerButtonToggle"
                           Style="{StaticResource ToggleSwitchStyle}"
@@ -78,8 +79,8 @@
             </utils:SettingsCard.Control>
         </utils:SettingsCard>
 
-        <utils:SettingsCard Title="Show master slider"
-                               Description="Show the All Displays master slider in the brightness flyout.">
+        <utils:SettingsCard Title="{loc:Loc Settings_Flyout_ShowMasterSlider_Title}"
+                               Description="{loc:Loc Settings_Flyout_ShowMasterSlider_Description}">
             <utils:SettingsCard.Control>
                 <CheckBox x:Name="ShowMasterSliderToggle"
                           Style="{StaticResource ToggleSwitchStyle}"
@@ -88,8 +89,8 @@
             </utils:SettingsCard.Control>
         </utils:SettingsCard>
 
-        <utils:SettingsCard Title="Show individual sliders"
-                               Description="Show the per-monitor sliders in the brightness flyout.">
+        <utils:SettingsCard Title="{loc:Loc Settings_Flyout_ShowIndividualSliders_Title}"
+                               Description="{loc:Loc Settings_Flyout_ShowIndividualSliders_Description}">
             <utils:SettingsCard.Control>
                 <CheckBox x:Name="ShowIndividualSlidersToggle"
                           Style="{StaticResource ToggleSwitchStyle}"
@@ -98,8 +99,8 @@
             </utils:SettingsCard.Control>
         </utils:SettingsCard>
 
-        <utils:SettingsCard Title="Show environmental curves button"
-                               Description="Show the environmental curves toggle button in the brightness flyout footer.">
+        <utils:SettingsCard Title="{loc:Loc Settings_Flyout_ShowEnvironmentalCurvesButton_Title}"
+                               Description="{loc:Loc Settings_Flyout_ShowEnvironmentalCurvesButton_Description}">
             <utils:SettingsCard.Control>
                 <CheckBox x:Name="ShowEnvironmentalCurvesButtonToggle"
                           Style="{StaticResource ToggleSwitchStyle}"
@@ -108,8 +109,8 @@
             </utils:SettingsCard.Control>
         </utils:SettingsCard>
 
-        <utils:SettingsCard Title="Show kelvin label on night light slider"
-                               Description="Display the current color temperature (e.g. 4500K) above the night light slider in the brightness flyout.">
+        <utils:SettingsCard Title="{loc:Loc Settings_Flyout_ShowNightLightKelvinLabel_Title}"
+                               Description="{loc:Loc Settings_Flyout_ShowNightLightKelvinLabel_Description}">
             <utils:SettingsCard.Control>
                 <CheckBox x:Name="ShowNightLightKelvinLabelToggle"
                           Style="{StaticResource ToggleSwitchStyle}"
@@ -118,11 +119,11 @@
             </utils:SettingsCard.Control>
         </utils:SettingsCard>
 
-        <TextBlock Text="Behavior"
+        <TextBlock Text="{loc:Loc Settings_Flyout_Behavior_Header}"
                    Style="{StaticResource SubsectionHeaderStyle}"/>
 
-        <utils:SettingsCard Title="Power button affects only enabled monitors"
-                               Description="When on, the footer power button only powers off monitors enabled in the app. When off, it powers off every monitor.">
+        <utils:SettingsCard Title="{loc:Loc Settings_Flyout_PowerButtonOnlyEnabled_Title}"
+                               Description="{loc:Loc Settings_Flyout_PowerButtonOnlyEnabled_Description}">
             <utils:SettingsCard.Control>
                 <CheckBox x:Name="FooterPowerButtonOnlyEnabledToggle"
                           Style="{StaticResource ToggleSwitchStyle}"
@@ -131,8 +132,8 @@
             </utils:SettingsCard.Control>
         </utils:SettingsCard>
 
-        <utils:SettingsCard Title="Number keys switch profile in flyout"
-                               Description="While the brightness flyout is focused, press 1-4 to switch to the matching profile.">
+        <utils:SettingsCard Title="{loc:Loc Settings_Flyout_NumberKeysSwitchProfile_Title}"
+                               Description="{loc:Loc Settings_Flyout_NumberKeysSwitchProfile_Description}">
             <utils:SettingsCard.Control>
                 <CheckBox x:Name="FlyoutNumberKeysSwitchProfileToggle"
                           Style="{StaticResource ToggleSwitchStyle}"
@@ -141,22 +142,22 @@
             </utils:SettingsCard.Control>
         </utils:SettingsCard>
 
-        <utils:SettingsCard Title="Master slider tracking"
-                               Description="How the master slider reflects the individual monitor sliders when it's not driving them.">
+        <utils:SettingsCard Title="{loc:Loc Settings_Flyout_MasterSliderTracking_Title}"
+                               Description="{loc:Loc Settings_Flyout_MasterSliderTracking_Description}">
             <utils:SettingsCard.Control>
                 <ComboBox x:Name="MasterSliderModeCombo"
                           Style="{StaticResource SettingsComboBoxStyle}"
                           VerticalAlignment="Center"
                           Tag="MasterSliderMode" SelectionChanged="EnumCombo_Changed">
-                    <ComboBoxItem Tag="Lowest">Lowest</ComboBoxItem>
-                    <ComboBoxItem Tag="Average">Average</ComboBoxItem>
-                    <ComboBoxItem Tag="Highest">Highest</ComboBoxItem>
+                    <ComboBoxItem Tag="Lowest" Content="{loc:Loc Settings_Flyout_MasterSliderTracking_Lowest}"/>
+                    <ComboBoxItem Tag="Average" Content="{loc:Loc Settings_Flyout_MasterSliderTracking_Average}"/>
+                    <ComboBoxItem Tag="Highest" Content="{loc:Loc Settings_Flyout_MasterSliderTracking_Highest}"/>
                 </ComboBox>
             </utils:SettingsCard.Control>
         </utils:SettingsCard>
 
-        <utils:SettingsCard Title="Preserve slider offsets (prevent slider offset degeneration)"
-                               Description="When the master slider pushes an individual monitor past 0% or 100%, retain the overflow so later master adjustments restore the original brightness differences between monitors.">
+        <utils:SettingsCard Title="{loc:Loc Settings_Flyout_PreserveSliderOffsets_Title}"
+                               Description="{loc:Loc Settings_Flyout_PreserveSliderOffsets_Description}">
             <utils:SettingsCard.Control>
                 <CheckBox x:Name="PreserveMasterSliderOffsetsToggle"
                           Style="{StaticResource ToggleSwitchStyle}"
@@ -165,8 +166,8 @@
             </utils:SettingsCard.Control>
         </utils:SettingsCard>
 
-        <utils:SettingsCard Title="Mouse wheel step"
-                               Description="How many percent each mouse wheel notch adjusts a brightness slider in the flyout.">
+        <utils:SettingsCard Title="{loc:Loc Settings_Flyout_MouseWheelStep_Title}"
+                               Description="{loc:Loc Settings_Flyout_MouseWheelStep_Description}">
             <utils:SettingsCard.Control>
                 <local:NumericSpinner Width="100" VerticalAlignment="Center"
                                       x:Name="FlyoutScrollWheelStepBox"

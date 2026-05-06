@@ -1,5 +1,6 @@
 using System.Windows;
 using System.Windows.Controls;
+using BrightnessTrayAppWpf.Localization;
 using BrightnessTrayAppWpf.Models;
 using BrightnessTrayAppWpf.Wpf.Settings.Utils;
 using ComboBox = System.Windows.Controls.ComboBox;
@@ -15,13 +16,15 @@ namespace BrightnessTrayAppWpf.Wpf.Settings.Pages;
 /// </summary>
 public partial class TrayIconPage : UserControl
 {
-    private static readonly (string Tag, string Display)[] TrayClickActionOptions =
+    // Tag/key pairs for the click action combos. The Display column is a localization key
+    // resolved at populate time; same key drives every shared label.
+    private static readonly (string Tag, string DisplayKey)[] TrayClickActionOptions =
     [
-        ("Nothing", "Nothing"),
-        ("TurnOffAllDisplays", "All displays OFF"),
-        ("TurnOnAllDisplays", "All displays ON"),
-        ("FullBright", "Full bright"),
-        ("FullDim", "Full dim")
+        ("Nothing", "Settings_TrayIcon_ClickAction_Nothing"),
+        ("TurnOffAllDisplays", "Settings_TrayIcon_ClickAction_AllDisplaysOff"),
+        ("TurnOnAllDisplays", "Settings_TrayIcon_ClickAction_AllDisplaysOn"),
+        ("FullBright", "Settings_TrayIcon_ClickAction_FullBright"),
+        ("FullDim", "Settings_TrayIcon_ClickAction_FullDim")
     ];
 
     private AppSettings? _settings;
@@ -87,8 +90,8 @@ public partial class TrayIconPage : UserControl
 
         foreach (ComboBox combo in combos)
         {
-            foreach ((string tag, string display) in TrayClickActionOptions)
-                combo.Items.Add(new ComboBoxItem { Tag = tag, Content = display });
+            foreach ((string tag, string displayKey) in TrayClickActionOptions)
+                combo.Items.Add(new ComboBoxItem { Tag = tag, Content = LocalizationManager.Instance[displayKey] });
         }
     }
 

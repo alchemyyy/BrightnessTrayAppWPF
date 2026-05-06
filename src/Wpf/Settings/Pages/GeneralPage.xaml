@@ -8,17 +8,18 @@
     xmlns:pages="clr-namespace:BrightnessTrayAppWpf.Wpf.Settings.Pages"
     xmlns:utils="clr-namespace:BrightnessTrayAppWpf.Wpf.Settings.Utils"
     xmlns:utils1="clr-namespace:BrightnessTrayAppWpf.Wpf.Utils"
+    xmlns:loc="clr-namespace:BrightnessTrayAppWpf.Localization"
     mc:Ignorable="d"
     d:DesignWidth="660"
     d:DesignHeight="594"
     d:Background="#1F1F1F"
     utils1:SettingsKeyboardNavigation.IsContentSection="True">
     <StackPanel>
-        <TextBlock Style="{StaticResource SectionHeaderStyle}" Text="General"/>
+        <TextBlock Style="{StaticResource SectionHeaderStyle}" Text="{loc:Loc Settings_General_SectionHeader}"/>
 
         <utils:SettingsCard x:Name="RunOnStartupCard"
-                               Title="Run on startup automatically"
-                               Description="Launch BrightnessTrayAppWpf when you sign in to Windows.">
+                               Title="{loc:Loc Settings_General_RunOnStartup_Title}"
+                               Description="{loc:Loc Settings_General_RunOnStartup_Description}">
             <utils:SettingsCard.Control>
                 <CheckBox x:Name="RunOnStartupToggle"
                           Style="{StaticResource ToggleSwitchStyle}"
@@ -27,8 +28,8 @@
             </utils:SettingsCard.Control>
         </utils:SettingsCard>
 
-        <utils:SettingsCard Title="Apply brightness when app opens"
-                               Description="Restore the last-saved brightness profile on launch.">
+        <utils:SettingsCard Title="{loc:Loc Settings_General_ApplyBrightnessOnStartup_Title}"
+                               Description="{loc:Loc Settings_General_ApplyBrightnessOnStartup_Description}">
             <utils:SettingsCard.Control>
                 <CheckBox x:Name="ApplyBrightnessOnStartupToggle"
                           Style="{StaticResource ToggleSwitchStyle}"
@@ -37,7 +38,7 @@
             </utils:SettingsCard.Control>
         </utils:SettingsCard>
 
-        <TextBlock Text="Installation"
+        <TextBlock Text="{loc:Loc Settings_General_Installation_Header}"
                    Style="{StaticResource SubsectionHeaderStyle}"/>
 
         <Border Style="{StaticResource SettingsCardStyle}">
@@ -47,7 +48,7 @@
                     <ColumnDefinition Width="Auto"/>
                 </Grid.ColumnDefinitions>
                 <StackPanel Style="{StaticResource SettingsCardTitlePanel}">
-                    <TextBlock Style="{StaticResource SettingTitleStyle}" Text="Local user"/>
+                    <TextBlock Style="{StaticResource SettingTitleStyle}" Text="{loc:Loc Settings_General_LocalUser_Title}"/>
                     <TextBlock x:Name="InstallLocalAppDataStatusText"
                                Style="{StaticResource SettingDescriptionStyle}"
                                Text="..."/>
@@ -57,13 +58,13 @@
                             VerticalAlignment="Center">
                     <Button x:Name="InstallLocalAppDataButton"
                             Style="{StaticResource SettingsButtonStyle}"
-                            Content="Install"
+                            Content="{loc:Loc Settings_General_Install_Button}"
                             Padding="14,6"
                             Margin="{StaticResource RightSpacerSmall}"
                             Click="InstallLocalAppData_Click"/>
                     <Button x:Name="UninstallLocalAppDataButton"
                             Style="{StaticResource SettingsButtonStyle}"
-                            Content="Uninstall"
+                            Content="{loc:Loc Settings_General_Uninstall_Button}"
                             Padding="14,6"
                             Click="UninstallLocalAppData_Click"/>
                 </StackPanel>
@@ -77,7 +78,7 @@
                     <ColumnDefinition Width="Auto"/>
                 </Grid.ColumnDefinitions>
                 <StackPanel Style="{StaticResource SettingsCardTitlePanel}">
-                    <TextBlock Style="{StaticResource SettingTitleStyle}" Text="System wide"/>
+                    <TextBlock Style="{StaticResource SettingTitleStyle}" Text="{loc:Loc Settings_General_SystemWide_Title}"/>
                     <TextBlock x:Name="InstallProgramFilesStatusText"
                                Style="{StaticResource SettingDescriptionStyle}"
                                Text="..."/>
@@ -87,13 +88,13 @@
                             VerticalAlignment="Center">
                     <Button x:Name="InstallProgramFilesButton"
                             Style="{StaticResource SettingsButtonStyle}"
-                            Content="Install"
+                            Content="{loc:Loc Settings_General_Install_Button}"
                             Padding="14,6"
                             Margin="{StaticResource RightSpacerSmall}"
                             Click="InstallProgramFiles_Click"/>
                     <Button x:Name="UninstallProgramFilesButton"
                             Style="{StaticResource SettingsButtonStyle}"
-                            Content="Uninstall"
+                            Content="{loc:Loc Settings_General_Uninstall_Button}"
                             Padding="14,6"
                             Click="UninstallProgramFiles_Click"/>
                 </StackPanel>
@@ -107,7 +108,7 @@
                     <ColumnDefinition Width="Auto"/>
                 </Grid.ColumnDefinitions>
                 <StackPanel Style="{StaticResource SettingsCardTitlePanel}">
-                    <TextBlock Style="{StaticResource SettingTitleStyle}" Text="Windows Store app bundle"/>
+                    <TextBlock Style="{StaticResource SettingTitleStyle}" Text="{loc:Loc Settings_General_WindowsStore_Title}"/>
                     <TextBlock x:Name="InstallStoreStatusText"
                                Style="{StaticResource SettingDescriptionStyle}"
                                Text="..."/>
@@ -115,11 +116,11 @@
             </Grid>
         </Border>
 
-        <TextBlock Text="Night Light"
+        <TextBlock Text="{loc:Loc Settings_General_NightLight_Header}"
                    Style="{StaticResource SubsectionHeaderStyle}"/>
 
-        <utils:SettingsCard Title="Enable Night Light control"
-                               Description="Show the night light strength slider in the brightness flyout. When off, the slider row is hidden.">
+        <utils:SettingsCard Title="{loc:Loc Settings_General_ShowNightLightSlider_Title}"
+                               Description="{loc:Loc Settings_General_ShowNightLightSlider_Description}">
             <utils:SettingsCard.Control>
                 <CheckBox x:Name="ShowNightLightSliderToggle"
                           Style="{StaticResource ToggleSwitchStyle}"
@@ -128,8 +129,8 @@
             </utils:SettingsCard.Control>
         </utils:SettingsCard>
 
-        <utils:SettingsCard Title="Invert night light slider"
-                               Description="Reverse the night light slider so dragging left increases warmth and dragging right cools the screen.">
+        <utils:SettingsCard Title="{loc:Loc Settings_General_InvertNightLightSlider_Title}"
+                               Description="{loc:Loc Settings_General_InvertNightLightSlider_Description}">
             <utils:SettingsCard.Control>
                 <CheckBox x:Name="InvertNightLightSliderToggle"
                           Style="{StaticResource ToggleSwitchStyle}"
@@ -138,8 +139,8 @@
             </utils:SettingsCard.Control>
         </utils:SettingsCard>
 
-        <utils:SettingsCard Title="Turn off night light at zero strength"
-                               Description="When the night light slider hits 0, also disable night light. Toggling night light back on restores the last non-zero strength.">
+        <utils:SettingsCard Title="{loc:Loc Settings_General_TurnOffNightLightAtZeroStrength_Title}"
+                               Description="{loc:Loc Settings_General_TurnOffNightLightAtZeroStrength_Description}">
             <utils:SettingsCard.Control>
                 <CheckBox x:Name="TurnOffNightLightAtZeroStrengthToggle"
                           Style="{StaticResource ToggleSwitchStyle}"
@@ -153,8 +154,8 @@
              this card is left in the tree (collapsed) so the affordance can be revived
              without re-authoring the XAML if the backend is ever reinstated.
              Selecting this mode no-ops at runtime - the resolver falls through to Registry. -->
-        <utils:SettingsCard Title="Use gamma-ramp night light"
-                               Description="Drive night light by writing the GPU's gamma LUT directly instead of going through Windows Night Light. Survives locked-down profiles and stuck BlueLightReduction services. Doesn't work on HDR displays."
+        <utils:SettingsCard Title="{loc:Loc Settings_General_GammaRampNightLight_Title}"
+                               Description="{loc:Loc Settings_General_GammaRampNightLight_Description}"
                                Visibility="Collapsed">
             <utils:SettingsCard.Control>
                 <CheckBox x:Name="GammaRampNightLightToggle"
@@ -170,8 +171,8 @@
              SaveSettingsAsync -> CloudStore Save -> broker notification, which is the
              only path that reliably refreshes BOTH the live filter AND the Settings UI's
              cached slider position. -->
-        <utils:SettingsCard Title="Use Settings UI handler"
-                               Description="Route night-light writes through the same setting handler that the Windows Settings slider uses. Keeps the Settings UI's cached slider position in sync with what the flyout is showing. Recommended on builds where the BlueLightReduction service goes stale and the registry path stops being picked up.">
+        <utils:SettingsCard Title="{loc:Loc Settings_General_SettingsHandlerNightLight_Title}"
+                               Description="{loc:Loc Settings_General_SettingsHandlerNightLight_Description}">
             <utils:SettingsCard.Control>
                 <CheckBox x:Name="SettingsHandlerNightLightToggle"
                           Style="{StaticResource ToggleSwitchStyle}"
@@ -186,8 +187,8 @@
              toggled off and back on. When enabled, every strength write is followed by an
              off/on pulse - briefly visible as flicker, but guarantees the new strength
              takes effect. Independent of the selected backend; off by default. -->
-        <utils:SettingsCard Title="Force-apply strength changes"
-                               Description="If sliding the night-light strength does nothing visible until you toggle night light off and back on, enable this. Each strength change is followed by a brief off/on pulse so Windows re-applies the new value. Adds a momentary flicker per change. Applies to whichever backend is selected.">
+        <utils:SettingsCard Title="{loc:Loc Settings_General_NightLightPulseOnStrengthChange_Title}"
+                               Description="{loc:Loc Settings_General_NightLightPulseOnStrengthChange_Description}">
             <utils:SettingsCard.Control>
                 <CheckBox x:Name="NightLightPulseOnStrengthChangeToggle"
                           Style="{StaticResource ToggleSwitchStyle}"
@@ -201,12 +202,12 @@
              build (post-Windows-update) and has to fetch the matching PDB from the Microsoft public
              symbol server. 60s is fine on a typical home connection; metered or high-latency links
              may need more. -->
-        <utils:SettingsCard Title="Night Light symbol download timeout"
-                               Description="HTTP timeout the night-light fallback uses when downloading the SettingsHandlers_Display PDB from Microsoft's symbol server. Only matters after a Windows update changes the binary layout; raise this on slow or metered connections.">
+        <utils:SettingsCard Title="{loc:Loc Settings_General_NightLightPDBDownloadTimeout_Title}"
+                               Description="{loc:Loc Settings_General_NightLightPDBDownloadTimeout_Description}">
             <utils:SettingsCard.Control>
                 <local:NumericSpinner Style="{StaticResource DwellTimeSpinnerStyle}"
                                       x:Name="NightLightPDBDownloadTimeoutBox"
-                                      Suffix="s"
+                                      Suffix="{loc:Loc Settings_General_Seconds_Suffix}"
                                       Minimum="5" Maximum="600"/>
             </utils:SettingsCard.Control>
         </utils:SettingsCard>
@@ -216,8 +217,8 @@
              Default 5s keeps twilight transitions feeling smooth;
              users who want finer control over a fast-changing curve can drop it lower,
              and users who want minimal background work can raise it. -->
-        <utils:SettingsCard Title="Environmental curve tick interval"
-                               Description="How often the brightness / night-light curves re-sample and apply. Lower = quicker reaction to fast-changing curves; higher = less background work. Identical values across ticks are filtered before any DDC write.">
+        <utils:SettingsCard Title="{loc:Loc Settings_General_EnvironmentalCurveTickInterval_Title}"
+                               Description="{loc:Loc Settings_General_EnvironmentalCurveTickInterval_Description}">
             <utils:SettingsCard.Control>
                 <local:NumericSpinner Style="{StaticResource DwellTimeSpinnerStyle}"
                                       x:Name="EnvironmentalCurveTickIntervalBox"
@@ -225,7 +226,7 @@
             </utils:SettingsCard.Control>
         </utils:SettingsCard>
 
-        <TextBlock Text="Profiles"
+        <TextBlock Text="{loc:Loc Settings_General_Profiles_Header}"
                    Style="{StaticResource SubsectionHeaderStyle}"/>
 
         <!-- Two-column layout: rearrange card on the left, autosave card on the right. -->
@@ -241,8 +242,8 @@
             <utils:SettingsCard Grid.Column="1"
                                    VerticalAlignment="Top"
                                    Margin="6,0,0,0"
-                                   Title="Auto-save"
-                                   Description="Automatically save to the selected profile whenever a monitor setting changes.">
+                                   Title="{loc:Loc Settings_General_Autosave_Title}"
+                                   Description="{loc:Loc Settings_General_Autosave_Description}">
                 <utils:SettingsCard.Control>
                     <CheckBox x:Name="AutosaveToggle"
                               Style="{StaticResource ToggleSwitchStyle}"
@@ -255,11 +256,11 @@
                     Style="{StaticResource SettingsCardStyle}"
                     Margin="0,0,6,6">
                 <StackPanel>
-                    <TextBlock Text="Rearrange and rename profile data"
+                    <TextBlock Text="{loc:Loc Settings_General_RearrangeProfiles_Title}"
                                Style="{StaticResource SettingTitleStyle}"
                                FontWeight="SemiBold"/>
                     <TextBlock Style="{StaticResource SettingDescriptionStyle}"
-                               Text="Drag the cards to reorder them, then Apply to swap the profiles' saved data between slots."
+                               Text="{loc:Loc Settings_General_RearrangeProfiles_Description}"
                                Margin="0,4,0,12"/>
 
                     <Grid>
@@ -305,7 +306,7 @@
                                                 Padding="10,0"
                                                 Cursor="Hand"
                                                 Tag="{Binding Key}"
-                                                ToolTip="Drag or Ctrl+&#x2191;/&#x2193; to reorder; double-click or type to rename"
+                                                ToolTip="{loc:Loc Settings_General_ProfileCard_DragTooltip}"
                                                 Focusable="True"
                                                 utils1:KeyboardFocusBehavior.ShowKeyboardFocus="True"
                                                 PreviewMouseLeftButtonDown="ProfileGripper_PreviewMouseLeftButtonDown"
@@ -371,7 +372,7 @@
 
                     <Button x:Name="ApplyProfileSwapsButton"
                             Style="{StaticResource SettingsButtonStyle}"
-                            Content="Apply"
+                            Content="{loc:Loc Settings_General_Apply_Button}"
                             HorizontalAlignment="Right"
                             MinWidth="120"
                             Margin="0,4,0,0"

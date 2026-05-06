@@ -4,9 +4,10 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:shell="clr-namespace:System.Windows.Shell;assembly=PresentationFramework"
     xmlns:utils="clr-namespace:BrightnessTrayAppWpf.Wpf.Utils"
+    xmlns:loc="clr-namespace:BrightnessTrayAppWpf.Localization"
     utils:KeyboardFocusBehavior.EnableKeyboardOnlyFocus="True"
     utils:KeyboardFocusBehavior.FocusStyle="{StaticResource KeyboardFocusVisualStyle}"
-    Title="Uninstall BrightnessTrayAppWpf"
+    Title="{loc:Loc Uninstaller_Title}"
     Width="520"
     Height="360"
     MinWidth="420"
@@ -47,7 +48,7 @@
                 </Grid.ColumnDefinitions>
 
                 <TextBlock Grid.Column="0"
-                           Text="Uninstall BrightnessTrayAppWpf"
+                           Text="{loc:Loc Uninstaller_Title}"
                            Foreground="{DynamicResource ThemeForeground}"
                            VerticalAlignment="Center"
                            Margin="16,0,0,0"
@@ -62,7 +63,7 @@
                             Style="{StaticResource CaptionCloseButtonStyle}"
                             Click="Close_Click"
                             Content="&#xE8BB;"
-                            ToolTip="Close"/>
+                            ToolTip="{loc:Loc Uninstaller_Caption_Close}"/>
                 </StackPanel>
             </Grid>
 
@@ -77,12 +78,12 @@
 
                 <TextBlock Grid.Row="0"
                            Style="{StaticResource SectionHeaderStyle}"
-                           Text="Uninstall BrightnessTrayAppWpf"/>
+                           Text="{loc:Loc Uninstaller_SectionHeader}"/>
 
                 <TextBlock Grid.Row="1"
                            x:Name="DescriptionText"
                            Style="{StaticResource SettingDescriptionStyle}"
-                           Text="This will remove the installed copy of BrightnessTrayAppWpf and its registration in Windows Apps. Choose what to do with your settings."
+                           Text="{loc:Loc Uninstaller_DefaultDescription}"
                            Margin="0,0,0,16"/>
 
                 <StackPanel Grid.Row="2">
@@ -99,9 +100,9 @@
                                          VerticalAlignment="Center"
                                          Margin="0,0,12,0"/>
                             <StackPanel Grid.Column="1" VerticalAlignment="Center">
-                                <TextBlock Style="{StaticResource SettingTitleStyle}" Text="Keep my settings"/>
+                                <TextBlock Style="{StaticResource SettingTitleStyle}" Text="{loc:Loc Uninstaller_KeepSettings_Title}"/>
                                 <TextBlock Style="{StaticResource SettingDescriptionStyle}"
-                                           Text="Leave settings.xml in place so a future install picks them up."/>
+                                           Text="{loc:Loc Uninstaller_KeepSettings_Description}"/>
                             </StackPanel>
                         </Grid>
                     </Border>
@@ -118,10 +119,10 @@
                                          VerticalAlignment="Center"
                                          Margin="0,0,12,0"/>
                             <StackPanel Grid.Column="1" VerticalAlignment="Center">
-                                <TextBlock Style="{StaticResource SettingTitleStyle}" Text="Delete my settings"/>
+                                <TextBlock Style="{StaticResource SettingTitleStyle}" Text="{loc:Loc Uninstaller_DeleteSettings_Title}"/>
                                 <TextBlock Style="{StaticResource SettingDescriptionStyle}"
                                            x:Name="DeleteSettingsDescription"
-                                           Text="Also remove the BrightnessTrayAppWpf folder under %LOCALAPPDATA%, including settings.xml."/>
+                                           Text="{loc:Loc Uninstaller_DeleteSettings_DefaultDescription}"/>
                             </StackPanel>
                         </Grid>
                     </Border>
@@ -133,13 +134,13 @@
                             Margin="0,20,0,0">
                     <Button x:Name="CancelButton"
                             Style="{StaticResource SettingsButtonStyle}"
-                            Content="Cancel"
+                            Content="{loc:Loc Uninstaller_Cancel}"
                             Padding="20,8"
                             Margin="0,0,8,0"
                             Click="Cancel_Click"/>
                     <Button x:Name="UninstallButton"
                             Style="{StaticResource SettingsButtonStyle}"
-                            Content="Uninstall"
+                            Content="{loc:Loc Uninstaller_UninstallButton}"
                             Padding="20,8"
                             Click="Uninstall_Click"/>
                 </StackPanel>

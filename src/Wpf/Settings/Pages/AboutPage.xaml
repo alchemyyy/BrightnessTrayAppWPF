@@ -4,6 +4,7 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    xmlns:loc="clr-namespace:BrightnessTrayAppWpf.Localization"
     xmlns:utils="clr-namespace:BrightnessTrayAppWpf.Wpf.Utils"
     mc:Ignorable="d"
     d:DesignWidth="660"
@@ -11,7 +12,7 @@
     d:Background="#1F1F1F"
     utils:SettingsKeyboardNavigation.IsContentSection="True">
     <StackPanel>
-        <TextBlock Style="{StaticResource SectionHeaderStyle}" Text="About"/>
+        <TextBlock Style="{StaticResource SectionHeaderStyle}" Text="{loc:Loc Settings_About_SectionHeader}"/>
 
         <TextBlock Text="BrightnessTrayAppWpf"
                    FontSize="14"
@@ -19,35 +20,35 @@
                    Foreground="{DynamicResource ThemeForeground}"
                    Margin="0,0,0,4"/>
 
-        <TextBlock Text="A tray-based brightness controller for DDC/CI monitors."
+        <TextBlock Text="{loc:Loc Settings_About_Tagline}"
                    Foreground="{DynamicResource ThemeForeground}"
                    Opacity="0.7"
                    TextWrapping="Wrap"
                    Margin="0,0,0,24"/>
 
         <StackPanel Orientation="Horizontal" Margin="{StaticResource AboutRowMargin}">
-            <TextBlock Text="Build"
+            <TextBlock Text="{loc:Loc Settings_About_BuildLabel}"
                        Style="{StaticResource AboutLabelStyle}"/>
             <TextBlock x:Name="BuildNumberText"
                        Foreground="{DynamicResource ThemeForeground}"/>
         </StackPanel>
 
         <StackPanel Orientation="Horizontal" Margin="{StaticResource AboutRowMargin}">
-            <TextBlock Text="Runtime"
+            <TextBlock Text="{loc:Loc Settings_About_RuntimeLabel}"
                        Style="{StaticResource AboutLabelStyle}"/>
             <TextBlock x:Name="RuntimeText"
                        Foreground="{DynamicResource ThemeForeground}"/>
         </StackPanel>
 
         <StackPanel Orientation="Horizontal" Margin="{StaticResource AboutRowMargin}">
-            <TextBlock Text="Author"
+            <TextBlock Text="{loc:Loc Settings_About_AuthorLabel}"
                        Style="{StaticResource AboutLabelStyle}"/>
             <TextBlock Text="alchemyyy"
                        Foreground="{DynamicResource ThemeForeground}"/>
         </StackPanel>
 
         <StackPanel Orientation="Horizontal" Margin="{StaticResource AboutRowMargin}">
-            <TextBlock Text="Github"
+            <TextBlock Text="{loc:Loc Settings_About_GithubLabel}"
                        Style="{StaticResource AboutLabelStyle}"/>
             <TextBlock>
                 <Hyperlink NavigateUri="https://github.com/alchemyyy/BrightnessTrayAppWpf"
@@ -58,21 +59,21 @@
             </TextBlock>
         </StackPanel>
 
-        <TextBlock Text="Known Issues"
+        <TextBlock Text="{loc:Loc Settings_About_KnownIssues_Header}"
                    Style="{StaticResource SubsectionHeaderStyle}"/>
 
         <Border Style="{StaticResource SettingsCardStyle}">
           <StackPanel>
-            <TextBlock Style="{StaticResource SettingTitleStyle}" Text="Night Light corruption"/>
+            <TextBlock Style="{StaticResource SettingTitleStyle}" Text="{loc:Loc Settings_About_NightLightCorruption_Title}"/>
             <TextBlock Style="{StaticResource SettingDescriptionStyle}"
-                       Text="If Night Light becomes unresponsive, win+alt+shift+b then signing out and back in should clear it."/>
+                       Text="{loc:Loc Settings_About_NightLightCorruption_Description}"/>
           </StackPanel>
         </Border>
         <Border Style="{StaticResource SettingsCardStyle}">
           <StackPanel>
-            <TextBlock Style="{StaticResource SettingTitleStyle}" Text="DDC state corruption"/>
+            <TextBlock Style="{StaticResource SettingTitleStyle}" Text="{loc:Loc Settings_About_DDCCorruption_Title}"/>
             <TextBlock Style="{StaticResource SettingDescriptionStyle}"
-                       Text="If a monitor becomes unrecoverable, its slider will show with a warning triangle glyph. The monitor will have to be power cycled to restore DDC."/>
+                       Text="{loc:Loc Settings_About_DDCCorruption_Description}"/>
           </StackPanel>
         </Border>
     </StackPanel>

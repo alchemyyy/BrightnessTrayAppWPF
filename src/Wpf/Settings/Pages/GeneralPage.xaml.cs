@@ -5,6 +5,7 @@ using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Diagnostics;
+using BrightnessTrayAppWpf.Localization;
 using BrightnessTrayAppWpf.Models;
 using BrightnessTrayAppWpf.Services;
 using BrightnessTrayAppWpf.Utils;
@@ -29,7 +30,11 @@ public class ProfileSlotEntry : INotifyPropertyChanged
 {
     public int Key { get; set; }
 
-    private string _name = "Profile";
+    // Localized default and sentinel: a slot whose persisted name equals this is treated as
+    // "unnamed" and stored as null in settings so the file stays clean.
+    public static string DefaultName => LocalizationManager.Instance["Settings_General_DefaultProfileName"];
+
+    private string _name = DefaultName;
     public string Name
     {
         get => _name;
@@ -81,9 +86,10 @@ public class ProfileSlotEntry : INotifyPropertyChanged
 /// </summary>
 public partial class GeneralPage : UserControl
 {
-    private const string RunOnStartupOffDescription =
-        "Launch BrightnessTrayAppWpf when you sign in to Windows.";
-    private const string RunOnStartupOnHeaderLine = "Autostart shortcut placed in shell:startup.";
+    private static string RunOnStartupOffDescription =>
+        LocalizationManager.Instance["Settings_General_RunOnStartup_Description"];
+    private static string RunOnStartupOnHeaderLine =>
+        LocalizationManager.Instance["Settings_General_RunOnStartup_OnHeaderLine"];
 
     private AppSettings? _settings;
     private ProfileManager? _profileManager;
@@ -194,7 +200,9 @@ public partial class GeneralPage : UserControl
             RunOnStartupCard.Description = RunOnStartupOffDescription;
             return;
         }
-        RunOnStartupCard.Description = $"{RunOnStartupOnHeaderLine}\nTarget: {target}";
+        RunOnStartupCard.Description = string.Format(
+            LocalizationManager.Instance["Settings_General_RunOnStartup_OnDescriptionFormat"],
+            RunOnStartupOnHeaderLine, target);
     }
 
     private void BoolToggle_Changed(object sender, RoutedEventArgs e)
@@ -255,7 +263,7 @@ public partial class GeneralPage : UserControl
             _profileSlots.Add(new ProfileSlotEntry
             {
                 Key = i,
-                Name = string.IsNullOrWhiteSpace(saved) ? "Profile" : saved,
+                Name = string.IsNullOrWhiteSpace(saved) ? ProfileSlotEntry.DefaultName : saved,
             });
         }
         ProfileSwapListPanel.ItemsSource = _profileSlots;
@@ -422,17 +430,17 @@ public partial class GeneralPage : UserControl
         if (revert)
         {
             string? saved = _profileManager?.Profiles.Profiles[entry.Key].Name;
-            entry.Name = string.IsNullOrWhiteSpace(saved) ? "Profile" : saved;
+            entry.Name = string.IsNullOrWhiteSpace(saved) ? ProfileSlotEntry.DefaultName : saved;
         }
         else
         {
             string trimmed = (tb.Text).Trim();
-            if (string.IsNullOrEmpty(trimmed)) trimmed = "Profile";
+            if (string.IsNullOrEmpty(trimmed)) trimmed = ProfileSlotEntry.DefaultName;
 
             entry.Name = trimmed;
-            // Persist; "Profile" is the default sentinel and is stored as null
+            // Persist; the localized default name is the sentinel and is stored as null
             // so the XML stays clean and unchanged for slots the user hasn't renamed.
-            string? toStore = trimmed == "Profile" ? null : trimmed;
+            string? toStore = trimmed == ProfileSlotEntry.DefaultName ? null : trimmed;
             _profileManager?.RenameProfile(entry.Key, toStore);
             // Fan out to other pages (Hotkeys, Environmental) that cache profile names in their UI
             // - without this they'd keep showing the old label until the window is reopened.
@@ -511,38 +519,51 @@ public partial class GeneralPage : UserControl
         string installPath,
         bool elevated)
     {
-        string elevationSuffix = elevated ? " (requires admin)" : "";
+        string elevationSuffix = elevated
+            ? LocalizationManager.Instance["Settings_General_RequiresAdmin_Suffix"]
+            : "";
 
         switch (info.Status)
         {
             case InstallStatus.NotInstalled:
-                statusText.Text = $"Not installed. Will be placed at \"{installPath}\".{elevationSuffix}";
-                installButton.Content = "Install";
+                statusText.Text = string.Format(
+                    LocalizationManager.Instance["Settings_General_NotInstalled_Format"],
+                    installPath, elevationSuffix);
+                installButton.Content = LocalizationManager.Instance["Settings_General_Install_Button"];
                 installButton.Visibility = Visibility.Visible;
                 uninstallButton.Visibility = Visibility.Collapsed;
                 break;
             case InstallStatus.InstalledUpToDate:
                 statusText.Text = info.InstalledVersion is { } v
-                    ? $"Installed (build {v}) at \"{installPath}\"."
-                    : $"Installed at \"{installPath}\".";
+                    ? string.Format(
+                        LocalizationManager.Instance["Settings_General_InstalledWithBuild_Format"],
+                        v, installPath)
+                    : string.Format(
+                        LocalizationManager.Instance["Settings_General_Installed_Format"],
+                        installPath);
                 installButton.Visibility = Visibility.Collapsed;
-                uninstallButton.Content = "Uninstall";
+                uninstallButton.Content = LocalizationManager.Instance["Settings_General_Uninstall_Button"];
                 uninstallButton.Visibility = Visibility.Visible;
                 break;
             case InstallStatus.InstalledOutOfDate:
                 statusText.Text = info.InstalledVersion is { } ov
-                    ? $"Installed build {ov}, running build {BuildInfo.BuildNumber}. "
-                        + $"Click Update to overwrite.{elevationSuffix}"
-                    : $"Installed (older build) at \"{installPath}\".{elevationSuffix}";
-                installButton.Content = "Update";
+                    ? string.Format(
+                        LocalizationManager.Instance["Settings_General_InstalledOutOfDate_Format"],
+                        ov, BuildInfo.BuildNumber, elevationSuffix)
+                    : string.Format(
+                        LocalizationManager.Instance["Settings_General_InstalledOlderBuild_Format"],
+                        installPath, elevationSuffix);
+                installButton.Content = LocalizationManager.Instance["Settings_General_Update_Button"];
                 installButton.Visibility = Visibility.Visible;
-                uninstallButton.Content = "Uninstall";
+                uninstallButton.Content = LocalizationManager.Instance["Settings_General_Uninstall_Button"];
                 uninstallButton.Visibility = Visibility.Visible;
                 break;
             case InstallStatus.CurrentlyRunning:
-                statusText.Text = $"Currently running from \"{installPath}\".";
+                statusText.Text = string.Format(
+                    LocalizationManager.Instance["Settings_General_CurrentlyRunning_Format"],
+                    installPath);
                 installButton.Visibility = Visibility.Collapsed;
-                uninstallButton.Content = "Uninstall";
+                uninstallButton.Content = LocalizationManager.Instance["Settings_General_Uninstall_Button"];
                 uninstallButton.Visibility = Visibility.Visible;
                 break;
         }
@@ -551,8 +572,8 @@ public partial class GeneralPage : UserControl
     private void ApplyStoreRow(InstallationInfo info)
     {
         InstallStoreStatusText.Text = info.Status == InstallStatus.CurrentlyRunning
-            ? "Currently running from a Windows Store package."
-            : "Not installed via the Windows Store.";
+            ? LocalizationManager.Instance["Settings_General_StoreRunning"]
+            : LocalizationManager.Instance["Settings_General_StoreNotInstalled"];
     }
 
     // Window.GetWindow can return null for a UserControl that isn't yet parented,
@@ -576,11 +597,12 @@ public partial class GeneralPage : UserControl
             if (Window.GetWindow(this) is IConfirmDialogService confirm)
             {
                 bool ok = await confirm.ConfirmAsync(
-                    title: "Install BrightnessTrayAppWpf?",
-                    message: $"This will copy the running exe to \"{InstallationService.LocalAppDataInstallExe}\" "
-                        + "and register it in Windows Settings > Apps.",
-                    confirmText: "Install",
-                    cancelText: "Cancel");
+                    title: LocalizationManager.Instance["Settings_General_InstallConfirm_Title"],
+                    message: string.Format(
+                        LocalizationManager.Instance["Settings_General_InstallConfirm_Message_Format"],
+                        InstallationService.LocalAppDataInstallExe),
+                    confirmText: LocalizationManager.Instance["Settings_General_Install_Button"],
+                    cancelText: LocalizationManager.Instance["Settings_General_Cancel_Button"]);
                 if (!ok) return;
             }
 
@@ -589,7 +611,9 @@ public partial class GeneralPage : UserControl
             {
                 InstallResult result = await Task.Run(InstallationService.InstallToLocalAppData);
                 if (result is { Success: false, UserCancelled: false } && !string.IsNullOrEmpty(result.ErrorMessage))
-                    ShowOwnedWarning(result.ErrorMessage, "Install failed");
+                    ShowOwnedWarning(
+                        result.ErrorMessage,
+                        LocalizationManager.Instance["Settings_General_InstallFailed_Title"]);
             }
             finally
             {
@@ -612,11 +636,12 @@ public partial class GeneralPage : UserControl
             if (Window.GetWindow(this) is IConfirmDialogService confirm)
             {
                 bool ok = await confirm.ConfirmAsync(
-                    title: "Install BrightnessTrayAppWpf system-wide?",
-                    message: $"This will copy the running exe to \"{InstallationService.ProgramFilesInstallExe}\" "
-                        + "and register it in Windows Settings > Apps. Requires admin.",
-                    confirmText: "Install",
-                    cancelText: "Cancel");
+                    title: LocalizationManager.Instance["Settings_General_InstallSystemWideConfirm_Title"],
+                    message: string.Format(
+                        LocalizationManager.Instance["Settings_General_InstallSystemWideConfirm_Message_Format"],
+                        InstallationService.ProgramFilesInstallExe),
+                    confirmText: LocalizationManager.Instance["Settings_General_Install_Button"],
+                    cancelText: LocalizationManager.Instance["Settings_General_Cancel_Button"]);
                 if (!ok) return;
             }
 
@@ -625,7 +650,9 @@ public partial class GeneralPage : UserControl
             {
                 InstallResult result = await Task.Run(InstallationService.InstallSystemWide);
                 if (result is { Success: false, UserCancelled: false } && !string.IsNullOrEmpty(result.ErrorMessage))
-                    ShowOwnedWarning(result.ErrorMessage, "Install failed");
+                    ShowOwnedWarning(
+                        result.ErrorMessage,
+                        LocalizationManager.Instance["Settings_General_InstallFailed_Title"]);
             }
             finally
             {
@@ -699,9 +726,8 @@ public partial class GeneralPage : UserControl
             if (exitCode != 0)
             {
                 ShowOwnedWarning(
-                    "Uninstall completed with warnings. Some files or registry entries may need "
-                        + "manual removal. Check the install location and Windows Settings > Apps.",
-                    "Uninstall incomplete");
+                    LocalizationManager.Instance["Settings_General_UninstallIncomplete_Message"],
+                    LocalizationManager.Instance["Settings_General_UninstallIncomplete_Title"]);
             }
         }));
     }

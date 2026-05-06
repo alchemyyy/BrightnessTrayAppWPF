@@ -2,6 +2,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
+using BrightnessTrayAppWpf.Localization;
 using BrightnessTrayAppWpf.Models;
 using BrightnessTrayAppWpf.Visuals;
 using BrightnessTrayAppWpf.Wpf.Settings.Utils;
@@ -163,21 +164,22 @@ public partial class ThemePage : UserControl
     /// Maps a swatch tag (the "Text" / "Background" / "TrayIconBright" / ... values stamped on
     /// each swatch button's Tag) to the displayed Title of the SettingsCard the swatch lives in.
     /// Used as the picker's titlebar prefix so the window header echoes the card the user clicked
-    /// from instead of the internal tag name.
+    /// from instead of the internal tag name. Each branch returns a localized SettingsCard title
+    /// shared with the matching XAML SettingsCard.Title binding.
     /// </summary>
     private static string GetSwatchCardTitle(string name) => name switch
     {
-        "Text" => "Text color",
-        "Background" => "Background color",
-        "TrayIcon" => "Static icon color",
-        "TrayIconBright" => "Bright color",
-        "TrayIconDim" => "Dim color",
-        "EnvBrightnessCurve" => "Brightness curve color",
-        "EnvNightLightCurve" => "Night light curve color",
-        "EnvCurrentTime" => "Current-time marker color",
-        "EnvTwilightBackdrop" => "Twilight backdrop color",
-        "EnvNightBackdrop" => "Night backdrop color",
-        "EnvGridLine" => "Grid line color",
+        "Text" => LocalizationManager.Instance["Settings_Theme_TextColor_Title"],
+        "Background" => LocalizationManager.Instance["Settings_Theme_BackgroundColor_Title"],
+        "TrayIcon" => LocalizationManager.Instance["Settings_Theme_StaticIconColor_Title"],
+        "TrayIconBright" => LocalizationManager.Instance["Settings_Theme_BrightColor_Title"],
+        "TrayIconDim" => LocalizationManager.Instance["Settings_Theme_DimColor_Title"],
+        "EnvBrightnessCurve" => LocalizationManager.Instance["Settings_Theme_BrightnessCurveColor_Title"],
+        "EnvNightLightCurve" => LocalizationManager.Instance["Settings_Theme_NightLightCurveColor_Title"],
+        "EnvCurrentTime" => LocalizationManager.Instance["Settings_Theme_CurrentTimeMarkerColor_Title"],
+        "EnvTwilightBackdrop" => LocalizationManager.Instance["Settings_Theme_TwilightBackdropColor_Title"],
+        "EnvNightBackdrop" => LocalizationManager.Instance["Settings_Theme_NightBackdropColor_Title"],
+        "EnvGridLine" => LocalizationManager.Instance["Settings_Theme_GridLineColor_Title"],
         _ => name,
     };
 
@@ -235,7 +237,12 @@ public partial class ThemePage : UserControl
         // mirror that here so the picker doesn't open at opaque black for an "unset" pick.
         Color initial = (isLight ? target.LightColor : target.DarkColor)
                         ?? GetSwatchFallbackColor(parts[0], isLight);
-        string title = $"{GetSwatchCardTitle(parts[0])} ({(isLight ? "light" : "dark")})";
+        string variantToken = isLight
+            ? LocalizationManager.Instance["Settings_Theme_PickerTitle_LightVariant"]
+            : LocalizationManager.Instance["Settings_Theme_PickerTitle_DarkVariant"];
+        string title = string.Format(
+            LocalizationManager.Instance["Settings_Theme_PickerTitle_Format"],
+            GetSwatchCardTitle(parts[0]), variantToken);
 
         TAWPFColorPicker picker = new(title, hasAlpha: true, initial)
         {

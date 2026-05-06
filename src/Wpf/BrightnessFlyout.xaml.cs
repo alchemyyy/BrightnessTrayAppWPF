@@ -9,6 +9,7 @@ using System.Windows.Controls.Primitives;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Threading;
+using BrightnessTrayAppWpf.Localization;
 using BrightnessTrayAppWpf.Models;
 using BrightnessTrayAppWpf.Services;
 using BrightnessTrayAppWpf.Utils;
@@ -320,7 +321,7 @@ public partial class BrightnessFlyout : Window, INotifyPropertyChanged
         NightLightMonitor = new MonitorInfo
         {
             ID = "nightlight",
-            Name = "Night Light",
+            Name = LocalizationManager.Instance["Flyout_NightLightRowName"],
             IsNightLight = true,
             Brightness = FlipIfNightLightInverted(initialNightLightStrength),
         };
@@ -339,7 +340,7 @@ public partial class BrightnessFlyout : Window, INotifyPropertyChanged
         MasterMonitor = new MonitorInfo
         {
             ID = "master",
-            Name = "All Displays",
+            Name = LocalizationManager.Instance["Flyout_MasterRowName"],
             IconGlyph = "\uEDAB", // Sync Badge 12 glyph - master icon-toggle force-syncs all monitors
             Brightness = 50,
             IsMaster = true,
@@ -1973,9 +1974,12 @@ public partial class BrightnessFlyout : Window, INotifyPropertyChanged
             ? threwWith
             : !string.IsNullOrWhiteSpace(monitor.LastDDCError)
                 ? monitor.LastDDCError!
-                : "Monitor did not respond to DDC/CI.";
+                : LocalizationManager.Instance["Flyout_HardPowerOff_NoResponseDetail"];
 
-        ShowRecoveryTooltip(anchor, $"Hard power-off failed: {detail}", autoCloseAfter: TimeSpan.FromMilliseconds(TimeConstants.RecoveryTooltipAutoCloseDurationMs));
+        ShowRecoveryTooltip(
+            anchor,
+            string.Format(LocalizationManager.Instance["Flyout_HardPowerOff_FailedFormat"], detail),
+            autoCloseAfter: TimeSpan.FromMilliseconds(TimeConstants.RecoveryTooltipAutoCloseDurationMs));
     }
 
     // Captured on the first warning-glyph click before the user has acknowledged the destructive
@@ -1994,8 +1998,7 @@ public partial class BrightnessFlyout : Window, INotifyPropertyChanged
 
         ShowRecoveryTooltip(
             anchor,
-            "Sending hard power-off to the monitor. If it accepts, the screen will go dark - "
-                + "press the monitor's physical power button to bring it back.",
+            LocalizationManager.Instance["Flyout_HardPowerOff_InProgress"],
             autoCloseAfter: null);
 
         _ = Task.Run(() =>
@@ -2021,7 +2024,7 @@ public partial class BrightnessFlyout : Window, INotifyPropertyChanged
                 {
                     ShowRecoveryTooltip(
                         anchor,
-                        "Hard power-off sent. Press the monitor's physical power button to power it back on.",
+                        LocalizationManager.Instance["Flyout_HardPowerOff_Success"],
                         autoCloseAfter: TimeSpan.FromMilliseconds(TimeConstants.RecoveryTooltipAutoCloseDurationMs));
                 }
                 else

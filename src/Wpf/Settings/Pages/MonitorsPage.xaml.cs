@@ -4,6 +4,7 @@ using System.Runtime.CompilerServices;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
+using BrightnessTrayAppWpf.Localization;
 using BrightnessTrayAppWpf.Models;
 using BrightnessTrayAppWpf.Services;
 using BrightnessTrayAppWpf.Wpf.Settings.Utils;
@@ -46,7 +47,7 @@ public class MonitorListEntry : INotifyPropertyChanged
     public string OriginalNameDisplay =>
         !string.IsNullOrEmpty(OriginalName) ? OriginalName
         : string.IsNullOrEmpty(EDIDSerial) ? EDIDKey
-        : "Display";
+        : LocalizationManager.Instance["Settings_Monitors_DisplayFallback_Name"];
 
     /// <summary>
     /// ": Serial" suffix, rendered dimmed alongside <see cref="OriginalNameDisplay"/>.
@@ -430,11 +431,10 @@ public partial class MonitorsPage : UserControl
             if (_confirmDialogService == null) return;
 
             bool ok = await _confirmDialogService.ConfirmAsync(
-                title: "Clear all saved display data?",
-                message: "This deletes all name overrides, custom order, per-monitor overrides, and the known-displays "
-                    + "history. The Display order & overrides list will repopulate from currently-connected monitors.",
-                confirmText: "Clear",
-                cancelText: "Cancel");
+                title: LocalizationManager.Instance["Settings_Monitors_ClearDisplays_ConfirmTitle"],
+                message: LocalizationManager.Instance["Settings_Monitors_ClearDisplays_ConfirmMessage"],
+                confirmText: LocalizationManager.Instance["Settings_Monitors_ClearDisplays_ConfirmButton"],
+                cancelText: LocalizationManager.Instance["Settings_Monitors_Cancel_Button"]);
             if (ok) ClearAllDisplayData();
         }
         catch (Exception ex)

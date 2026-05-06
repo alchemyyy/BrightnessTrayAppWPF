@@ -5,6 +5,7 @@ using System.Windows.Input;
 using System.Windows.Interop;
 using System.Windows.Media;
 using BrightnessTrayAppWpf.Interop;
+using BrightnessTrayAppWpf.Localization;
 using BrightnessTrayAppWpf.Models;
 using BrightnessTrayAppWpf.Services;
 using Color = System.Windows.Media.Color;
@@ -43,8 +44,10 @@ namespace BrightnessTrayAppWpf.Wpf;
 /// </summary>
 public partial class TAWPFColorPicker : Window
 {
-    private const string ApplyButtonLabelDirty = "Apply";
-    private const string ApplyButtonLabelClean = "Applied";
+    // Apply button labels are localized at lookup time so a culture switch refreshes them
+    // alongside the rest of the UI; static readonly would freeze the wrong language at field-init.
+    private static string ApplyButtonLabelDirty => LocalizationManager.Instance["ColorPicker_Apply_Dirty"];
+    private static string ApplyButtonLabelClean => LocalizationManager.Instance["ColorPicker_Apply_Clean"];
 
     // Single throttler slot - one picker only edits one color, so we don't need per-key partitioning.
     // 50ms cooldown caps ColorChanged fanout (AppSettings.Changed -> brush rebuild + swatch refresh +

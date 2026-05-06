@@ -6,6 +6,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using BrightnessTrayAppWpf.Interop;
+using BrightnessTrayAppWpf.Localization;
 using BrightnessTrayAppWpf.Models;
 
 namespace BrightnessTrayAppWpf.Wpf.Utils;
@@ -110,7 +111,7 @@ public sealed class HotkeyRowViewModel : INotifyPropertyChanged
         }
     }
 
-    private string _addButtonText = "Add";
+    private string _addButtonText = LocalizationManager.Instance["Settings_Hotkeys_Add_Button"];
     public string AddButtonText
     {
         get => _addButtonText;
@@ -171,7 +172,7 @@ public sealed class HotkeyRowViewModel : INotifyPropertyChanged
     {
         if (_draftModifiers == 0 || _draftVirtualKey == 0)
         {
-            AddButtonText = "Add";
+            AddButtonText = LocalizationManager.Instance["Settings_Hotkeys_Add_Button"];
             AddButtonEnabled = false;
             return;
         }
@@ -185,7 +186,9 @@ public sealed class HotkeyRowViewModel : INotifyPropertyChanged
             exists = true;
             break;
         }
-        AddButtonText = exists ? "Exists" : "Add";
+        AddButtonText = exists
+            ? LocalizationManager.Instance["Settings_Hotkeys_Exists_Button"]
+            : LocalizationManager.Instance["Settings_Hotkeys_Add_Button"];
         AddButtonEnabled = !exists;
     }
 
@@ -259,23 +262,37 @@ public static class ModifierCatalog
 
     public static readonly List<Option> All =
     [
-        new() { Label = "Ctrl",                  Modifiers = User32.MOD_CONTROL },
-        new() { Label = "Alt",                   Modifiers = User32.MOD_ALT },
-        new() { Label = "Shift",                 Modifiers = User32.MOD_SHIFT },
-        new() { Label = "Win",                   Modifiers = User32.MOD_WIN },
-        new() { Label = "Ctrl+Alt",              Modifiers = User32.MOD_CONTROL | User32.MOD_ALT },
-        new() { Label = "Ctrl+Shift",            Modifiers = User32.MOD_CONTROL | User32.MOD_SHIFT },
-        new() { Label = "Ctrl+Win",              Modifiers = User32.MOD_CONTROL | User32.MOD_WIN },
-        new() { Label = "Alt+Shift",             Modifiers = User32.MOD_ALT | User32.MOD_SHIFT },
-        new() { Label = "Alt+Win",               Modifiers = User32.MOD_ALT | User32.MOD_WIN },
-        new() { Label = "Shift+Win",             Modifiers = User32.MOD_SHIFT | User32.MOD_WIN },
-        new() { Label = "Ctrl+Alt+Shift",        Modifiers = User32.MOD_CONTROL | User32.MOD_ALT | User32.MOD_SHIFT },
-        new() { Label = "Ctrl+Alt+Win",          Modifiers = User32.MOD_CONTROL | User32.MOD_ALT | User32.MOD_WIN },
-        new() { Label = "Ctrl+Shift+Win",        Modifiers = User32.MOD_CONTROL | User32.MOD_SHIFT | User32.MOD_WIN },
-        new() { Label = "Alt+Shift+Win",         Modifiers = User32.MOD_ALT | User32.MOD_SHIFT | User32.MOD_WIN },
+        new() { Label = LocalizationManager.Instance["Settings_Hotkeys_Modifier_Ctrl"],
+            Modifiers = User32.MOD_CONTROL },
+        new() { Label = LocalizationManager.Instance["Settings_Hotkeys_Modifier_Alt"],
+            Modifiers = User32.MOD_ALT },
+        new() { Label = LocalizationManager.Instance["Settings_Hotkeys_Modifier_Shift"],
+            Modifiers = User32.MOD_SHIFT },
+        new() { Label = LocalizationManager.Instance["Settings_Hotkeys_Modifier_Win"],
+            Modifiers = User32.MOD_WIN },
+        new() { Label = LocalizationManager.Instance["Settings_Hotkeys_Modifier_CtrlAlt"],
+            Modifiers = User32.MOD_CONTROL | User32.MOD_ALT },
+        new() { Label = LocalizationManager.Instance["Settings_Hotkeys_Modifier_CtrlShift"],
+            Modifiers = User32.MOD_CONTROL | User32.MOD_SHIFT },
+        new() { Label = LocalizationManager.Instance["Settings_Hotkeys_Modifier_CtrlWin"],
+            Modifiers = User32.MOD_CONTROL | User32.MOD_WIN },
+        new() { Label = LocalizationManager.Instance["Settings_Hotkeys_Modifier_AltShift"],
+            Modifiers = User32.MOD_ALT | User32.MOD_SHIFT },
+        new() { Label = LocalizationManager.Instance["Settings_Hotkeys_Modifier_AltWin"],
+            Modifiers = User32.MOD_ALT | User32.MOD_WIN },
+        new() { Label = LocalizationManager.Instance["Settings_Hotkeys_Modifier_ShiftWin"],
+            Modifiers = User32.MOD_SHIFT | User32.MOD_WIN },
+        new() { Label = LocalizationManager.Instance["Settings_Hotkeys_Modifier_CtrlAltShift"],
+            Modifiers = User32.MOD_CONTROL | User32.MOD_ALT | User32.MOD_SHIFT },
+        new() { Label = LocalizationManager.Instance["Settings_Hotkeys_Modifier_CtrlAltWin"],
+            Modifiers = User32.MOD_CONTROL | User32.MOD_ALT | User32.MOD_WIN },
+        new() { Label = LocalizationManager.Instance["Settings_Hotkeys_Modifier_CtrlShiftWin"],
+            Modifiers = User32.MOD_CONTROL | User32.MOD_SHIFT | User32.MOD_WIN },
+        new() { Label = LocalizationManager.Instance["Settings_Hotkeys_Modifier_AltShiftWin"],
+            Modifiers = User32.MOD_ALT | User32.MOD_SHIFT | User32.MOD_WIN },
         new()
         {
-            Label = "Ctrl+Alt+Shift+Win",
+            Label = LocalizationManager.Instance["Settings_Hotkeys_Modifier_CtrlAltShiftWin"],
             Modifiers = User32.MOD_CONTROL | User32.MOD_ALT | User32.MOD_SHIFT | User32.MOD_WIN,
         },
     ];
@@ -322,11 +339,11 @@ public static class HotkeyKeyFormat
                 Key.OemPlus => "=",
                 Key.OemComma => ",",
                 Key.OemPeriod => ".",
-                Key.Space => "Space",
-                Key.Return => "Enter",
-                Key.Escape => "Esc",
-                Key.PageUp => "PageUp",
-                Key.PageDown => "PageDown",
+                Key.Space => LocalizationManager.Instance["Settings_Hotkeys_Key_Space"],
+                Key.Return => LocalizationManager.Instance["Settings_Hotkeys_Key_Enter"],
+                Key.Escape => LocalizationManager.Instance["Settings_Hotkeys_Key_Escape"],
+                Key.PageUp => LocalizationManager.Instance["Settings_Hotkeys_Key_PageUp"],
+                Key.PageDown => LocalizationManager.Instance["Settings_Hotkeys_Key_PageDown"],
                 _ => wpfKey.ToString(),
             };
         }

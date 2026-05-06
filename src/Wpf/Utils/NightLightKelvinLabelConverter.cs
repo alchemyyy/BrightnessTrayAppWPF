@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Windows.Data;
 using BrightnessTrayAppWpf.Interop.NightLight;
+using BrightnessTrayAppWpf.Localization;
 
 namespace BrightnessTrayAppWpf.Wpf.Utils;
 
@@ -25,7 +26,9 @@ public class NightLightKelvinLabelConverter : IMultiValueConverter
             : 0;
         bool invert = values.Length > 1 && values[1] is true;
         int strength = invert ? 100 - displayValue : displayValue;
-        return $": {NightLightKelvin.PercentToKelvin(strength)}K";
+        return string.Format(
+            LocalizationManager.Instance["NightLight_KelvinSuffix_Format"],
+            NightLightKelvin.PercentToKelvin(strength));
     }
 
     public object[] ConvertBack(object value, Type[] targetTypes, object? parameter, CultureInfo culture)

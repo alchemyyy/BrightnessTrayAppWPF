@@ -4,6 +4,7 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    xmlns:loc="clr-namespace:BrightnessTrayAppWpf.Localization"
     xmlns:utils="clr-namespace:BrightnessTrayAppWpf.Wpf.Settings.Utils"
     xmlns:utils1="clr-namespace:BrightnessTrayAppWpf.Wpf.Utils"
     mc:Ignorable="d"
@@ -12,10 +13,10 @@
     d:Background="#1F1F1F"
     utils1:SettingsKeyboardNavigation.IsContentSection="True">
     <StackPanel>
-        <TextBlock Style="{StaticResource SectionHeaderStyle}" Text="Tray Icon"/>
+        <TextBlock Style="{StaticResource SectionHeaderStyle}" Text="{loc:Loc Settings_TrayIcon_SectionHeader}"/>
 
-        <utils:SettingsCard Title="Mouse wheel"
-                               Description="Enable scrolling the mouse wheel while hovering the tray icon. Configure targets below in 'Modified actions'. Does *not* use an always-active global mouse hook.">
+        <utils:SettingsCard Title="{loc:Loc Settings_TrayIcon_MouseWheel_Title}"
+                               Description="{loc:Loc Settings_TrayIcon_MouseWheel_Description}">
             <utils:SettingsCard.Control>
                 <CheckBox x:Name="TrayScrollEnableToggle"
                           Style="{StaticResource ToggleSwitchStyle}"
@@ -24,11 +25,11 @@
             </utils:SettingsCard.Control>
         </utils:SettingsCard>
 
-        <TextBlock Text="Context menu"
+        <TextBlock Text="{loc:Loc Settings_TrayIcon_ContextMenu_Header}"
                    Style="{StaticResource SubsectionHeaderStyle}"/>
 
-        <utils:SettingsCard Title="Show profile selectors"
-                               Description="Display brightness profile entries in the tray right-click menu.">
+        <utils:SettingsCard Title="{loc:Loc Settings_TrayIcon_ShowProfileSelectors_Title}"
+                               Description="{loc:Loc Settings_TrayIcon_ShowProfileSelectors_Description}">
             <utils:SettingsCard.Control>
                 <CheckBox x:Name="ShowProfileSelectorsToggle"
                           Style="{StaticResource ToggleSwitchStyle}"
@@ -37,8 +38,8 @@
             </utils:SettingsCard.Control>
         </utils:SettingsCard>
 
-        <utils:SettingsCard Title="Show individual power selectors"
-                               Description="Display per-monitor power toggles in the tray right-click menu.">
+        <utils:SettingsCard Title="{loc:Loc Settings_TrayIcon_ShowIndividualPowerSelectors_Title}"
+                               Description="{loc:Loc Settings_TrayIcon_ShowIndividualPowerSelectors_Description}">
             <utils:SettingsCard.Control>
                 <CheckBox x:Name="ShowMonitorPowerToggle"
                           Style="{StaticResource ToggleSwitchStyle}"
@@ -47,8 +48,8 @@
             </utils:SettingsCard.Control>
         </utils:SettingsCard>
 
-        <utils:SettingsCard Title="Show all-displays power selector"
-                               Description="Display a single entry that powers every display off.">
+        <utils:SettingsCard Title="{loc:Loc Settings_TrayIcon_ShowAllDisplaysPowerSelector_Title}"
+                               Description="{loc:Loc Settings_TrayIcon_ShowAllDisplaysPowerSelector_Description}">
             <utils:SettingsCard.Control>
                 <CheckBox x:Name="ShowAllDisplaysPowerToggle"
                           Style="{StaticResource ToggleSwitchStyle}"
@@ -57,68 +58,68 @@
             </utils:SettingsCard.Control>
         </utils:SettingsCard>
 
-        <utils:SettingsCard Title="Menu position"
-                               Description="Classic opens at the cursor. Modern docks the menu above the taskbar like the Windows 11 system flyouts.">
+        <utils:SettingsCard Title="{loc:Loc Settings_TrayIcon_MenuPosition_Title}"
+                               Description="{loc:Loc Settings_TrayIcon_MenuPosition_Description}">
             <utils:SettingsCard.Control>
                 <ComboBox x:Name="ContextMenuPositionCombo"
                           Style="{StaticResource SettingsComboBoxStyle}"
                           VerticalAlignment="Center"
                           Tag="ContextMenuPosition" SelectionChanged="EnumCombo_Changed">
-                    <ComboBoxItem Tag="Classic">Classic</ComboBoxItem>
-                    <ComboBoxItem Tag="Modern">Modern</ComboBoxItem>
+                    <ComboBoxItem Tag="Classic" Content="{loc:Loc Settings_TrayIcon_MenuPosition_Classic}"/>
+                    <ComboBoxItem Tag="Modern" Content="{loc:Loc Settings_TrayIcon_MenuPosition_Modern}"/>
                 </ComboBox>
             </utils:SettingsCard.Control>
         </utils:SettingsCard>
 
-        <TextBlock Text="Modified actions"
+        <TextBlock Text="{loc:Loc Settings_TrayIcon_ModifiedActions_Header}"
                    Style="{StaticResource SubsectionHeaderStyle}"/>
         <TextBlock Style="{StaticResource SettingDescriptionStyle}"
-                   Text="Assign actions to modified clicks or scrolls on the tray icon. Entries set to Nothing fall back to the default behavior."
+                   Text="{loc:Loc Settings_TrayIcon_ModifiedActions_Description}"
                    Margin="0,0,0,8"/>
 
-        <utils:SettingsCard Title="Mouse wheel"
+        <utils:SettingsCard Title="{loc:Loc Settings_TrayIcon_MouseWheel_Title}"
                                IsEnabled="{Binding IsChecked, ElementName=TrayScrollEnableToggle}">
             <utils:SettingsCard.Control>
                 <ComboBox x:Name="TrayWheelActionCombo"
                           Style="{StaticResource SettingsComboBoxStyle}"
                           VerticalAlignment="Center"
                           Tag="TrayWheelAction" SelectionChanged="EnumCombo_Changed">
-                    <ComboBoxItem Tag="Nothing">Nothing</ComboBoxItem>
-                    <ComboBoxItem Tag="Brightness">Brightness</ComboBoxItem>
-                    <ComboBoxItem Tag="NightLight">Night Light</ComboBoxItem>
+                    <ComboBoxItem Tag="Nothing" Content="{loc:Loc Settings_TrayIcon_WheelAction_Nothing}"/>
+                    <ComboBoxItem Tag="Brightness" Content="{loc:Loc Settings_TrayIcon_WheelAction_Brightness}"/>
+                    <ComboBoxItem Tag="NightLight" Content="{loc:Loc Settings_TrayIcon_WheelAction_NightLight}"/>
                 </ComboBox>
             </utils:SettingsCard.Control>
         </utils:SettingsCard>
 
-        <utils:SettingsCard Title="Ctrl + mouse wheel"
+        <utils:SettingsCard Title="{loc:Loc Settings_TrayIcon_CtrlMouseWheel_Title}"
                                IsEnabled="{Binding IsChecked, ElementName=TrayScrollEnableToggle}">
             <utils:SettingsCard.Control>
                 <ComboBox x:Name="TrayCtrlWheelActionCombo"
                           Style="{StaticResource SettingsComboBoxStyle}"
                           VerticalAlignment="Center"
                           Tag="TrayCtrlWheelAction" SelectionChanged="EnumCombo_Changed">
-                    <ComboBoxItem Tag="Nothing">Nothing</ComboBoxItem>
-                    <ComboBoxItem Tag="Brightness">Brightness</ComboBoxItem>
-                    <ComboBoxItem Tag="NightLight">Night Light</ComboBoxItem>
+                    <ComboBoxItem Tag="Nothing" Content="{loc:Loc Settings_TrayIcon_WheelAction_Nothing}"/>
+                    <ComboBoxItem Tag="Brightness" Content="{loc:Loc Settings_TrayIcon_WheelAction_Brightness}"/>
+                    <ComboBoxItem Tag="NightLight" Content="{loc:Loc Settings_TrayIcon_WheelAction_NightLight}"/>
                 </ComboBox>
             </utils:SettingsCard.Control>
         </utils:SettingsCard>
 
-        <utils:SettingsCard Title="Alt + mouse wheel"
+        <utils:SettingsCard Title="{loc:Loc Settings_TrayIcon_AltMouseWheel_Title}"
                                IsEnabled="{Binding IsChecked, ElementName=TrayScrollEnableToggle}">
             <utils:SettingsCard.Control>
                 <ComboBox x:Name="TrayAltWheelActionCombo"
                           Style="{StaticResource SettingsComboBoxStyle}"
                           VerticalAlignment="Center"
                           Tag="TrayAltWheelAction" SelectionChanged="EnumCombo_Changed">
-                    <ComboBoxItem Tag="Nothing">Nothing</ComboBoxItem>
-                    <ComboBoxItem Tag="Brightness">Brightness</ComboBoxItem>
-                    <ComboBoxItem Tag="NightLight">Night Light</ComboBoxItem>
+                    <ComboBoxItem Tag="Nothing" Content="{loc:Loc Settings_TrayIcon_WheelAction_Nothing}"/>
+                    <ComboBoxItem Tag="Brightness" Content="{loc:Loc Settings_TrayIcon_WheelAction_Brightness}"/>
+                    <ComboBoxItem Tag="NightLight" Content="{loc:Loc Settings_TrayIcon_WheelAction_NightLight}"/>
                 </ComboBox>
             </utils:SettingsCard.Control>
         </utils:SettingsCard>
 
-        <utils:SettingsCard Title="Ctrl + left click">
+        <utils:SettingsCard Title="{loc:Loc Settings_TrayIcon_CtrlLeftClick_Title}">
             <utils:SettingsCard.Control>
                 <ComboBox x:Name="TrayCtrlLeftClickActionCombo"
                           Style="{StaticResource SettingsComboBoxStyle}"
@@ -127,7 +128,7 @@
             </utils:SettingsCard.Control>
         </utils:SettingsCard>
 
-        <utils:SettingsCard Title="Alt + left click">
+        <utils:SettingsCard Title="{loc:Loc Settings_TrayIcon_AltLeftClick_Title}">
             <utils:SettingsCard.Control>
                 <ComboBox x:Name="TrayAltLeftClickActionCombo"
                           Style="{StaticResource SettingsComboBoxStyle}"
@@ -136,7 +137,7 @@
             </utils:SettingsCard.Control>
         </utils:SettingsCard>
 
-        <utils:SettingsCard Title="Ctrl + right click">
+        <utils:SettingsCard Title="{loc:Loc Settings_TrayIcon_CtrlRightClick_Title}">
             <utils:SettingsCard.Control>
                 <ComboBox x:Name="TrayCtrlRightClickActionCombo"
                           Style="{StaticResource SettingsComboBoxStyle}"
@@ -145,7 +146,7 @@
             </utils:SettingsCard.Control>
         </utils:SettingsCard>
 
-        <utils:SettingsCard Title="Alt + right click">
+        <utils:SettingsCard Title="{loc:Loc Settings_TrayIcon_AltRightClick_Title}">
             <utils:SettingsCard.Control>
                 <ComboBox x:Name="TrayAltRightClickActionCombo"
                           Style="{StaticResource SettingsComboBoxStyle}"
@@ -154,7 +155,7 @@
             </utils:SettingsCard.Control>
         </utils:SettingsCard>
 
-        <utils:SettingsCard Title="Double left click">
+        <utils:SettingsCard Title="{loc:Loc Settings_TrayIcon_DoubleLeftClick_Title}">
             <utils:SettingsCard.Control>
                 <ComboBox x:Name="TrayDoubleClickActionCombo"
                           Style="{StaticResource SettingsComboBoxStyle}"
@@ -163,7 +164,7 @@
             </utils:SettingsCard.Control>
         </utils:SettingsCard>
 
-        <utils:SettingsCard Title="Ctrl + double left click">
+        <utils:SettingsCard Title="{loc:Loc Settings_TrayIcon_CtrlDoubleLeftClick_Title}">
             <utils:SettingsCard.Control>
                 <ComboBox x:Name="TrayCtrlDoubleLeftClickActionCombo"
                           Style="{StaticResource SettingsComboBoxStyle}"
@@ -172,7 +173,7 @@
             </utils:SettingsCard.Control>
         </utils:SettingsCard>
 
-        <utils:SettingsCard Title="Alt + double left click">
+        <utils:SettingsCard Title="{loc:Loc Settings_TrayIcon_AltDoubleLeftClick_Title}">
             <utils:SettingsCard.Control>
                 <ComboBox x:Name="TrayAltDoubleLeftClickActionCombo"
                           Style="{StaticResource SettingsComboBoxStyle}"

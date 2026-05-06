@@ -4,6 +4,7 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    xmlns:loc="clr-namespace:BrightnessTrayAppWpf.Localization"
     xmlns:models="clr-namespace:BrightnessTrayAppWpf.Models"
     xmlns:utils="clr-namespace:BrightnessTrayAppWpf.Wpf.Settings.Utils"
     xmlns:utils1="clr-namespace:BrightnessTrayAppWpf.Wpf.Utils"
@@ -13,15 +14,15 @@
     d:Background="#1F1F1F"
     utils1:SettingsKeyboardNavigation.IsContentSection="True">
     <StackPanel>
-        <TextBlock Style="{StaticResource SectionHeaderStyle}" Text="Theme"/>
+        <TextBlock Style="{StaticResource SectionHeaderStyle}" Text="{loc:Loc Settings_Theme_SectionHeader}"/>
 
-        <TextBlock Text="Context menu"
+        <TextBlock Text="{loc:Loc Settings_Theme_ContextMenu_Header}"
                    Style="{StaticResource SettingTitleStyle}"
                    FontWeight="SemiBold"
                    Margin="0,0,0,8"/>
 
-        <utils:SettingsCard Title="Font size"
-                               Description="Controls the overall size of the tray context menu. All elements scale from font size.">
+        <utils:SettingsCard Title="{loc:Loc Settings_Theme_FontSize_Title}"
+                               Description="{loc:Loc Settings_Theme_FontSize_Description}">
             <utils:SettingsCard.Control>
                 <TextBox x:Name="ContextMenuFontSizeBox"
                          Style="{StaticResource SettingsTextBoxStyle}"
@@ -34,66 +35,66 @@
             </utils:SettingsCard.Control>
         </utils:SettingsCard>
 
-        <TextBlock Text="Appearance"
+        <TextBlock Text="{loc:Loc Settings_Theme_Appearance_Header}"
                    Style="{StaticResource SubsectionHeaderStyle}"/>
 
-        <utils:SettingsCard Title="Theme style"
-                               Description="Follow Windows, or force light / dark mode for this app.">
+        <utils:SettingsCard Title="{loc:Loc Settings_Theme_ThemeStyle_Title}"
+                               Description="{loc:Loc Settings_Theme_ThemeStyle_Description}">
             <utils:SettingsCard.Control>
                 <ComboBox x:Name="ThemeModeCombo"
                           Style="{StaticResource SettingsComboBoxStyle}"
                           VerticalAlignment="Center"
                           Tag="ThemeMode" SelectionChanged="EnumCombo_Changed">
-                    <ComboBoxItem Tag="System">System</ComboBoxItem>
-                    <ComboBoxItem Tag="Light">Light</ComboBoxItem>
-                    <ComboBoxItem Tag="Dark">Dark</ComboBoxItem>
+                    <ComboBoxItem Tag="System" Content="{loc:Loc Settings_Theme_ThemeStyle_System}"/>
+                    <ComboBoxItem Tag="Light" Content="{loc:Loc Settings_Theme_ThemeStyle_Light}"/>
+                    <ComboBoxItem Tag="Dark" Content="{loc:Loc Settings_Theme_ThemeStyle_Dark}"/>
                 </ComboBox>
             </utils:SettingsCard.Control>
         </utils:SettingsCard>
 
-        <utils:SettingsCard Title="Text color"
-                               Description="Override the default text color. Each variant falls back to the default when unset.">
+        <utils:SettingsCard Title="{loc:Loc Settings_Theme_TextColor_Title}"
+                               Description="{loc:Loc Settings_Theme_TextColor_Description}">
             <utils:SettingsCard.Control>
                 <StackPanel Style="{StaticResource SettingsCardControlPanel}">
                     <Button x:Name="TextColorLightSwatch"
                             Style="{StaticResource ColorRowSwatchStyle}"
                             Tag="Text|Light" Click="ColorSwatch_Click"
-                            ToolTip="Light theme text color"/>
+                            ToolTip="{loc:Loc Settings_Theme_TextColor_LightTooltip}"/>
                     <Button x:Name="TextColorDarkSwatch"
                             Style="{StaticResource ColorRowSwatchStyle}"
                             Tag="Text|Dark" Click="ColorSwatch_Click"
-                            ToolTip="Dark theme text color"/>
+                            ToolTip="{loc:Loc Settings_Theme_TextColor_DarkTooltip}"/>
                     <Button Style="{StaticResource SettingsButtonStyle}"
-                            Content="Reset"
+                            Content="{loc:Loc Settings_Theme_Reset}"
                             Tag="Text" Click="ColorReset_Click"/>
                 </StackPanel>
             </utils:SettingsCard.Control>
         </utils:SettingsCard>
 
-        <utils:SettingsCard Title="Background color"
-                               Description="Override the default background color. Each variant falls back to the default when unset.">
+        <utils:SettingsCard Title="{loc:Loc Settings_Theme_BackgroundColor_Title}"
+                               Description="{loc:Loc Settings_Theme_BackgroundColor_Description}">
             <utils:SettingsCard.Control>
                 <StackPanel Style="{StaticResource SettingsCardControlPanel}">
                     <Button x:Name="BackgroundColorLightSwatch"
                             Style="{StaticResource ColorRowSwatchStyle}"
                             Tag="Background|Light" Click="ColorSwatch_Click"
-                            ToolTip="Light theme background color"/>
+                            ToolTip="{loc:Loc Settings_Theme_BackgroundColor_LightTooltip}"/>
                     <Button x:Name="BackgroundColorDarkSwatch"
                             Style="{StaticResource ColorRowSwatchStyle}"
                             Tag="Background|Dark" Click="ColorSwatch_Click"
-                            ToolTip="Dark theme background color"/>
+                            ToolTip="{loc:Loc Settings_Theme_BackgroundColor_DarkTooltip}"/>
                     <Button Style="{StaticResource SettingsButtonStyle}"
-                            Content="Reset"
+                            Content="{loc:Loc Settings_Theme_Reset}"
                             Tag="Background" Click="ColorReset_Click"/>
                 </StackPanel>
             </utils:SettingsCard.Control>
         </utils:SettingsCard>
 
-        <TextBlock Text="Flyout"
+        <TextBlock Text="{loc:Loc Settings_Theme_Flyout_Header}"
                    Style="{StaticResource SubsectionHeaderStyle}"/>
 
-        <utils:SettingsCard Title="Rounded corners"
-                               Description="Applies rounded corners to the flyout, settings cards, buttons, and menus. Turn off for a squared-off look.">
+        <utils:SettingsCard Title="{loc:Loc Settings_Theme_RoundedCorners_Title}"
+                               Description="{loc:Loc Settings_Theme_RoundedCorners_Description}">
             <utils:SettingsCard.Control>
                 <CheckBox x:Name="RoundedCornersToggle"
                           Style="{StaticResource ToggleSwitchStyle}"
@@ -102,8 +103,8 @@
             </utils:SettingsCard.Control>
         </utils:SettingsCard>
 
-        <utils:SettingsCard Title="Slider indicator"
-                               Description="The glyph drawn as the brightness-slider thumb. Each option keeps its own font family and size.">
+        <utils:SettingsCard Title="{loc:Loc Settings_Theme_SliderIndicator_Title}"
+                               Description="{loc:Loc Settings_Theme_SliderIndicator_Description}">
             <utils:SettingsCard.Control>
                 <ComboBox x:Name="SliderThumbGlyphCombo"
                           Style="{StaticResource SettingsComboBoxStyle}"
@@ -144,38 +145,38 @@
             </utils:SettingsCard.Control>
         </utils:SettingsCard>
 
-        <TextBlock Text="Tray icon"
+        <TextBlock Text="{loc:Loc Settings_Theme_TrayIcon_Header}"
                    Style="{StaticResource SubsectionHeaderStyle}"/>
 
-        <utils:SettingsCard Title="Tray icon style"
-                               Description="Dynamic eclipses with brightness. Static locks the icon at 50% eclipse.">
+        <utils:SettingsCard Title="{loc:Loc Settings_Theme_TrayIconStyle_Title}"
+                               Description="{loc:Loc Settings_Theme_TrayIconStyle_Description}">
             <utils:SettingsCard.Control>
                 <ComboBox x:Name="TrayIconStyleCombo"
                           Style="{StaticResource SettingsComboBoxStyle}"
                           VerticalAlignment="Center"
                           Tag="TrayIconStyle" SelectionChanged="EnumCombo_Changed">
-                    <ComboBoxItem Tag="Dynamic">Eclipse (dynamic)</ComboBoxItem>
-                    <ComboBoxItem Tag="Static">Eclipse (static)</ComboBoxItem>
+                    <ComboBoxItem Tag="Dynamic" Content="{loc:Loc Settings_Theme_TrayIconStyle_Dynamic}"/>
+                    <ComboBoxItem Tag="Static" Content="{loc:Loc Settings_Theme_TrayIconStyle_Static}"/>
                 </ComboBox>
             </utils:SettingsCard.Control>
         </utils:SettingsCard>
 
-        <utils:SettingsCard Title="Dynamic icon brightness tracking"
-                               Description="How the dynamic tray icon reflects the individual monitor brightness values.">
+        <utils:SettingsCard Title="{loc:Loc Settings_Theme_DynamicIconTracking_Title}"
+                               Description="{loc:Loc Settings_Theme_DynamicIconTracking_Description}">
             <utils:SettingsCard.Control>
                 <ComboBox x:Name="DynamicIconBrightnessTrackingCombo"
                           Style="{StaticResource SettingsComboBoxStyle}"
                           VerticalAlignment="Center"
                           Tag="DynamicIconBrightnessTracking" SelectionChanged="EnumCombo_Changed">
-                    <ComboBoxItem Tag="Lowest">Lowest</ComboBoxItem>
-                    <ComboBoxItem Tag="Average">Average</ComboBoxItem>
-                    <ComboBoxItem Tag="Highest">Highest</ComboBoxItem>
+                    <ComboBoxItem Tag="Lowest" Content="{loc:Loc Settings_Theme_DynamicIconTracking_Lowest}"/>
+                    <ComboBoxItem Tag="Average" Content="{loc:Loc Settings_Theme_DynamicIconTracking_Average}"/>
+                    <ComboBoxItem Tag="Highest" Content="{loc:Loc Settings_Theme_DynamicIconTracking_Highest}"/>
                 </ComboBox>
             </utils:SettingsCard.Control>
         </utils:SettingsCard>
 
-        <utils:SettingsCard Title="Track only enabled monitor sliders"
-                               Description="Exclude disabled monitors from the dynamic icon calculation. When all monitors are disabled, the icon shows full brightness.">
+        <utils:SettingsCard Title="{loc:Loc Settings_Theme_TrackEnabledOnly_Title}"
+                               Description="{loc:Loc Settings_Theme_TrackEnabledOnly_Description}">
             <utils:SettingsCard.Control>
                 <CheckBox x:Name="DynamicIconTrackEnabledOnlyToggle"
                           Style="{StaticResource ToggleSwitchStyle}"
@@ -185,177 +186,177 @@
         </utils:SettingsCard>
 
         <utils:SettingsCard x:Name="TrayIconStaticColorCard"
-                               Title="Static icon color"
-                               Description="Override the static tray icon color. Each variant falls back to the default when unset.">
+                               Title="{loc:Loc Settings_Theme_StaticIconColor_Title}"
+                               Description="{loc:Loc Settings_Theme_StaticIconColor_Description}">
             <utils:SettingsCard.Control>
                 <StackPanel Style="{StaticResource SettingsCardControlPanel}">
                     <Button x:Name="TrayIconColorLightSwatch"
                             Style="{StaticResource ColorRowSwatchStyle}"
                             Tag="TrayIcon|Light" Click="ColorSwatch_Click"
-                            ToolTip="Light theme tray icon color"/>
+                            ToolTip="{loc:Loc Settings_Theme_StaticIconColor_LightTooltip}"/>
                     <Button x:Name="TrayIconColorDarkSwatch"
                             Style="{StaticResource ColorRowSwatchStyle}"
                             Tag="TrayIcon|Dark" Click="ColorSwatch_Click"
-                            ToolTip="Dark theme tray icon color"/>
+                            ToolTip="{loc:Loc Settings_Theme_StaticIconColor_DarkTooltip}"/>
                     <Button Style="{StaticResource SettingsButtonStyle}"
-                            Content="Reset"
+                            Content="{loc:Loc Settings_Theme_Reset}"
                             Tag="TrayIcon" Click="ColorReset_Click"/>
                 </StackPanel>
             </utils:SettingsCard.Control>
         </utils:SettingsCard>
 
         <utils:SettingsCard x:Name="TrayIconBrightColorCard"
-                               Title="Bright color"
-                               Description="Color used at 100% brightness. Blends toward the dim color as brightness decreases. Each variant falls back to the default when unset.">
+                               Title="{loc:Loc Settings_Theme_BrightColor_Title}"
+                               Description="{loc:Loc Settings_Theme_BrightColor_Description}">
             <utils:SettingsCard.Control>
                 <StackPanel Style="{StaticResource SettingsCardControlPanel}">
                     <Button x:Name="TrayIconBrightColorLightSwatch"
                             Style="{StaticResource ColorRowSwatchStyle}"
                             Tag="TrayIconBright|Light" Click="ColorSwatch_Click"
-                            ToolTip="Light theme bright color"/>
+                            ToolTip="{loc:Loc Settings_Theme_BrightColor_LightTooltip}"/>
                     <Button x:Name="TrayIconBrightColorDarkSwatch"
                             Style="{StaticResource ColorRowSwatchStyle}"
                             Tag="TrayIconBright|Dark" Click="ColorSwatch_Click"
-                            ToolTip="Dark theme bright color"/>
+                            ToolTip="{loc:Loc Settings_Theme_BrightColor_DarkTooltip}"/>
                     <Button Style="{StaticResource SettingsButtonStyle}"
-                            Content="Reset"
+                            Content="{loc:Loc Settings_Theme_Reset}"
                             Tag="TrayIconBright" Click="ColorReset_Click"/>
                 </StackPanel>
             </utils:SettingsCard.Control>
         </utils:SettingsCard>
 
         <utils:SettingsCard x:Name="TrayIconDimColorCard"
-                               Title="Dim color"
-                               Description="Color used at 0% brightness. Blends toward the bright color as brightness increases. Each variant falls back to the default when unset.">
+                               Title="{loc:Loc Settings_Theme_DimColor_Title}"
+                               Description="{loc:Loc Settings_Theme_DimColor_Description}">
             <utils:SettingsCard.Control>
                 <StackPanel Style="{StaticResource SettingsCardControlPanel}">
                     <Button x:Name="TrayIconDimColorLightSwatch"
                             Style="{StaticResource ColorRowSwatchStyle}"
                             Tag="TrayIconDim|Light" Click="ColorSwatch_Click"
-                            ToolTip="Light theme dim color"/>
+                            ToolTip="{loc:Loc Settings_Theme_DimColor_LightTooltip}"/>
                     <Button x:Name="TrayIconDimColorDarkSwatch"
                             Style="{StaticResource ColorRowSwatchStyle}"
                             Tag="TrayIconDim|Dark" Click="ColorSwatch_Click"
-                            ToolTip="Dark theme dim color"/>
+                            ToolTip="{loc:Loc Settings_Theme_DimColor_DarkTooltip}"/>
                     <Button Style="{StaticResource SettingsButtonStyle}"
-                            Content="Reset"
+                            Content="{loc:Loc Settings_Theme_Reset}"
                             Tag="TrayIconDim" Click="ColorReset_Click"/>
                 </StackPanel>
             </utils:SettingsCard.Control>
         </utils:SettingsCard>
 
-        <TextBlock Text="Environmental"
+        <TextBlock Text="{loc:Loc Settings_Theme_Environmental_Header}"
                    Style="{StaticResource SubsectionHeaderStyle}"/>
 
-        <utils:SettingsCard Title="Brightness curve color"
-                               Description="Stroke color for the brightness curve and its legend swatch. Each variant falls back to the default when unset.">
+        <utils:SettingsCard Title="{loc:Loc Settings_Theme_BrightnessCurveColor_Title}"
+                               Description="{loc:Loc Settings_Theme_BrightnessCurveColor_Description}">
             <utils:SettingsCard.Control>
                 <StackPanel Style="{StaticResource SettingsCardControlPanel}">
                     <Button x:Name="EnvBrightnessCurveLightSwatch"
                             Style="{StaticResource ColorRowSwatchStyle}"
                             Tag="EnvBrightnessCurve|Light" Click="ColorSwatch_Click"
-                            ToolTip="Light theme brightness curve color"/>
+                            ToolTip="{loc:Loc Settings_Theme_BrightnessCurveColor_LightTooltip}"/>
                     <Button x:Name="EnvBrightnessCurveDarkSwatch"
                             Style="{StaticResource ColorRowSwatchStyle}"
                             Tag="EnvBrightnessCurve|Dark" Click="ColorSwatch_Click"
-                            ToolTip="Dark theme brightness curve color"/>
+                            ToolTip="{loc:Loc Settings_Theme_BrightnessCurveColor_DarkTooltip}"/>
                     <Button Style="{StaticResource SettingsButtonStyle}"
-                            Content="Reset"
+                            Content="{loc:Loc Settings_Theme_Reset}"
                             Tag="EnvBrightnessCurve" Click="ColorReset_Click"/>
                 </StackPanel>
             </utils:SettingsCard.Control>
         </utils:SettingsCard>
 
-        <utils:SettingsCard Title="Night light curve color"
-                               Description="Stroke color for the night-light curve and its legend swatch. Each variant falls back to the default when unset.">
+        <utils:SettingsCard Title="{loc:Loc Settings_Theme_NightLightCurveColor_Title}"
+                               Description="{loc:Loc Settings_Theme_NightLightCurveColor_Description}">
             <utils:SettingsCard.Control>
                 <StackPanel Style="{StaticResource SettingsCardControlPanel}">
                     <Button x:Name="EnvNightLightCurveLightSwatch"
                             Style="{StaticResource ColorRowSwatchStyle}"
                             Tag="EnvNightLightCurve|Light" Click="ColorSwatch_Click"
-                            ToolTip="Light theme night-light curve color"/>
+                            ToolTip="{loc:Loc Settings_Theme_NightLightCurveColor_LightTooltip}"/>
                     <Button x:Name="EnvNightLightCurveDarkSwatch"
                             Style="{StaticResource ColorRowSwatchStyle}"
                             Tag="EnvNightLightCurve|Dark" Click="ColorSwatch_Click"
-                            ToolTip="Dark theme night-light curve color"/>
+                            ToolTip="{loc:Loc Settings_Theme_NightLightCurveColor_DarkTooltip}"/>
                     <Button Style="{StaticResource SettingsButtonStyle}"
-                            Content="Reset"
+                            Content="{loc:Loc Settings_Theme_Reset}"
                             Tag="EnvNightLightCurve" Click="ColorReset_Click"/>
                 </StackPanel>
             </utils:SettingsCard.Control>
         </utils:SettingsCard>
 
-        <utils:SettingsCard Title="Current-time marker color"
-                               Description="Color of the dashed line marking the current time on the curve editor. Each variant falls back to the default when unset.">
+        <utils:SettingsCard Title="{loc:Loc Settings_Theme_CurrentTimeMarkerColor_Title}"
+                               Description="{loc:Loc Settings_Theme_CurrentTimeMarkerColor_Description}">
             <utils:SettingsCard.Control>
                 <StackPanel Style="{StaticResource SettingsCardControlPanel}">
                     <Button x:Name="EnvCurrentTimeLightSwatch"
                             Style="{StaticResource ColorRowSwatchStyle}"
                             Tag="EnvCurrentTime|Light" Click="ColorSwatch_Click"
-                            ToolTip="Light theme current-time marker color"/>
+                            ToolTip="{loc:Loc Settings_Theme_CurrentTimeMarkerColor_LightTooltip}"/>
                     <Button x:Name="EnvCurrentTimeDarkSwatch"
                             Style="{StaticResource ColorRowSwatchStyle}"
                             Tag="EnvCurrentTime|Dark" Click="ColorSwatch_Click"
-                            ToolTip="Dark theme current-time marker color"/>
+                            ToolTip="{loc:Loc Settings_Theme_CurrentTimeMarkerColor_DarkTooltip}"/>
                     <Button Style="{StaticResource SettingsButtonStyle}"
-                            Content="Reset"
+                            Content="{loc:Loc Settings_Theme_Reset}"
                             Tag="EnvCurrentTime" Click="ColorReset_Click"/>
                 </StackPanel>
             </utils:SettingsCard.Control>
         </utils:SettingsCard>
 
-        <utils:SettingsCard Title="Twilight backdrop color"
-                               Description="Translucent band shaded behind the curves between sunrise/sunset and astronomical twilight. Each variant falls back to the default when unset.">
+        <utils:SettingsCard Title="{loc:Loc Settings_Theme_TwilightBackdropColor_Title}"
+                               Description="{loc:Loc Settings_Theme_TwilightBackdropColor_Description}">
             <utils:SettingsCard.Control>
                 <StackPanel Style="{StaticResource SettingsCardControlPanel}">
                     <Button x:Name="EnvTwilightBackdropLightSwatch"
                             Style="{StaticResource ColorRowSwatchStyle}"
                             Tag="EnvTwilightBackdrop|Light" Click="ColorSwatch_Click"
-                            ToolTip="Light theme twilight backdrop color"/>
+                            ToolTip="{loc:Loc Settings_Theme_TwilightBackdropColor_LightTooltip}"/>
                     <Button x:Name="EnvTwilightBackdropDarkSwatch"
                             Style="{StaticResource ColorRowSwatchStyle}"
                             Tag="EnvTwilightBackdrop|Dark" Click="ColorSwatch_Click"
-                            ToolTip="Dark theme twilight backdrop color"/>
+                            ToolTip="{loc:Loc Settings_Theme_TwilightBackdropColor_DarkTooltip}"/>
                     <Button Style="{StaticResource SettingsButtonStyle}"
-                            Content="Reset"
+                            Content="{loc:Loc Settings_Theme_Reset}"
                             Tag="EnvTwilightBackdrop" Click="ColorReset_Click"/>
                 </StackPanel>
             </utils:SettingsCard.Control>
         </utils:SettingsCard>
 
-        <utils:SettingsCard Title="Night backdrop color"
-                               Description="Translucent band shaded behind the curves during astronomical night. Each variant falls back to the default when unset.">
+        <utils:SettingsCard Title="{loc:Loc Settings_Theme_NightBackdropColor_Title}"
+                               Description="{loc:Loc Settings_Theme_NightBackdropColor_Description}">
             <utils:SettingsCard.Control>
                 <StackPanel Style="{StaticResource SettingsCardControlPanel}">
                     <Button x:Name="EnvNightBackdropLightSwatch"
                             Style="{StaticResource ColorRowSwatchStyle}"
                             Tag="EnvNightBackdrop|Light" Click="ColorSwatch_Click"
-                            ToolTip="Light theme night backdrop color"/>
+                            ToolTip="{loc:Loc Settings_Theme_NightBackdropColor_LightTooltip}"/>
                     <Button x:Name="EnvNightBackdropDarkSwatch"
                             Style="{StaticResource ColorRowSwatchStyle}"
                             Tag="EnvNightBackdrop|Dark" Click="ColorSwatch_Click"
-                            ToolTip="Dark theme night backdrop color"/>
+                            ToolTip="{loc:Loc Settings_Theme_NightBackdropColor_DarkTooltip}"/>
                     <Button Style="{StaticResource SettingsButtonStyle}"
-                            Content="Reset"
+                            Content="{loc:Loc Settings_Theme_Reset}"
                             Tag="EnvNightBackdrop" Click="ColorReset_Click"/>
                 </StackPanel>
             </utils:SettingsCard.Control>
         </utils:SettingsCard>
 
-        <utils:SettingsCard Title="Grid line color"
-                               Description="Color of the horizontal and vertical gridlines drawn behind the curves. Each variant falls back to the default when unset.">
+        <utils:SettingsCard Title="{loc:Loc Settings_Theme_GridLineColor_Title}"
+                               Description="{loc:Loc Settings_Theme_GridLineColor_Description}">
             <utils:SettingsCard.Control>
                 <StackPanel Style="{StaticResource SettingsCardControlPanel}">
                     <Button x:Name="EnvGridLineLightSwatch"
                             Style="{StaticResource ColorRowSwatchStyle}"
                             Tag="EnvGridLine|Light" Click="ColorSwatch_Click"
-                            ToolTip="Light theme grid line color"/>
+                            ToolTip="{loc:Loc Settings_Theme_GridLineColor_LightTooltip}"/>
                     <Button x:Name="EnvGridLineDarkSwatch"
                             Style="{StaticResource ColorRowSwatchStyle}"
                             Tag="EnvGridLine|Dark" Click="ColorSwatch_Click"
-                            ToolTip="Dark theme grid line color"/>
+                            ToolTip="{loc:Loc Settings_Theme_GridLineColor_DarkTooltip}"/>
                     <Button Style="{StaticResource SettingsButtonStyle}"
-                            Content="Reset"
+                            Content="{loc:Loc Settings_Theme_Reset}"
                             Tag="EnvGridLine" Click="ColorReset_Click"/>
                 </StackPanel>
             </utils:SettingsCard.Control>

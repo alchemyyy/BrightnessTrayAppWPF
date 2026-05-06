@@ -5,6 +5,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Threading;
+using BrightnessTrayAppWpf.Localization;
 using BrightnessTrayAppWpf.Models;
 using BrightnessTrayAppWpf.Services;
 using BrightnessTrayAppWpf.Utils;
@@ -363,8 +364,12 @@ public partial class EnvironmentalPage : UserControl
         for (int i = 0; i < _profileManager.Profiles.Profiles.Count; i++)
         {
             string label = string.IsNullOrWhiteSpace(_profileManager.GetName(i))
-                ? $"Profile ({i + 1})"
-                : $"{_profileManager.GetName(i)} ({i + 1})";
+                ? string.Format(
+                    LocalizationManager.Instance["Settings_Environmental_Profile_Default_Format"], i + 1)
+                : string.Format(
+                    LocalizationManager.Instance["Settings_Environmental_Profile_Named_Format"],
+                    _profileManager.GetName(i),
+                    i + 1);
             ProfileCombo.Items.Add(new ComboBoxItem
             {
                 Content = label,
@@ -570,7 +575,9 @@ public partial class EnvironmentalPage : UserControl
         // Editor needs the flag to gate its per-minute current-time tick against the simulated sweep cursor.
         // Button label flips with the same signal; "Cancel" while running, idle label otherwise.
         CurveEditor.SetPreviewSweepRunning(running);
-        PreviewSweepButton.Content = running ? "Cancel" : "Preview next 24 hours";
+        PreviewSweepButton.Content = running
+            ? LocalizationManager.Instance["Settings_Environmental_PreviewSweep_Cancel_Button"]
+            : LocalizationManager.Instance["Settings_Environmental_PreviewSweep_Active_Button"];
     }
 
     private void OnEnvironmentalPreviewSweepProgress(double t) =>
@@ -1449,8 +1456,9 @@ public partial class EnvironmentalPage : UserControl
 
             Button button = (Button)sender;
             button.IsEnabled = false;
-            string originalContent = button.Content as string ?? "Approximate from IP";
-            button.Content = "Locating...";
+            string originalContent = button.Content as string
+                ?? LocalizationManager.Instance["Settings_Environmental_ApproximateFromIp_Fallback"];
+            button.Content = LocalizationManager.Instance["Settings_Environmental_ApproxFromIp_Locating"];
             try
             {
                 // https://am.i.mullvad.net/json - returns a small JSON blob containing latitude/longitude.

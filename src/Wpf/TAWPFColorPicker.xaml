@@ -4,9 +4,10 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:shell="clr-namespace:System.Windows.Shell;assembly=PresentationFramework"
     xmlns:utils="clr-namespace:BrightnessTrayAppWpf.Wpf.Utils"
+    xmlns:loc="clr-namespace:BrightnessTrayAppWpf.Localization"
     utils:KeyboardFocusBehavior.EnableKeyboardOnlyFocus="True"
     utils:KeyboardFocusBehavior.FocusStyle="{StaticResource KeyboardFocusVisualStyle}"
-    Title="ColorPicker"
+    Title="{loc:Loc ColorPicker_DefaultTitle}"
     Width="408"
     SizeToContent="Height"
     MinWidth="200"
@@ -234,7 +235,7 @@
 
                 <TextBlock Grid.Column="0"
                            x:Name="TitleText"
-                           Text="ColorPicker"
+                           Text="{loc:Loc ColorPicker_DefaultTitle}"
                            Foreground="{DynamicResource ThemeForeground}"
                            VerticalAlignment="Center"
                            Margin="16,0,0,0"
@@ -249,7 +250,7 @@
                             Style="{StaticResource CaptionCloseButtonStyle}"
                             Click="Close_Click"
                             Content="&#xE8BB;"
-                            ToolTip="Close"/>
+                            ToolTip="{loc:Loc ColorPicker_CloseTooltip}"/>
                 </StackPanel>
             </Grid>
 
@@ -387,11 +388,11 @@
                     <Slider Grid.Row="1" Grid.Column="10" x:Name="BSlider" Tag="B" Style="{StaticResource ChannelSliderStyle}"/>
 
                     <!-- Channel labels (row 2). FreePick has no label. -->
-                    <TextBlock Grid.Row="2" Grid.Column="2" Text="hue" Style="{StaticResource ChannelColumnFooterStyle}"/>
-                    <TextBlock Grid.Row="2" Grid.Column="4" Text="alpha" Style="{StaticResource ChannelColumnFooterStyle}"/>
-                    <TextBlock Grid.Row="2" Grid.Column="6" Text="r" Style="{StaticResource ChannelColumnFooterStyle}"/>
-                    <TextBlock Grid.Row="2" Grid.Column="8" Text="g" Style="{StaticResource ChannelColumnFooterStyle}"/>
-                    <TextBlock Grid.Row="2" Grid.Column="10" Text="b" Style="{StaticResource ChannelColumnFooterStyle}"/>
+                    <TextBlock Grid.Row="2" Grid.Column="2" Text="{loc:Loc ColorPicker_ChannelLabel_Hue}" Style="{StaticResource ChannelColumnFooterStyle}"/>
+                    <TextBlock Grid.Row="2" Grid.Column="4" Text="{loc:Loc ColorPicker_ChannelLabel_Alpha}" Style="{StaticResource ChannelColumnFooterStyle}"/>
+                    <TextBlock Grid.Row="2" Grid.Column="6" Text="{loc:Loc ColorPicker_ChannelLabel_R}" Style="{StaticResource ChannelColumnFooterStyle}"/>
+                    <TextBlock Grid.Row="2" Grid.Column="8" Text="{loc:Loc ColorPicker_ChannelLabel_G}" Style="{StaticResource ChannelColumnFooterStyle}"/>
+                    <TextBlock Grid.Row="2" Grid.Column="10" Text="{loc:Loc ColorPicker_ChannelLabel_B}" Style="{StaticResource ChannelColumnFooterStyle}"/>
                 </Grid>
 
                 <!-- ROW 2: hex textboxes (left) + Apply / Reset buttons (right).
@@ -433,7 +434,7 @@
                             <ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
                         <TextBlock Grid.Column="0"
-                                   Text="rgba hex:"
+                                   Text="{loc:Loc ColorPicker_RgbaHexLabel}"
                                    Style="{StaticResource SettingTitleStyle}"
                                    VerticalAlignment="Center"/>
                         <TextBox Grid.Column="2"
@@ -451,7 +452,7 @@
                             <ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
                         <TextBlock Grid.Column="0"
-                                   Text="argb hex:"
+                                   Text="{loc:Loc ColorPicker_ArgbHexLabel}"
                                    Style="{StaticResource SettingTitleStyle}"
                                    VerticalAlignment="Center"/>
                         <TextBox Grid.Column="2"
@@ -475,7 +476,7 @@
                         <Button Grid.Column="0"
                                 x:Name="ApplyButton"
                                 Style="{StaticResource SettingsButtonStyle}"
-                                Content="Applied"
+                                Content="{loc:Loc ColorPicker_Apply_Clean}"
                                 Padding="20,8"
                                 IsEnabled="False"
                                 HorizontalAlignment="Stretch"
@@ -484,7 +485,7 @@
                         <Button Grid.Column="2"
                                 x:Name="ResetButton"
                                 Style="{StaticResource SettingsButtonStyle}"
-                                Content="Reset"
+                                Content="{loc:Loc ColorPicker_ResetButton}"
                                 Padding="20,8"
                                 HorizontalAlignment="Stretch"
                                 VerticalAlignment="Center"

@@ -109,6 +109,25 @@
     <Page Remove="Wpf\App.xaml" />
   </ItemGroup>
 
+  <!-- Localization: standard .NET strongly-typed ResX pair.
+       The neutral Strings.resx is embedded into the main assembly; the Designer.cs
+       companion exposes ResourceManager + Culture for code-side lookups.
+       Adding a translated .resx in the future:
+         1. Drop Strings.<lang>.resx alongside Strings.resx
+         2. Append the language code to SatelliteResourceLanguages above (e.g. "en;fr")
+            so the satellite assembly is emitted on publish. -->
+  <ItemGroup>
+    <EmbeddedResource Update="Localization\Strings.resx">
+      <Generator>PublicResXFileCodeGenerator</Generator>
+      <LastGenOutput>Strings.Designer.cs</LastGenOutput>
+    </EmbeddedResource>
+    <Compile Update="Localization\Strings.Designer.cs">
+      <DesignTime>True</DesignTime>
+      <AutoGen>True</AutoGen>
+      <DependentUpon>Strings.resx</DependentUpon>
+    </Compile>
+  </ItemGroup>
+
   <!-- Kill any running instance before build/clean so the exe isn't locked.
        No Configuration condition: applies to Debug and Release alike.
        Hooks Clean too so Rebuild (= Clean + Build) doesn't fail on the

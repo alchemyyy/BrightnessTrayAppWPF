@@ -4,6 +4,7 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:utils="clr-namespace:BrightnessTrayAppWpf.Wpf.Utils"
     xmlns:pages="clr-namespace:BrightnessTrayAppWpf.Wpf.Settings.Pages"
+    xmlns:loc="clr-namespace:BrightnessTrayAppWpf.Localization"
     xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
     mc:Ignorable="d"
@@ -12,10 +13,10 @@
     d:Background="#1F1F1F"
     utils:SettingsKeyboardNavigation.IsContentSection="True">
     <StackPanel>
-        <TextBlock Style="{StaticResource SectionHeaderStyle}" Text="Keyboard shortcuts"/>
+        <TextBlock Style="{StaticResource SectionHeaderStyle}" Text="{loc:Loc Settings_Hotkeys_SectionHeader}"/>
 
         <TextBlock Style="{StaticResource SettingDescriptionStyle}"
-                   Text="Bind a system-wide keyboard shortcut to each action. Bindings require at least one modifier key (Ctrl, Alt, Shift, or Win). All actions start unbound."
+                   Text="{loc:Loc Settings_Hotkeys_SectionDescription}"
                    Margin="0,0,0,16"/>
 
         <!-- Search box filters the rows by title + description. Lives outside the
@@ -23,7 +24,7 @@
         <StackPanel Orientation="Horizontal"
                     HorizontalAlignment="Left"
                     Margin="0,0,0,12">
-            <TextBlock Text="Search:"
+            <TextBlock Text="{loc:Loc Settings_Hotkeys_SearchLabel}"
                        Style="{StaticResource SettingTitleStyle}"
                        VerticalAlignment="Center"
                        Margin="{StaticResource RightSpacerSmall}"/>
@@ -78,7 +79,7 @@
                                     Width="32"
                                     Height="29"
                                     Padding="0"
-                                    ToolTip="delete this hotkey"
+                                    ToolTip="{loc:Loc Settings_Hotkeys_DeleteHotkey_ToolTip}"
                                     Click="HotkeyEntryDelete_Click"
                                     Tag="{Binding}">
                                 <TextBlock Text="x"
@@ -175,7 +176,7 @@
                     <Border Style="{StaticResource SettingsCardStyle}">
                         <StackPanel>
                             <TextBlock Style="{StaticResource SettingTitleStyle}"
-                                       Text="Power off specific monitor"
+                                       Text="{loc:Loc Settings_Hotkeys_PowerOffSpecificMonitor_Title}"
                                        Margin="0,0,0,8"/>
                             <Grid>
                                 <Grid.ColumnDefinitions>
@@ -249,7 +250,7 @@
 
                                 <Button Grid.Row="0" Grid.Column="5"
                                         Style="{StaticResource SettingsButtonStyle}"
-                                        Content="Remove"
+                                        Content="{loc:Loc Settings_Hotkeys_Remove_Button}"
                                         VerticalAlignment="Center"
                                         Click="HotkeyRemove_Click"
                                         Tag="{Binding}"/>
@@ -274,7 +275,7 @@
 
         <Button x:Name="AddMonitorOffBindingButton"
                 Style="{StaticResource SettingsButtonStyle}"
-                Content="Add monitor-off binding"
+                Content="{loc:Loc Settings_Hotkeys_AddMonitorOffBinding_Button}"
                 HorizontalAlignment="Left"
                 Margin="0,8,0,0"
                 Click="AddMonitorOffBinding_Click"/>

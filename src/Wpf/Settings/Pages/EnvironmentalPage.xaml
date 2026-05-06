@@ -6,17 +6,18 @@
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
     xmlns:environmentalPageAddons="clr-namespace:BrightnessTrayAppWpf.Wpf.Settings.Pages.EnvironmentalPageAddons"
     xmlns:utils="clr-namespace:BrightnessTrayAppWpf.Wpf.Utils"
+    xmlns:loc="clr-namespace:BrightnessTrayAppWpf.Localization"
     mc:Ignorable="d"
     d:DesignWidth="660"
     d:DesignHeight="594"
     d:Background="#1F1F1F"
     utils:SettingsKeyboardNavigation.IsContentSection="True">
     <StackPanel>
-        <TextBlock Style="{StaticResource SectionHeaderStyle}" Text="Environmental"/>
+        <TextBlock Style="{StaticResource SectionHeaderStyle}" Text="{loc:Loc Settings_Environmental_SectionHeader}"/>
 
         <TextBlock Style="{StaticResource SettingDescriptionStyle}"
                    Margin="0,0,0,4"
-                   Text="Drive brightness and night-light from the local sun position. Curves are stored per profile; geo coordinates are global."/>
+                   Text="{loc:Loc Settings_Environmental_SectionDescription}"/>
 
         <!-- Curve editor:
              24h cycle on the X axis (midnight to midnight), normalised value on the Y.
@@ -54,7 +55,7 @@
                                 CornerRadius="1.5"
                                 VerticalAlignment="Center"
                                 Margin="0,0,2,0"/>
-                        <TextBlock Text="Brightness"
+                        <TextBlock Text="{loc:Loc Settings_Environmental_Legend_Brightness}"
                                    FontSize="11"
                                    VerticalAlignment="Center"
                                    Foreground="{DynamicResource ThemeForeground}"/>
@@ -67,7 +68,7 @@
                                 CornerRadius="1.5"
                                 VerticalAlignment="Center"
                                 Margin="0,0,2,0"/>
-                        <TextBlock Text="Night Light"
+                        <TextBlock Text="{loc:Loc Settings_Environmental_Legend_NightLight}"
                                    FontSize="11"
                                    VerticalAlignment="Center"
                                    Foreground="{DynamicResource ThemeForeground}"/>
@@ -82,7 +83,7 @@
                                 CornerRadius="1"
                                 VerticalAlignment="Center"
                                 Margin="0,0,2,0"/>
-                        <TextBlock Text="Time Now"
+                        <TextBlock Text="{loc:Loc Settings_Environmental_Legend_TimeNow}"
                                    FontSize="11"
                                    VerticalAlignment="Center"
                                    Foreground="{DynamicResource ThemeForeground}"/>
@@ -96,7 +97,7 @@
                      so the overall row width stays ~200px. -->
                 <StackPanel Orientation="Horizontal"
                             Margin="0,0,0,0">
-                    <TextBlock Text="Profile"
+                    <TextBlock Text="{loc:Loc Settings_Environmental_Profile_Label}"
                                Style="{StaticResource SettingTitleStyle}"
                                FontWeight="SemiBold"
                                VerticalAlignment="Center"
@@ -119,10 +120,10 @@
                               Margin="{StaticResource RightSpacerSmall}"
                               Checked="EnvironmentalOffsetMode_Changed"
                               Unchecked="EnvironmentalOffsetMode_Changed"/>
-                    <TextBlock Text="Offset mode"
+                    <TextBlock Text="{loc:Loc Settings_Environmental_OffsetMode_Title}"
                                Style="{StaticResource SettingTitleStyle}"
                                VerticalAlignment="Center"
-                               ToolTip="When on, curves apply additively/subtractively to the live brightness / night-light value. Drag the dashed lines to clamp how far the offset can swing."/>
+                               ToolTip="{loc:Loc Settings_Environmental_OffsetMode_ToolTip}"/>
                 </StackPanel>
 
                 <!-- Follow the sun reanchors curve points to sun events
@@ -138,10 +139,10 @@
                               Margin="{StaticResource RightSpacerSmall}"
                               Checked="EnvironmentalFollowTheSun_Changed"
                               Unchecked="EnvironmentalFollowTheSun_Changed"/>
-                    <TextBlock Text="Follow the sun"
+                    <TextBlock Text="{loc:Loc Settings_Environmental_FollowTheSun_Title}"
                                Style="{StaticResource SettingTitleStyle}"
                                VerticalAlignment="Center"
-                               ToolTip="Reanchor curve points to twilight, sunrise, solar noon, and sunset for the current profile. Each point keeps its proportional position within its sun-segment, so the curve drifts in clock-time as days lengthen and shorten across the year. Per-profile, applied destructively to the stored points - missed days catch up automatically."/>
+                               ToolTip="{loc:Loc Settings_Environmental_FollowTheSun_ToolTip}"/>
                 </StackPanel>
 
                 <!-- Use daylight savings:
@@ -158,10 +159,10 @@
                               Margin="{StaticResource RightSpacerSmall}"
                               Checked="EnvironmentalUseDaylightSavings_Changed"
                               Unchecked="EnvironmentalUseDaylightSavings_Changed"/>
-                    <TextBlock Text="Use daylight savings"
+                    <TextBlock Text="{loc:Loc Settings_Environmental_UseDaylightSavings_Title}"
                                Style="{StaticResource SettingTitleStyle}"
                                VerticalAlignment="Center"
-                               ToolTip="When on, sun-position calculations follow daylight savings - sun events line up with wall-clock time across the year. When off, the timezone's standard offset is used year-round, so sun events stay anchored to standard time and the curve doesn't shift by an hour at DST boundaries. Per-profile."/>
+                               ToolTip="{loc:Loc Settings_Environmental_UseDaylightSavings_ToolTip}"/>
                 </StackPanel>
 
                 <!-- Disabled period: a window inside the day where curves apply nothing.
@@ -176,10 +177,10 @@
                               Margin="{StaticResource RightSpacerSmall}"
                               Checked="EnvironmentalDisabledPeriod_Changed"
                               Unchecked="EnvironmentalDisabledPeriod_Changed"/>
-                    <TextBlock Text="Disabled period"
+                    <TextBlock Text="{loc:Loc Settings_Environmental_DisabledPeriod_Title}"
                                Style="{StaticResource SettingTitleStyle}"
                                VerticalAlignment="Center"
-                               ToolTip="Carve out a window inside the 24h cycle where the curves do not apply. Drag the white pins above the chart, or edit the Start / End boxes below, to set the boundaries. Start past End wraps midnight. Per-profile."/>
+                               ToolTip="{loc:Loc Settings_Environmental_DisabledPeriod_ToolTip}"/>
                 </StackPanel>
 
 
@@ -199,10 +200,10 @@
                               Margin="{StaticResource RightSpacerSmall}"
                               Checked="EnvironmentalDisabledPeriodFollowTheSun_Changed"
                               Unchecked="EnvironmentalDisabledPeriodFollowTheSun_Changed"/>
-                    <TextBlock Text="Follow sun"
+                    <TextBlock Text="{loc:Loc Settings_Environmental_DisabledPeriodFollowTheSun_Title}"
                                Style="{StaticResource SettingTitleStyle}"
                                VerticalAlignment="Center"
-                               ToolTip="Reanchor the Start / End boundaries to twilight, sunrise, solar noon, and sunset so the disabled period drifts with the day/night cycle across the year. Sun events already honour the profile's Use daylight savings flag, so this does not compound with that shift."/>
+                               ToolTip="{loc:Loc Settings_Environmental_DisabledPeriodFollowTheSun_ToolTip}"/>
                 </StackPanel>
 
 
@@ -213,7 +214,7 @@
                             Orientation="Horizontal"
                             Margin="0,0,8,6"
                             Visibility="Collapsed">
-                    <TextBlock Text="Start"
+                    <TextBlock Text="{loc:Loc Settings_Environmental_DisabledPeriod_Start_Label}"
                                Style="{StaticResource SettingTitleStyle}"
                                VerticalAlignment="Center"
                                Margin="0,0,4,0"/>
@@ -224,7 +225,7 @@
                              TextAlignment="Center"
                              LostFocus="EnvironmentalDisabledPeriodStart_LostFocus"
                              PreviewKeyDown="EnvironmentalDisabledPeriodTime_PreviewKeyDown"/>
-                    <TextBlock Text="End"
+                    <TextBlock Text="{loc:Loc Settings_Environmental_DisabledPeriod_End_Label}"
                                Style="{StaticResource SettingTitleStyle}"
                                VerticalAlignment="Center"
                                Margin="10,0,4,0"/>
@@ -244,10 +245,10 @@
                      Leaves FollowTheSun / DST flags alone since those are not curve shape. -->
                 <Button x:Name="ResetCurvesButton"
                         Style="{StaticResource SettingsButtonStyle}"
-                        Content="Reset curves"
+                        Content="{loc:Loc Settings_Environmental_ResetCurves_Button}"
                         HorizontalAlignment="Left"
                         Margin="{StaticResource ListItemSpacing}"
-                        ToolTip="Reset the selected profile's brightness, night-light, and offset curves back to their flat defaults. Per-profile, applied immediately."
+                        ToolTip="{loc:Loc Settings_Environmental_ResetCurves_ToolTip}"
                         Click="EnvironmentalResetCurves_Click"/>
             </StackPanel>
 
@@ -279,7 +280,7 @@
                                       Tag="Brightness"
                                       Checked="EnvironmentalCurveVisibility_Changed"
                                       Unchecked="EnvironmentalCurveVisibility_Changed"/>
-                            <TextBlock Text="Show brightness curve"
+                            <TextBlock Text="{loc:Loc Settings_Environmental_ShowBrightnessCurve_Title}"
                                        Style="{StaticResource SettingTitleStyle}"
                                        VerticalAlignment="Center"/>
                         </StackPanel>
@@ -291,7 +292,7 @@
                                       Tag="NightLight"
                                       Checked="EnvironmentalCurveVisibility_Changed"
                                       Unchecked="EnvironmentalCurveVisibility_Changed"/>
-                            <TextBlock Text="Show night light curve"
+                            <TextBlock Text="{loc:Loc Settings_Environmental_ShowNightLightCurve_Title}"
                                        Style="{StaticResource SettingTitleStyle}"
                                        VerticalAlignment="Center"/>
                         </StackPanel>
@@ -302,10 +303,10 @@
                                       Margin="{StaticResource RightSpacerSmall}"
                                       Checked="EnvironmentalShowSunOverlay_Changed"
                                       Unchecked="EnvironmentalShowSunOverlay_Changed"/>
-                            <TextBlock Text="Show sun overlay"
+                            <TextBlock Text="{loc:Loc Settings_Environmental_ShowSunOverlay_Title}"
                                        Style="{StaticResource SettingTitleStyle}"
                                        VerticalAlignment="Center"
-                                       ToolTip="Shade twilight (orange) and night (greyish blue) bands behind the curves using the geo coordinates below."/>
+                                       ToolTip="{loc:Loc Settings_Environmental_ShowSunOverlay_ToolTip}"/>
                         </StackPanel>
                         <StackPanel Orientation="Horizontal">
                             <CheckBox x:Name="ShowCursorReadoutToggle"
@@ -314,10 +315,10 @@
                                       Margin="{StaticResource RightSpacerSmall}"
                                       Checked="EnvironmentalShowCursorReadout_Changed"
                                       Unchecked="EnvironmentalShowCursorReadout_Changed"/>
-                            <TextBlock Text="Show cursor readout"
+                            <TextBlock Text="{loc:Loc Settings_Environmental_ShowCursorReadout_Title}"
                                        Style="{StaticResource SettingTitleStyle}"
                                        VerticalAlignment="Center"
-                                       ToolTip="Show a vertical scrubber and per-curve value markers while the cursor is over the editor."/>
+                                       ToolTip="{loc:Loc Settings_Environmental_ShowCursorReadout_ToolTip}"/>
                         </StackPanel>
                     </StackPanel>
 
@@ -340,7 +341,7 @@
                                 <ColumnDefinition Width="Auto"/>
                             </Grid.ColumnDefinitions>
                             <TextBlock Grid.Column="0"
-                                       Text="Preview Date:"
+                                       Text="{loc:Loc Settings_Environmental_PreviewDate_Label}"
                                        Style="{StaticResource SettingTitleStyle}"
                                        VerticalAlignment="Center"
                                        HorizontalAlignment="Right"
@@ -370,7 +371,7 @@
                                             Width="28"
                                             FontSize="13"
                                             Content="&#xE787;"
-                                            ToolTip="Pick a date"
+                                            ToolTip="{loc:Loc Settings_Environmental_PickDate_ToolTip}"
                                             Click="EnvironmentalSunOverlayCalendarButton_Click"/>
                                 </Grid>
                             </Border>
@@ -411,8 +412,8 @@
                                 Width="217"
                                 HorizontalAlignment="Right"
                                 Margin="0,-2,0,4"
-                                Content="Live preview next 24 hours"
-                                ToolTip="Animate the full day's curve over 10 seconds, applying values to monitors and night light as it sweeps.&#x0a;Requires at least one slider in the flyout to be set to curve mode."
+                                Content="{loc:Loc Settings_Environmental_PreviewSweep_Idle_Button}"
+                                ToolTip="{loc:Loc Settings_Environmental_PreviewSweep_ToolTip}"
                                 ToolTipService.ShowOnDisabled="True"
                                 Click="EnvironmentalPreviewSweepButton_Click"/>
 
@@ -439,7 +440,7 @@
                                            Style="{StaticResource SettingTitleStyle}"
                                            FontWeight="SemiBold"
                                            VerticalAlignment="Center"
-                                           Text="Smoothness"/>
+                                           Text="{loc:Loc Settings_Environmental_Smoothness_Title}"/>
                                 <Grid Grid.Row="0" Grid.Column="1"
                                       Width="80"
                                       Margin="0,4,4,0"
@@ -477,11 +478,11 @@
                                 <TextBlock Grid.Row="1" Grid.Column="0" Grid.ColumnSpan="2"
                                            Style="{StaticResource SettingDescriptionStyle}"
                                            Margin="0,-12,0,0"
-                                           Text="Blend between"/>
+                                           Text="{loc:Loc Settings_Environmental_Smoothness_DescriptionLine1}"/>
                                 <TextBlock Grid.Row="1" Grid.Column="0" Grid.ColumnSpan="2"
                                            Margin="0,2,0,0"
                                            Style="{StaticResource SettingDescriptionStyle}"
-                                           Text="linear(0) and interpolated(100) "/>
+                                           Text="{loc:Loc Settings_Environmental_Smoothness_DescriptionLine2}"/>
               </Grid>
                         </Border>
                     </StackPanel>
@@ -509,13 +510,13 @@
                                    FontWeight="SemiBold"
                                    VerticalAlignment="Center"
                                    Margin="0,0,0,10"
-                                   Text="Geo location"/>
+                                   Text="{loc:Loc Settings_Environmental_GeoLocation_Title}"/>
                         <TextBlock Grid.Row="0" Grid.Column="2" Grid.ColumnSpan="3"
                                    Style="{StaticResource SettingDescriptionStyle}"
                                    VerticalAlignment="Center"
                                    HorizontalAlignment="Right"
                                    Margin="0,0,0,8"
-                                   Text="Decimal degrees. Positive values are north / east."/>
+                                   Text="{loc:Loc Settings_Environmental_GeoLocation_Description}"/>
 
                         <!-- Action buttons stacked on the left, Lat / Lon inputs to their right.
                              The IP-approximation button calls https://am.i.mullvad.net/json
@@ -524,21 +525,21 @@
                                     VerticalAlignment="Bottom">
                             <Button x:Name="ApproximateFromIpButton"
                                     Style="{StaticResource SettingsButtonStyle}"
-                                    Content="Approx. from IP"
+                                    Content="{loc:Loc Settings_Environmental_ApproxFromIp_Button}"
                                     MinWidth="130"
                                     Margin="0,0,0,4"
                                     HorizontalAlignment="Stretch"
                                     Click="ApproximateFromIp_Click"/>
                             <Button x:Name="OpenMapPickerButton"
                                     Style="{StaticResource SettingsButtonStyle}"
-                                    Content="Pick on map"
+                                    Content="{loc:Loc Settings_Environmental_PickOnMap_Button}"
                                     MinWidth="130"
                                     HorizontalAlignment="Stretch"
                                     Click="OpenMapPicker_Click"/>
                         </StackPanel>
 
                         <StackPanel Grid.Row="1" Grid.Column="2">
-                            <TextBlock Text="Latitude"
+                            <TextBlock Text="{loc:Loc Settings_Environmental_Latitude_Label}"
                                        Style="{StaticResource SettingTitleStyle}"
                                        Margin="0,6,0,4"/>
                             <TextBox x:Name="LatitudeBox"
@@ -548,7 +549,7 @@
                         </StackPanel>
 
                         <StackPanel Grid.Row="1" Grid.Column="4">
-                            <TextBlock Text="Longitude"
+                            <TextBlock Text="{loc:Loc Settings_Environmental_Longitude_Label}"
                                        Style="{StaticResource SettingTitleStyle}"
                                        Margin="0,6,0,4"/>
                             <TextBox x:Name="LongitudeBox"

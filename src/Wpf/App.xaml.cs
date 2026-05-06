@@ -7,6 +7,7 @@ using System.Windows.Threading;
 using BrightnessTrayAppWpf.DDCCI;
 using BrightnessTrayAppWpf.Interop;
 using BrightnessTrayAppWpf.Interop.NightLight;
+using BrightnessTrayAppWpf.Localization;
 using BrightnessTrayAppWpf.Models;
 using BrightnessTrayAppWpf.Services;
 using BrightnessTrayAppWpf.Visuals;
@@ -46,6 +47,12 @@ public partial class App
         // Safe to repeat so any direct App entry (e.g. attached debugger) still gets a logger.
         WpfLog.Initialize();
         WpfLog.Log($"App.OnStartup: begin, args=[{string.Join(' ', e.Args)}]");
+
+        // Seed the localization manager before any UI is built so the first XAML load
+        // sees the right culture on every {loc:Loc ...} lookup.
+        // Defaults to the OS UI culture; with only neutral resources present, this resolves
+        // to the embedded English strings via the standard ResourceManager fallback chain.
+        LocalizationManager.Instance.Initialize();
 
         if (Program.IsUninstallerMode)
         {
@@ -373,7 +380,7 @@ public partial class App
                 int captured = i;
                 string label = profileManager?.GetName(i) is { } customName && !string.IsNullOrWhiteSpace(customName)
                     ? customName
-                    : $"Profile {i + 1}";
+                    : string.Format(LocalizationManager.Instance["Tray_Profile_Format"], i + 1);
                 MenuItem profileItem = new() { Header = BuildProfileHeader(label, i == selectedIndex) };
                 profileItem.Click += (_, _) => SelectProfileFromMenu(captured);
                 contextMenu.Items.Add(profileItem);
@@ -383,7 +390,7 @@ public partial class App
 
         if (_appSettings?.ShowAllDisplaysPowerButton ?? true)
         {
-            MenuItem powerAll = new() { Header = "Power off all displays" };
+            MenuItem powerAll = new() { Header = LocalizationManager.Instance["Tray_PowerOffAllDisplays"] };
             powerAll.Click += (_, _) => PowerOffAllMonitorsFromMenu();
             contextMenu.Items.Add(powerAll);
         }
@@ -393,7 +400,9 @@ public partial class App
             foreach (MonitorInfo monitor in GetOrderedMonitors())
             {
                 MonitorInfo captured = monitor;
-                MenuItem powerItem = new() { Header = $"Power off {monitor.Name}" };
+                string powerHeader = string.Format(
+                    LocalizationManager.Instance["Tray_PowerOffMonitor_Format"], monitor.Name);
+                MenuItem powerItem = new() { Header = powerHeader };
                 powerItem.Click += (_, _) => PowerOffMonitorFromMenu(captured);
                 contextMenu.Items.Add(powerItem);
             }
@@ -402,10 +411,10 @@ public partial class App
         if (contextMenu.Items.Count > 0 && contextMenu.Items[^1] is not Separator)
             contextMenu.Items.Add(new Separator());
 
-        MenuItem settingsItem = new() { Header = "Settings" };
+        MenuItem settingsItem = new() { Header = LocalizationManager.Instance["Tray_Settings"] };
         settingsItem.Click += (_, _) => OpenSettings();
 
-        MenuItem exitItem = new() { Header = "Exit" };
+        MenuItem exitItem = new() { Header = LocalizationManager.Instance["Tray_Exit"] };
         exitItem.Click += (_, _) => ExitApplication();
 
         contextMenu.Items.Add(settingsItem);
@@ -1145,9 +1154,11 @@ public partial class App
         int brightness = _activeFlyout?.Monitors is { Count: > 0 } monitors
             ? ComputeTrackedIconBrightness(monitors)
             : 100;
-        string tooltip = $"Brightness: {brightness}%";
+        string tooltip = string.Format(
+            LocalizationManager.Instance["Tray_Tooltip_Brightness_Format"], brightness);
         if (NightLightProvider.IsSupported() && NightLightProvider.IsEnabled())
-            tooltip += $"\nNight Light: {NightLightProvider.GetStrength()}%";
+            tooltip += string.Format(
+                LocalizationManager.Instance["Tray_Tooltip_NightLight_Format"], NightLightProvider.GetStrength());
 
         return (brightness, tooltip);
     }

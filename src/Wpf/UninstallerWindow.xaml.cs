@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Windows;
+using BrightnessTrayAppWpf.Localization;
 using BrightnessTrayAppWpf.Models;
 using BrightnessTrayAppWpf.Services;
 using BrightnessTrayAppWpf.Utils;
@@ -39,12 +40,12 @@ public partial class UninstallerWindow : Window
         _scope = scope;
         InitializeComponent();
 
-        DescriptionText.Text =
-            $"This will remove BrightnessTrayAppWpf installed at \"{installDir}\" " +
-            "and its entry in Windows Settings > Apps. Choose what to do with your settings.";
+        DescriptionText.Text = string.Format(
+            LocalizationManager.Instance["Uninstaller_Description_Format"], installDir);
 
-        DeleteSettingsDescription.Text =
-            $"Also remove \"{AppSettings.GetDefaultDirectory()}\" including settings.xml.";
+        DeleteSettingsDescription.Text = string.Format(
+            LocalizationManager.Instance["Uninstaller_DeleteSettings_Description_Format"],
+            AppSettings.GetDefaultDirectory());
     }
 
     private void Close_Click(object sender, RoutedEventArgs e) => Close();
@@ -57,7 +58,7 @@ public partial class UninstallerWindow : Window
 
         UninstallButton.IsEnabled = false;
         CancelButton.IsEnabled = false;
-        UninstallButton.Content = "Uninstalling...";
+        UninstallButton.Content = LocalizationManager.Instance["Uninstaller_UninstallingButton"];
 
         // Map the registry scope back to InstallScope so RunUninstall resolves the install dir
         // the same way as the in-app button path does.
