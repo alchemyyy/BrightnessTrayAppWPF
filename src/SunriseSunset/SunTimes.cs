@@ -1,4 +1,4 @@
-namespace BrightnessTrayAppWpf.SunriseSunset;
+namespace BrightnessTrayAppWPF.SunriseSunset;
 
 /// <summary>Aggregate result containing sunrise, sunset, solar noon and twilight times</summary>
 public sealed record SunTimes(

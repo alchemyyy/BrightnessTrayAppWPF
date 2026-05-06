@@ -1,4 +1,4 @@
-namespace BrightnessTrayAppWpf.Wpf.Settings.Utils;
+namespace BrightnessTrayAppWPF.WPF.Settings.Utils;
 
 /// <summary>
 /// Shell-owned facade for theme-induced chrome updates that reach into the host window's HWND.

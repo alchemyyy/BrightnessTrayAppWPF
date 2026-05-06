@@ -1,10 +1,10 @@
 using System.IO;
 using System.Xml;
 using System.Xml.Serialization;
-using BrightnessTrayAppWpf.Models;
-using BrightnessTrayAppWpf.Utils;
+using BrightnessTrayAppWPF.Models;
+using BrightnessTrayAppWPF.Utils;
 
-namespace BrightnessTrayAppWpf.Services;
+namespace BrightnessTrayAppWPF.Services;
 
 /// <summary>
 /// Manages brightness profiles - loading, saving, and applying.
@@ -562,7 +562,7 @@ public sealed class ProfileManager
                     anyUpgrade = true;
                     if (knownEdidKeys.Count > 0 && !knownEdidKeys.Contains(legacyId))
                     {
-                        WpfLog.Log(
+                        WPFLog.Log(
                             $"ProfileManager: migrated EDIDKey '{legacyId}' not yet in KnownDisplays");
                     }
                 }
@@ -628,7 +628,7 @@ public sealed class ProfileManager
         {
             // Best-effort: a locked file (AV scan), full disk, or roaming-profile hiccup
             // loses the latest edit but doesn't crash the app.
-            WpfLog.Log($"ProfileManager.Save: {ex.Message}");
+            WPFLog.Log($"ProfileManager.Save: {ex.Message}");
         }
     }
 

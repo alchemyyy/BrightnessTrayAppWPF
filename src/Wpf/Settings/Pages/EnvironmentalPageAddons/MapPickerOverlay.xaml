@@ -1,8 +1,8 @@
 <UserControl
-    x:Class="BrightnessTrayAppWpf.Wpf.Settings.Pages.EnvironmentalPageAddons.MapPickerOverlay"
+    x:Class="BrightnessTrayAppWPF.WPF.Settings.Pages.EnvironmentalPageAddons.MapPickerOverlay"
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-    xmlns:loc="clr-namespace:BrightnessTrayAppWpf.Localization"
+    xmlns:loc="clr-namespace:BrightnessTrayAppWPF.Localization"
     Background="#80000000"
     Focusable="True"
     KeyboardNavigation.TabNavigation="Cycle">

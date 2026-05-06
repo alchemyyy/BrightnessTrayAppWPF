@@ -1,14 +1,14 @@
 using System.Globalization;
 using System.Runtime.InteropServices;
 using System.Text;
-using BrightnessTrayAppWpf.DDCCI.Interop;
-using BrightnessTrayAppWpf.DDCCI.Parser;
-using BrightnessTrayAppWpf.DDCCI.Parser.Nodes;
-using BrightnessTrayAppWpf.DDCCI.Tokenizer;
-using BrightnessTrayAppWpf.DDCCI.Tokenizer.Tokens;
+using BrightnessTrayAppWPF.DDCCI.Interop;
+using BrightnessTrayAppWPF.DDCCI.Parser;
+using BrightnessTrayAppWPF.DDCCI.Parser.Nodes;
+using BrightnessTrayAppWPF.DDCCI.Tokenizer;
+using BrightnessTrayAppWPF.DDCCI.Tokenizer.Tokens;
 using Microsoft.Win32;
 
-namespace BrightnessTrayAppWpf.DDCCI;
+namespace BrightnessTrayAppWPF.DDCCI;
 
 /// <summary>
 /// Default <see cref="IDisplayService"/> implementation backed by the Windows Monitor Configuration API (dxva2.dll).
@@ -116,7 +116,7 @@ public class DisplayService : IDisplayService
         }
         catch (Exception ex)
         {
-            WpfLog.Log($"DisplayService.ReadEDID: failed for '{adapterName}': {ex.Message}");
+            WPFLog.Log($"DisplayService.ReadEDID: failed for '{adapterName}': {ex.Message}");
             return null;
         }
     }
@@ -340,7 +340,7 @@ public class DisplayService : IDisplayService
             try { return op(); }
             catch (Exception ex)
             {
-                WpfLog.Log($"DisplayService: {opLabel} threw unexpectedly: {ex.Message}");
+                WPFLog.Log($"DisplayService: {opLabel} threw unexpectedly: {ex.Message}");
                 return DDCCallOutcome<T>.Fail($"unexpected exception: {ex.Message}");
             }
         }
@@ -350,7 +350,7 @@ public class DisplayService : IDisplayService
             try { return op(); }
             catch (Exception ex)
             {
-                WpfLog.Log($"DisplayService: {opLabel} threw unexpectedly: {ex.Message}");
+                WPFLog.Log($"DisplayService: {opLabel} threw unexpectedly: {ex.Message}");
                 return DDCCallOutcome<T>.Fail($"unexpected exception: {ex.Message}");
             }
         }, ct);
@@ -365,14 +365,14 @@ public class DisplayService : IDisplayService
         }
         catch (OperationCanceledException)
         {
-            WpfLog.Log(
+            WPFLog.Log(
                 $"DisplayService: {opLabel} cancelled by sequence deadline; "
                 + "abandoning op (handles will be released when it eventually completes).");
             ObserveAbandoned(operationTask, opLabel);
             return DDCCallOutcome<T>.WithError($"DDC op '{opLabel}' cancelled by sequence deadline.");
         }
 
-        WpfLog.Log(
+        WPFLog.Log(
             $"DisplayService: {opLabel} exceeded {timeoutMs}ms timeout; "
             + "abandoning op (handles will be released when it eventually completes).");
         ObserveAbandoned(operationTask, opLabel);
@@ -389,13 +389,13 @@ public class DisplayService : IDisplayService
         {
             if (t.IsFaulted)
             {
-                WpfLog.Log(
+                WPFLog.Log(
                     $"DisplayService: abandoned op '{opLabel}' faulted post-abandonment: "
                     + $"{t.Exception?.GetBaseException().Message}");
             }
             else
             {
-                WpfLog.Log(
+                WPFLog.Log(
                     $"DisplayService: abandoned op '{opLabel}' completed post-abandonment (handles released).");
             }
         }, TaskScheduler.Default);

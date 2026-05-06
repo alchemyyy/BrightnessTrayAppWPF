@@ -1,4 +1,4 @@
-namespace BrightnessTrayAppWpf.SunriseSunset.Internal;
+namespace BrightnessTrayAppWPF.SunriseSunset.Internal;
 
 /// <summary>
 /// Mutable input/intermediate/output bag for <see cref="SPACore"/>.

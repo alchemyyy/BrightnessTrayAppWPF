@@ -1,7 +1,7 @@
-using BrightnessTrayAppWpf.Services;
+using BrightnessTrayAppWPF.Services;
 using Microsoft.Win32;
 
-namespace BrightnessTrayAppWpf.Interop.NightLight;
+namespace BrightnessTrayAppWPF.Interop.NightLight;
 
 /// <summary>
 /// Access layer for Windows Night Light via the CloudStore registry blobs. Format is Microsoft Bond
@@ -576,7 +576,7 @@ internal static class NightLightRegistry
         // revision blows past 255 we'd need a multi-byte varint here. Refuse the write rather than corrupt.
         if (newInner.Length > 255)
         {
-            WpfLog.Log(
+            WPFLog.Log(
                 $"NightLightRegistry.RebuildOuter: inner too large ({newInner.Length}B)"
                 + " - skipping write to avoid corruption.");
             return original;
@@ -683,7 +683,7 @@ internal static class NightLightRegistry
         }
         catch (Exception ex)
         {
-            WpfLog.Log($"NightLightRegistry.ReadBlob('{path}'): {ex.Message}");
+            WPFLog.Log($"NightLightRegistry.ReadBlob('{path}'): {ex.Message}");
             return null;
         }
     }
@@ -703,7 +703,7 @@ internal static class NightLightRegistry
         catch (Exception ex)
         {
             // Registry write can fail on locked/roaming profiles - caller sees no-op.
-            WpfLog.Log($"NightLightRegistry.WriteBlob('{path}'): {ex.Message}");
+            WPFLog.Log($"NightLightRegistry.WriteBlob('{path}'): {ex.Message}");
         }
     }
 }

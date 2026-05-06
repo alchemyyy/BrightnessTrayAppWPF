@@ -4,7 +4,7 @@ using System.Net.Http;
 using System.Runtime.InteropServices;
 using System.Text.Json;
 
-namespace BrightnessTrayAppWpf.Interop.NightLight;
+namespace BrightnessTrayAppWPF.Interop.NightLight;
 
 /// <summary>
 /// Resolves named symbols (mangled or namespace-qualified) to RVAs in a loaded native DLL
@@ -16,7 +16,7 @@ namespace BrightnessTrayAppWpf.Interop.NightLight;
 /// On miss, reads the CodeView (RSDS) record from the in-memory PE image
 /// to extract (PDB filename, GUID, Age),
 /// downloads the PDB into a per-app local cache laid out symstore-style:
-///   %LocalAppData%\BrightnessTrayAppWpf\symbols\{pdbName}\{GUID}{Age}\{pdbName}
+///   %LocalAppData%\BrightnessTrayAppWPF\symbols\{pdbName}\{GUID}{Age}\{pdbName}
 /// then resolves via SymInitialize + SymLoadModuleEx + SymFromName against that local file.
 /// Resolved RVAs are persisted back to the JSON cache for subsequent runs.
 ///
@@ -35,8 +35,8 @@ namespace BrightnessTrayAppWpf.Interop.NightLight;
 /// and remain there until the next layout change.
 ///
 /// Cache files:
-///   %LocalAppData%\BrightnessTrayAppWpf\nightlight-rva-cache.json   - resolved RVAs
-///   %LocalAppData%\BrightnessTrayAppWpf\symbols\                    - downloaded PDBs
+///   %LocalAppData%\BrightnessTrayAppWPF\nightlight-rva-cache.json   - resolved RVAs
+///   %LocalAppData%\BrightnessTrayAppWPF\symbols\                    - downloaded PDBs
 ///
 /// Air-gapped machines (or networks that block <c>msdl.microsoft.com</c>) silently fail the download;
 /// the caller treats that as "backend not supported" and degrades to the registry/gamma path.
@@ -58,7 +58,7 @@ internal static class PDBSymbolResolver
 
     private static readonly string AppDataDir = Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-        "BrightnessTrayAppWpf");
+        "BrightnessTrayAppWPF");
 
     public static readonly string NightlightDir = Path.Combine(AppDataDir, "nightlight");
     private static readonly string CacheFile   = Path.Combine(NightlightDir, "nightlight-rva-cache.json");
@@ -101,7 +101,7 @@ internal static class PDBSymbolResolver
         }
         catch (Exception ex)
         {
-            WpfLog.Log($"PDBSymbolResolver: failed to stat '{dllPath}': {ex.Message}");
+            WPFLog.Log($"PDBSymbolResolver: failed to stat '{dllPath}': {ex.Message}");
             return false;
         }
 
@@ -126,7 +126,7 @@ internal static class PDBSymbolResolver
             catch (Exception ex)
             {
                 // Cache write is best-effort: a future run will simply re-resolve.
-                WpfLog.Log($"PDBSymbolResolver: cache write failed: {ex.Message}");
+                WPFLog.Log($"PDBSymbolResolver: cache write failed: {ex.Message}");
             }
         }
 
@@ -147,7 +147,7 @@ internal static class PDBSymbolResolver
         }
         catch (Exception ex)
         {
-            WpfLog.Log($"PDBSymbolResolver: cache read failed (will re-resolve): {ex.Message}");
+            WPFLog.Log($"PDBSymbolResolver: cache read failed (will re-resolve): {ex.Message}");
             return false;
         }
 
@@ -216,7 +216,7 @@ internal static class PDBSymbolResolver
     {
         if (!TryReadCodeViewInfo(loadedModuleBase, out string pdbName, out Guid pdbSig, out uint pdbAge))
         {
-            WpfLog.Log(
+            WPFLog.Log(
                 $"PDBSymbolResolver: '{dllPath}' has no usable CodeView (RSDS) debug record"
                 + " - cannot derive PDB identity");
             return false;
@@ -236,13 +236,13 @@ internal static class PDBSymbolResolver
             }
             catch (Exception ex)
             {
-                WpfLog.Log($"PDBSymbolResolver: could not create PDB cache dir '{pdbDir}': {ex.Message}");
+                WPFLog.Log($"PDBSymbolResolver: could not create PDB cache dir '{pdbDir}': {ex.Message}");
                 return false;
             }
 
             string url = $"{SymbolServer}/{pdbName}/{symbolKey}/{pdbName}";
             if (!TryDownloadFile(url, pdbPath)) return false;
-            WpfLog.Log($"PDBSymbolResolver: downloaded {pdbName} ({symbolKey}) -> {pdbPath}");
+            WPFLog.Log($"PDBSymbolResolver: downloaded {pdbName} ({symbolKey}) -> {pdbPath}");
         }
 
         return ResolveViaDbghelp(loadedModuleBase, pdbDir, pdbPath, symbolNames, rvas);
@@ -335,7 +335,7 @@ internal static class PDBSymbolResolver
         }
         catch (Exception ex)
         {
-            WpfLog.Log($"PDBSymbolResolver: PE Debug Directory parse failed: {ex.Message}");
+            WPFLog.Log($"PDBSymbolResolver: PE Debug Directory parse failed: {ex.Message}");
         }
         return false;
     }
@@ -361,7 +361,7 @@ internal static class PDBSymbolResolver
 
             if (!resp.IsSuccessStatusCode)
             {
-                WpfLog.Log($"PDBSymbolResolver: HTTP {(int)resp.StatusCode} for '{url}'");
+                WPFLog.Log($"PDBSymbolResolver: HTTP {(int)resp.StatusCode} for '{url}'");
                 return false;
             }
 
@@ -371,7 +371,7 @@ internal static class PDBSymbolResolver
         }
         catch (Exception ex)
         {
-            WpfLog.Log($"PDBSymbolResolver: download '{url}' failed: {ex.Message}");
+            WPFLog.Log($"PDBSymbolResolver: download '{url}' failed: {ex.Message}");
             try { if (File.Exists(tempPath)) File.Delete(tempPath); } catch { /* best-effort */ }
             return false;
         }
@@ -384,7 +384,7 @@ internal static class PDBSymbolResolver
         }
         catch (Exception ex)
         {
-            WpfLog.Log($"PDBSymbolResolver: move '{tempPath}' -> '{targetPath}' failed: {ex.Message}");
+            WPFLog.Log($"PDBSymbolResolver: move '{tempPath}' -> '{targetPath}' failed: {ex.Message}");
             try { File.Delete(tempPath); } catch { /* best-effort */ }
             return false;
         }
@@ -412,7 +412,7 @@ internal static class PDBSymbolResolver
         if (!SymInitializeW(hProc, pdbDir, fInvadeProcess: false))
         {
             int lastError = Marshal.GetLastWin32Error();
-            WpfLog.Log($"PDBSymbolResolver: SymInitialize failed err=0x{lastError:X8}");
+            WPFLog.Log($"PDBSymbolResolver: SymInitialize failed err=0x{lastError:X8}");
             return false;
         }
 
@@ -432,7 +432,7 @@ internal static class PDBSymbolResolver
             if (modBase == 0)
             {
                 int lastError = Marshal.GetLastWin32Error();
-                WpfLog.Log(
+                WPFLog.Log(
                     $"PDBSymbolResolver: SymLoadModule failed err=0x{lastError:X8} for '{pdbPath}'");
                 return false;
             }
@@ -469,7 +469,7 @@ internal static class PDBSymbolResolver
                 if (!SymFromNameW(hProc, name, symbolInfoBuffer))
                 {
                     int lastError = Marshal.GetLastWin32Error();
-                    WpfLog.Log($"PDBSymbolResolver: SymFromName('{name}') failed err=0x{lastError:X8}");
+                    WPFLog.Log($"PDBSymbolResolver: SymFromName('{name}') failed err=0x{lastError:X8}");
                     return false;
                 }
 
@@ -479,7 +479,7 @@ internal static class PDBSymbolResolver
 
                 if (rva is < 0 or > int.MaxValue)
                 {
-                    WpfLog.Log($"PDBSymbolResolver: nonsensical RVA 0x{rva:X16} for '{name}'");
+                    WPFLog.Log($"PDBSymbolResolver: nonsensical RVA 0x{rva:X16} for '{name}'");
                     return false;
                 }
                 rvas[name] = (int)rva;

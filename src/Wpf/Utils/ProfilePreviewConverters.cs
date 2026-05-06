@@ -1,7 +1,7 @@
 using System.Globalization;
 using System.Windows.Data;
 
-namespace BrightnessTrayAppWpf.Wpf.Utils;
+namespace BrightnessTrayAppWPF.WPF.Utils;
 
 /// <summary>
 /// Converts (previewBrightness, sliderActualWidth) into the X translation for the preview ghost-thumb

@@ -4,11 +4,11 @@ using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Shapes;
 using System.Windows.Threading;
-using BrightnessTrayAppWpf.Localization;
-using BrightnessTrayAppWpf.Models;
-using BrightnessTrayAppWpf.SunriseSunset;
-using BrightnessTrayAppWpf.Utils;
-using BrightnessTrayAppWpf.Visuals;
+using BrightnessTrayAppWPF.Localization;
+using BrightnessTrayAppWPF.Models;
+using BrightnessTrayAppWPF.SunriseSunset;
+using BrightnessTrayAppWPF.Utils;
+using BrightnessTrayAppWPF.Visuals;
 using Brush = System.Windows.Media.Brush;
 using Brushes = System.Windows.Media.Brushes;
 using Cursors = System.Windows.Input.Cursors;
@@ -19,7 +19,7 @@ using Rectangle = System.Windows.Shapes.Rectangle;
 using Size = System.Windows.Size;
 using UserControl = System.Windows.Controls.UserControl;
 
-namespace BrightnessTrayAppWpf.Wpf.Settings.Pages.EnvironmentalPageAddons;
+namespace BrightnessTrayAppWPF.WPF.Settings.Pages.EnvironmentalPageAddons;
 
 /// <summary>
 /// Canvas-based 24h curve editor.

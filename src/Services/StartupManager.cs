@@ -3,11 +3,11 @@ using System.Runtime.InteropServices;
 using System.Text;
 using Microsoft.Win32;
 
-namespace BrightnessTrayAppWpf.Services;
+namespace BrightnessTrayAppWPF.Services;
 
 /// <summary>
 /// Manages the "Run on startup" autostart entry as a <c>shell:startup</c> .lnk shortcut.
-/// The shortcut lives at <c>%AppData%\Microsoft\Windows\Start Menu\Programs\Startup\BrightnessTrayAppWpf.lnk</c>
+/// The shortcut lives at <c>%AppData%\Microsoft\Windows\Start Menu\Programs\Startup\BrightnessTrayAppWPF.lnk</c>
 /// and is the user-visible mechanism Windows offers in <em>Task Manager &gt; Startup apps</em>,
 /// which is why we prefer it over the legacy <c>HKCU\...\Run</c> registry value the app used to write.
 /// When the toggle is flipped on, <see cref="ResolveStartupTarget"/> picks the most-permanent install
@@ -35,7 +35,7 @@ public static class StartupManager
         }
         catch (Exception ex)
         {
-            WpfLog.Log($"StartupManager.GetRunOnStartup: {ex.Message}");
+            WPFLog.Log($"StartupManager.GetRunOnStartup: {ex.Message}");
             return false;
         }
     }
@@ -56,7 +56,7 @@ public static class StartupManager
         catch (Exception ex)
         {
             // Best-effort: user will see the toggle revert if something breaks.
-            WpfLog.Log($"StartupManager.SetRunOnStartup: {ex.Message}");
+            WPFLog.Log($"StartupManager.SetRunOnStartup: {ex.Message}");
         }
     }
 
@@ -94,7 +94,7 @@ public static class StartupManager
         }
         catch (Exception ex)
         {
-            WpfLog.Log($"StartupManager.RetargetShortcutIfPresent: {ex.Message}");
+            WPFLog.Log($"StartupManager.RetargetShortcutIfPresent: {ex.Message}");
         }
     }
 
@@ -114,7 +114,7 @@ public static class StartupManager
         }
         catch (Exception ex)
         {
-            WpfLog.Log($"StartupManager.GetCurrentShortcutTarget: {ex.Message}");
+            WPFLog.Log($"StartupManager.GetCurrentShortcutTarget: {ex.Message}");
             return null;
         }
     }
@@ -136,7 +136,7 @@ public static class StartupManager
         }
         catch (Exception ex)
         {
-            WpfLog.Log($"StartupManager.RemoveLegacyRunKey: {ex.Message}");
+            WPFLog.Log($"StartupManager.RemoveLegacyRunKey: {ex.Message}");
         }
     }
 
@@ -166,7 +166,7 @@ public static class StartupManager
         }
         catch (Exception ex)
         {
-            WpfLog.Log($"StartupManager.RepairShortcutIfStale: {ex.Message}");
+            WPFLog.Log($"StartupManager.RepairShortcutIfStale: {ex.Message}");
         }
     }
 
@@ -195,7 +195,7 @@ public static class StartupManager
         }
         catch (Exception ex)
         {
-            WpfLog.Log($"StartupManager.GetRunningInstallExePathOrNull: {ex.Message}");
+            WPFLog.Log($"StartupManager.GetRunningInstallExePathOrNull: {ex.Message}");
             return null;
         }
     }
@@ -252,7 +252,7 @@ public static class StartupManager
         }
         catch (Exception ex)
         {
-            WpfLog.Log($"StartupManager.ResolveStartupTarget: {ex.Message}");
+            WPFLog.Log($"StartupManager.ResolveStartupTarget: {ex.Message}");
         }
         return string.Empty;
     }
@@ -322,7 +322,7 @@ public static class StartupManager
         }
         catch (Exception ex)
         {
-            WpfLog.Log($"StartupManager.TryReadShortcutTarget: {ex.Message}");
+            WPFLog.Log($"StartupManager.TryReadShortcutTarget: {ex.Message}");
             return null;
         }
         finally

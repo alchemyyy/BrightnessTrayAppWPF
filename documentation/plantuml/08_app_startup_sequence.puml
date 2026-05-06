@@ -25,7 +25,7 @@ participant "GlobalHotkeyService"           as GHS
 
 == Program.Main: log + branch on argv ==
 
-MAIN -> MAIN : WpfLog.Initialize()\nhook ProcessExit -> Flush
+MAIN -> MAIN : WPFLog.Initialize()\nhook ProcessExit -> Flush
 
 alt "--admin-action <verb>"
   MAIN -> MAIN : RunAdminAction\n(install-system via runas); exit
@@ -71,7 +71,7 @@ alt Program.IsUninstallerMode
   end note
 end
 
-APP -> APP : install crash handlers\n(UnhandledException, DispatcherUnhandledException,\n ProcessExit, SessionEnding)\neach calls TryDrainQuickly + WpfLog.Flush
+APP -> APP : install crash handlers\n(UnhandledException, DispatcherUnhandledException,\n ProcessExit, SessionEnding)\neach calls TryDrainQuickly + WPFLog.Flush
 
 APP -> AS  : firstRun = !File.Exists(settingsPath)\n_appSettings = LoadOrDefault(path)
 alt firstRun

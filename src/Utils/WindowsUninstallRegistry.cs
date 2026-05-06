@@ -1,7 +1,7 @@
 using System.IO;
 using Microsoft.Win32;
 
-namespace BrightnessTrayAppWpf.Utils;
+namespace BrightnessTrayAppWPF.Utils;
 
 /// <summary>
 /// Reads/writes the Windows Add-or-Remove-Programs registry entry under HKCU (per-user) or HKLM (machine-wide),
@@ -14,7 +14,7 @@ public static class WindowsUninstallRegistry
 
     private const string DisplayName = Program.ApplicationName;
     private const string Publisher = "alchemyyy";
-    private const string HelpLink = "https://github.com/alchemyyy/BrightnessTrayAppWpf";
+    private const string HelpLink = "https://github.com/alchemyyy/BrightnessTrayAppWPF";
 
     public enum Scope { CurrentUser, LocalMachine }
 
@@ -35,7 +35,7 @@ public static class WindowsUninstallRegistry
         }
         catch (Exception ex)
         {
-            WpfLog.Log($"WindowsUninstallRegistry.Read({scope}): {ex.Message}");
+            WPFLog.Log($"WindowsUninstallRegistry.Read({scope}): {ex.Message}");
             return null;
         }
     }
@@ -44,7 +44,7 @@ public static class WindowsUninstallRegistry
     {
         try
         {
-            string installExe = Path.Combine(installDir, "BrightnessTrayAppWpf.exe");
+            string installExe = Path.Combine(installDir, "BrightnessTrayAppWPF.exe");
             using RegistryKey key = OpenRoot(scope).CreateSubKey(SubKeyPath, writable: true);
 
             key.SetValue("DisplayName", DisplayName, RegistryValueKind.String);
@@ -75,7 +75,7 @@ public static class WindowsUninstallRegistry
         }
         catch (Exception ex)
         {
-            WpfLog.Log($"WindowsUninstallRegistry.Write({scope}): {ex.Message}");
+            WPFLog.Log($"WindowsUninstallRegistry.Write({scope}): {ex.Message}");
             return false;
         }
     }
@@ -92,7 +92,7 @@ public static class WindowsUninstallRegistry
         }
         catch (Exception ex)
         {
-            WpfLog.Log($"WindowsUninstallRegistry.Remove({scope}): {ex.Message}");
+            WPFLog.Log($"WindowsUninstallRegistry.Remove({scope}): {ex.Message}");
             return false;
         }
     }

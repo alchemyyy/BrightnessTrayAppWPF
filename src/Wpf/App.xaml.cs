@@ -4,17 +4,17 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
 using System.Windows.Threading;
-using BrightnessTrayAppWpf.DDCCI;
-using BrightnessTrayAppWpf.Interop;
-using BrightnessTrayAppWpf.Interop.NightLight;
-using BrightnessTrayAppWpf.Localization;
-using BrightnessTrayAppWpf.Models;
-using BrightnessTrayAppWpf.Services;
-using BrightnessTrayAppWpf.Visuals;
+using BrightnessTrayAppWPF.DDCCI;
+using BrightnessTrayAppWPF.Interop;
+using BrightnessTrayAppWPF.Interop.NightLight;
+using BrightnessTrayAppWPF.Localization;
+using BrightnessTrayAppWPF.Models;
+using BrightnessTrayAppWPF.Services;
+using BrightnessTrayAppWPF.Visuals;
 using Point = System.Windows.Point;
-using SettingsThemeMode = BrightnessTrayAppWpf.Models.ThemeMode;
+using SettingsThemeMode = BrightnessTrayAppWPF.Models.ThemeMode;
 
-namespace BrightnessTrayAppWpf.Wpf;
+namespace BrightnessTrayAppWPF.WPF;
 
 /// <summary>
 /// Brightness Tray Icon Application. Uses software rendering and custom Win32 APIs.
@@ -45,8 +45,8 @@ public partial class App
 
         // Idempotent - Program.Main already called this.
         // Safe to repeat so any direct App entry (e.g. attached debugger) still gets a logger.
-        WpfLog.Initialize();
-        WpfLog.Log($"App.OnStartup: begin, args=[{string.Join(' ', e.Args)}]");
+        WPFLog.Initialize();
+        WPFLog.Log($"App.OnStartup: begin, args=[{string.Join(' ', e.Args)}]");
 
         // Seed the localization manager before any UI is built so the first XAML load
         // sees the right culture on every {loc:Loc ...} lookup.
@@ -67,32 +67,32 @@ public partial class App
         // Windows has its own kill-this-process timer if we sit here too long.
         AppDomain.CurrentDomain.UnhandledException += (_, args) =>
         {
-            WpfLog.Log($"FATAL UnhandledException: {args.ExceptionObject}");
+            WPFLog.Log($"FATAL UnhandledException: {args.ExceptionObject}");
             TryDrainQuickly(TimeSpan.FromMilliseconds(TimeConstants.CrashHandlerDrainTimeoutMs));
-            WpfLog.Flush();
+            WPFLog.Flush();
             Environment.Exit(1);
         };
         DispatcherUnhandledException += (_, args) =>
         {
             args.Handled = true;
-            WpfLog.Log($"FATAL DispatcherUnhandledException: {args.Exception}");
+            WPFLog.Log($"FATAL DispatcherUnhandledException: {args.Exception}");
             TryDrainQuickly(TimeSpan.FromMilliseconds(TimeConstants.CrashHandlerDrainTimeoutMs));
-            WpfLog.Flush();
+            WPFLog.Flush();
             Environment.Exit(1);
         };
         AppDomain.CurrentDomain.ProcessExit += (_, _) =>
         {
             TryDrainQuickly(TimeSpan.FromMilliseconds(TimeConstants.ProcessExitDrainTimeoutMs));
             // Last handler to fire on every exit path - tear the logger down here, not earlier.
-            WpfLog.Shutdown();
+            WPFLog.Shutdown();
         };
         SessionEnding += (_, args) =>
         {
             // Logoff / shutdown: Windows gives us a small grace window.
             // Drain bigger than the crash paths because the user explicitly initiated this and we have time to be tidy.
-            WpfLog.Log($"SessionEnding: reason={args.ReasonSessionEnding}");
+            WPFLog.Log($"SessionEnding: reason={args.ReasonSessionEnding}");
             TryDrainQuickly(TimeSpan.FromMilliseconds(TimeConstants.SessionEndingDrainTimeoutMs));
-            WpfLog.Flush();
+            WPFLog.Flush();
         };
 
         // Load app settings first - theme needs them.
@@ -107,7 +107,7 @@ public partial class App
         }
         catch (Exception ex)
         {
-            WpfLog.Log($"App.OnStartup: settings load failed: {ex.Message}");
+            WPFLog.Log($"App.OnStartup: settings load failed: {ex.Message}");
             _appSettings = new AppSettings();
         }
 
@@ -122,7 +122,7 @@ public partial class App
 
         // Wire the night-light facade to the live settings so the resolved backend matches the user's mode.
         try { NightLightProvider.Initialize(_appSettings); }
-        catch (Exception ex) { WpfLog.Log($"App.OnStartup: NightLightProvider init failed: {ex.Message}"); }
+        catch (Exception ex) { WPFLog.Log($"App.OnStartup: NightLightProvider init failed: {ex.Message}"); }
 
         // Push the user-configured PDB download timeout into the resolver before any night-light backend probe runs,
         // so a fresh launch that triggers symbol resolution uses the saved value.
@@ -137,7 +137,7 @@ public partial class App
         }
         catch (Exception ex)
         {
-            WpfLog.Log($"App.OnStartup: theme init failed: {ex.Message}");
+            WPFLog.Log($"App.OnStartup: theme init failed: {ex.Message}");
         }
 
         // Enumerate real monitors via DDC/CI and seed the shared model list.
@@ -150,7 +150,7 @@ public partial class App
         }
         catch (Exception ex)
         {
-            WpfLog.Log($"App.OnStartup: MonitorService init failed: {ex.Message}");
+            WPFLog.Log($"App.OnStartup: MonitorService init failed: {ex.Message}");
         }
 
         // Subscribe to display topology changes via the consolidated event manager.
@@ -171,7 +171,7 @@ public partial class App
             }
             catch (Exception ex)
             {
-                WpfLog.Log($"App.OnStartup: DisplayEventManager init failed: {ex.Message}");
+                WPFLog.Log($"App.OnStartup: DisplayEventManager init failed: {ex.Message}");
             }
         }
 
@@ -188,7 +188,7 @@ public partial class App
             }
             catch (Exception ex)
             {
-                WpfLog.Log($"App.OnStartup: DDCRecoveryService init failed: {ex.Message}");
+                WPFLog.Log($"App.OnStartup: DDCRecoveryService init failed: {ex.Message}");
             }
         }
 
@@ -196,16 +196,16 @@ public partial class App
         // Otherwise a "swap profile data" action in settings would only reach the flyout's copy
         // on its next full rebuild.
         try { AppServices.ProfileManager = new ProfileManager(); }
-        catch (Exception ex) { WpfLog.Log($"App.OnStartup: ProfileManager init failed: {ex.Message}"); }
+        catch (Exception ex) { WPFLog.Log($"App.OnStartup: ProfileManager init failed: {ex.Message}"); }
 
         try { CreateTrayIcon(); }
-        catch (Exception ex) { WpfLog.Log($"App.OnStartup: CreateTrayIcon failed: {ex.Message}"); }
+        catch (Exception ex) { WPFLog.Log($"App.OnStartup: CreateTrayIcon failed: {ex.Message}"); }
 
         try { RequestTrayRefresh(); }
-        catch (Exception ex) { WpfLog.Log($"App.OnStartup: RequestTrayRefresh failed: {ex.Message}"); }
+        catch (Exception ex) { WPFLog.Log($"App.OnStartup: RequestTrayRefresh failed: {ex.Message}"); }
 
         try { PreWarmFlyout(); }
-        catch (Exception ex) { WpfLog.Log($"App.OnStartup: PreWarmFlyout failed: {ex.Message}"); }
+        catch (Exception ex) { WPFLog.Log($"App.OnStartup: PreWarmFlyout failed: {ex.Message}"); }
 
         // Live (min, max) brightness across the active monitor set;
         // drives the curve editor's degeneration lines from the settings window.
@@ -220,7 +220,7 @@ public partial class App
             }
             catch (Exception ex)
             {
-                WpfLog.Log($"App.OnStartup: MonitorBrightnessRangeProvider init failed: {ex.Message}");
+                WPFLog.Log($"App.OnStartup: MonitorBrightnessRangeProvider init failed: {ex.Message}");
             }
         }
 
@@ -238,10 +238,10 @@ public partial class App
             AppServices.HotkeyService = _hotkeyService;
             if (_monitorService != null) _monitorService.MonitorsRefreshed += OnMonitorsRefreshedForHotkeys;
         }
-        catch (Exception ex) { WpfLog.Log($"App.OnStartup: GlobalHotkeyService init failed: {ex.Message}"); }
+        catch (Exception ex) { WPFLog.Log($"App.OnStartup: GlobalHotkeyService init failed: {ex.Message}"); }
 
         try { StartWatcherMonitor(); }
-        catch (Exception ex) { WpfLog.Log($"App.OnStartup: StartWatcherMonitor failed: {ex.Message}"); }
+        catch (Exception ex) { WPFLog.Log($"App.OnStartup: StartWatcherMonitor failed: {ex.Message}"); }
 
         // if (false)
         // {
@@ -271,7 +271,7 @@ public partial class App
         }
         catch (Exception ex)
         {
-            WpfLog.Log($"App.RunUninstallerMode: theme init failed: {ex.Message}");
+            WPFLog.Log($"App.RunUninstallerMode: theme init failed: {ex.Message}");
         }
 
         ShutdownMode = ShutdownMode.OnLastWindowClose;
@@ -537,14 +537,14 @@ public partial class App
         Dispatcher.BeginInvoke(() =>
         {
             try { _hotkeyService.Apply(_appSettings.Hotkeys); }
-            catch (Exception ex) { WpfLog.Log($"App.OnMonitorsRefreshedForHotkeys: {ex.Message}"); }
+            catch (Exception ex) { WPFLog.Log($"App.OnMonitorsRefreshedForHotkeys: {ex.Message}"); }
         });
     }
 
     private void OnHotkeyFired(object? sender, HotkeyFiredEventArgs e)
     {
         try { HandleHotkey(e.Action, e.Parameter); }
-        catch (Exception ex) { WpfLog.Log($"App.OnHotkeyFired: {ex.Message}"); }
+        catch (Exception ex) { WPFLog.Log($"App.OnHotkeyFired: {ex.Message}"); }
     }
 
     /// <summary>
@@ -1313,8 +1313,8 @@ public partial class App
 
         _contextMenu = null;
 
-        WpfLog.Log("App.ExitApplication: clean exit");
-        WpfLog.Flush();
+        WPFLog.Log("App.ExitApplication: clean exit");
+        WPFLog.Flush();
         Shutdown(0);
     }
 
@@ -1342,7 +1342,7 @@ public partial class App
         }
         catch (Exception ex)
         {
-            WpfLog.Log($"App.TryDrainQuickly: {ex.Message}");
+            WPFLog.Log($"App.TryDrainQuickly: {ex.Message}");
         }
     }
 }

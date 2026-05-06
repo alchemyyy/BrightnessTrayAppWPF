@@ -2,15 +2,15 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
-using BrightnessTrayAppWpf.Localization;
-using BrightnessTrayAppWpf.Models;
-using BrightnessTrayAppWpf.Visuals;
-using BrightnessTrayAppWpf.Wpf.Settings.Utils;
+using BrightnessTrayAppWPF.Localization;
+using BrightnessTrayAppWPF.Models;
+using BrightnessTrayAppWPF.Visuals;
+using BrightnessTrayAppWPF.WPF.Settings.Utils;
 using Button = System.Windows.Controls.Button;
 using Color = System.Windows.Media.Color;
 using UserControl = System.Windows.Controls.UserControl;
 
-namespace BrightnessTrayAppWpf.Wpf.Settings.Pages;
+namespace BrightnessTrayAppWPF.WPF.Settings.Pages;
 
 /// <summary>
 /// Theme settings page.

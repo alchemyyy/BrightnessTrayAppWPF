@@ -2,7 +2,7 @@ using System.Runtime.InteropServices;
 using Microsoft.Win32;
 using Microsoft.Win32.SafeHandles;
 
-namespace BrightnessTrayAppWpf.Interop.NightLight;
+namespace BrightnessTrayAppWPF.Interop.NightLight;
 
 public static class AsyncUtils
 {
@@ -50,7 +50,7 @@ public static class AsyncUtils
             key = Registry.CurrentUser.OpenSubKey(registryKeyPath, writable: false);
             if (key is null)
             {
-                WpfLog.Log(
+                WPFLog.Log(
                     $"{callerName}.IssueWithSaveNotifyAsync: key '{registryKeyPath}' missing;"
                     + " falling back to fixed dwell.");
             }
@@ -67,7 +67,7 @@ public static class AsyncUtils
                     armed = true;
                 else
                 {
-                    WpfLog.Log(
+                    WPFLog.Log(
                         $"{callerName}.IssueWithSaveNotifyAsync: RegNotifyChangeKeyValue rc={rc};"
                         + " falling back to fixed dwell.");
                 }
@@ -80,7 +80,7 @@ public static class AsyncUtils
                 bool signaled = await WaitOneAsync(eventWaitHandle, saveNotifyTimeoutMs).ConfigureAwait(false);
                 if (!signaled)
                 {
-                    WpfLog.Log(
+                    WPFLog.Log(
                         $"{callerName}.IssueWithSaveNotifyAsync: timeout {saveNotifyTimeoutMs}ms"
                         + " - registry write did not fire RegNotify.");
                 }

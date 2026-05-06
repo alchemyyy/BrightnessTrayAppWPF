@@ -1,6 +1,6 @@
 using System.Text;
 
-namespace BrightnessTrayAppWpf.DDCCI;
+namespace BrightnessTrayAppWPF.DDCCI;
 
 /// <summary>
 /// Minimal EDID 1.3/1.4 block parser.

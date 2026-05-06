@@ -4,10 +4,10 @@ using System.Runtime.CompilerServices;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
-using BrightnessTrayAppWpf.Localization;
-using BrightnessTrayAppWpf.Models;
-using BrightnessTrayAppWpf.Services;
-using BrightnessTrayAppWpf.Wpf.Settings.Utils;
+using BrightnessTrayAppWPF.Localization;
+using BrightnessTrayAppWPF.Models;
+using BrightnessTrayAppWPF.Services;
+using BrightnessTrayAppWPF.WPF.Settings.Utils;
 using Button = System.Windows.Controls.Button;
 using ComboBox = System.Windows.Controls.ComboBox;
 using KeyEventArgs = System.Windows.Input.KeyEventArgs;
@@ -15,7 +15,7 @@ using MouseEventArgs = System.Windows.Input.MouseEventArgs;
 using TextBox = System.Windows.Controls.TextBox;
 using UserControl = System.Windows.Controls.UserControl;
 
-namespace BrightnessTrayAppWpf.Wpf.Settings.Pages;
+namespace BrightnessTrayAppWPF.WPF.Settings.Pages;
 
 /// <summary>
 /// One row in the Monitors-tab "Display order &amp; overrides" list.
@@ -439,7 +439,7 @@ public partial class MonitorsPage : UserControl
         }
         catch (Exception ex)
         {
-            WpfLog.Log($"MonitorsPage.ClearDisplays_Click: {ex.Message}");
+            WPFLog.Log($"MonitorsPage.ClearDisplays_Click: {ex.Message}");
         }
     }
 

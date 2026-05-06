@@ -2,7 +2,7 @@ using System.Diagnostics;
 using System.Windows.Navigation;
 using UserControl = System.Windows.Controls.UserControl;
 
-namespace BrightnessTrayAppWpf.Wpf.Settings.Pages;
+namespace BrightnessTrayAppWPF.WPF.Settings.Pages;
 
 /// <summary>
 /// About page. Owns the build/runtime info rows, the Github hyperlink, and the static known-issues notes.

@@ -1,8 +1,8 @@
 using System.Diagnostics;
 using System.IO;
-using BrightnessTrayAppWpf.Interop;
+using BrightnessTrayAppWPF.Interop;
 
-namespace BrightnessTrayAppWpf;
+namespace BrightnessTrayAppWPF;
 
 /// <summary>
 /// Monitors the main application and restarts it if it crashes unexpectedly.
@@ -46,7 +46,7 @@ internal static class CrashHandler
         Process? childProcess = LaunchApplication(exePath, exeDir ?? ".");
         if (childProcess == null)
         {
-            ShowError("Failed to start BrightnessTrayAppWpf");
+            ShowError("Failed to start BrightnessTrayAppWPF");
             return 1;
         }
         coordinator.RecordMonitoredPID(childProcess.Id);
@@ -84,7 +84,7 @@ internal static class CrashHandler
             if (restartTimes.Count >= MaxRapidRestarts)
             {
                 ShowError(
-                    "BrightnessTrayAppWpf has crashed repeatedly.\n\n" +
+                    "BrightnessTrayAppWPF has crashed repeatedly.\n\n" +
                     "The crash handler will not attempt further restarts.\n" +
                     "Please check for issues and restart manually.");
                 break;
@@ -95,7 +95,7 @@ internal static class CrashHandler
             childProcess = LaunchApplication(exePath, exeDir ?? ".");
             if (childProcess == null)
             {
-                ShowError("Failed to restart BrightnessTrayAppWpf");
+                ShowError("Failed to restart BrightnessTrayAppWPF");
                 break;
             }
             coordinator.RecordMonitoredPID(childProcess.Id);
@@ -179,5 +179,5 @@ internal static class CrashHandler
 
     private static void ShowError(string message) =>
         // Use native MessageBox since we may not have WPF initialized.
-        _ = User32.MessageBox(IntPtr.Zero, message, "BrightnessTrayAppWpf Crash Handler", User32.MB_ICONERROR);
+        _ = User32.MessageBox(IntPtr.Zero, message, "BrightnessTrayAppWPF Crash Handler", User32.MB_ICONERROR);
 }

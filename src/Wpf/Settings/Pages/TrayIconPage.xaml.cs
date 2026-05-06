@@ -1,12 +1,12 @@
 using System.Windows;
 using System.Windows.Controls;
-using BrightnessTrayAppWpf.Localization;
-using BrightnessTrayAppWpf.Models;
-using BrightnessTrayAppWpf.Wpf.Settings.Utils;
+using BrightnessTrayAppWPF.Localization;
+using BrightnessTrayAppWPF.Models;
+using BrightnessTrayAppWPF.WPF.Settings.Utils;
 using ComboBox = System.Windows.Controls.ComboBox;
 using UserControl = System.Windows.Controls.UserControl;
 
-namespace BrightnessTrayAppWpf.Wpf.Settings.Pages;
+namespace BrightnessTrayAppWPF.WPF.Settings.Pages;
 
 /// <summary>
 /// Tray-icon settings page. Owns its UI, handlers, and the click-action combo seeding.

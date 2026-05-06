@@ -1,9 +1,9 @@
 using System.Collections.ObjectModel;
 using System.Windows.Threading;
-using BrightnessTrayAppWpf.Models;
-using BrightnessTrayAppWpf.Utils;
+using BrightnessTrayAppWPF.Models;
+using BrightnessTrayAppWPF.Utils;
 
-namespace BrightnessTrayAppWpf.Services;
+namespace BrightnessTrayAppWPF.Services;
 
 /// <summary>
 /// Background evaluator for the active profile's <see cref="EnvironmentalCurve"/>. Owns the periodic
@@ -367,7 +367,7 @@ public sealed class EnvironmentalCurveService : IDisposable
         }
         catch (Exception ex)
         {
-            WpfLog.Log($"EnvironmentalCurveService.Evaluate failed: {ex.Message}");
+            WPFLog.Log($"EnvironmentalCurveService.Evaluate failed: {ex.Message}");
         }
     }
 

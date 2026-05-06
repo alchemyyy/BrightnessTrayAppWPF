@@ -1,4 +1,4 @@
-namespace BrightnessTrayAppWpf.SunriseSunset;
+namespace BrightnessTrayAppWPF.SunriseSunset;
 
 /// <summary>Optional parameters for SPA calculations; all values default to NREL/standard values</summary>
 public sealed record SPAOptions

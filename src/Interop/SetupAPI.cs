@@ -1,7 +1,7 @@
 using System.Runtime.InteropServices;
 using System.Text;
 
-namespace BrightnessTrayAppWpf.Interop;
+namespace BrightnessTrayAppWPF.Interop;
 
 /// <summary>
 /// P/Invoke surface for class-based monitor enumeration via SetupAPI.

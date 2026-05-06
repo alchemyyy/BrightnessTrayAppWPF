@@ -197,7 +197,7 @@ note bottom of BrightnessFlyout
 end note
 
 note bottom of SettingsWindow
-  Per-tab pages in Wpf/Settings/Pages/*.
+  Per-tab pages in WPF/Settings/Pages/*.
   CurveEditor + MapPickerOverlay are
   hosted directly by the shell so the
   preview sweep can dock either one.

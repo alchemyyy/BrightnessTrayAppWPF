@@ -1,4 +1,4 @@
-namespace BrightnessTrayAppWpf.Services;
+namespace BrightnessTrayAppWPF.Services;
 
 /// <summary>
 /// Shell-owned facade for raising the settings window's modal confirm overlay.

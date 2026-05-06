@@ -1,11 +1,11 @@
 using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Windows.Threading;
-using BrightnessTrayAppWpf.DDCCI;
-using BrightnessTrayAppWpf.Models;
-using BrightnessTrayAppWpf.Utils;
+using BrightnessTrayAppWPF.DDCCI;
+using BrightnessTrayAppWPF.Models;
+using BrightnessTrayAppWPF.Utils;
 
-namespace BrightnessTrayAppWpf.Services;
+namespace BrightnessTrayAppWPF.Services;
 
 /// <summary>
 /// Recovery rungs the <see cref="DDCRecoveryService"/> can ask <see cref="MonitorService.TryRecoverMonitor"/> to apply
@@ -224,7 +224,7 @@ public sealed class MonitorService : IDisposable
 
         if (!_display.TryGetMonitors(out IReadOnlyList<DDCMonitor> enumeratedRo, out string? enumError))
         {
-            WpfLog.Log($"MonitorService.Refresh: enumeration failed: {enumError}");
+            WPFLog.Log($"MonitorService.Refresh: enumeration failed: {enumError}");
             return;
         }
         List<DDCMonitor> enumerated = [.. enumeratedRo];
@@ -352,7 +352,7 @@ public sealed class MonitorService : IDisposable
                         // only generate a doomed retry. An in-flight payload is left to drain on its own (it
                         // captured the entry's DDC handle and will release cleanly).
                         _writeThrottler.Drop(existingInfo.ID);
-                        WpfLog.Log(
+                        WPFLog.Log(
                             $"MonitorService: demoted '{ddc.Name}' during Refresh re-probe ({probeError})");
                     }
                 }
@@ -383,7 +383,7 @@ public sealed class MonitorService : IDisposable
                         existingInfo.SliderState = SliderStateMachine.OnHardwareRecovered(
                             existingInfo.SliderState, curveEngaged: false, inDisabledPeriod: false);
                         existingInfo.LastDDCError = null;
-                        WpfLog.Log($"MonitorService: promoted '{ddc.Name}' to DDC/CI-supported");
+                        WPFLog.Log($"MonitorService: promoted '{ddc.Name}' to DDC/CI-supported");
                     }
                     else
                         existingInfo.LastDDCError = promoteError;
@@ -419,7 +419,7 @@ public sealed class MonitorService : IDisposable
             if (supported)
                 _entries[id] = new MonitorEntry { ID = id, DDC = ddc, Max = newMax > 0 ? newMax : 100 };
             else
-                WpfLog.Log($"MonitorService: '{ddc.Name}' added as disabled (no DDC/CI response)");
+                WPFLog.Log($"MonitorService: '{ddc.Name}' added as disabled (no DDC/CI response)");
 
             // Subscribe regardless -
             // OnMonitorPropertyChanged guards on _entries so unsupported monitors no-op safely,
@@ -604,7 +604,7 @@ public sealed class MonitorService : IDisposable
                 {
                     if (_display.RefreshHandle(ddc))
                     {
-                        WpfLog.Log(
+                        WPFLog.Log(
                             $"MonitorService: refreshed HMONITOR for '{ddc.Name}' before final read attempt");
                     }
                 }
@@ -716,7 +716,7 @@ public sealed class MonitorService : IDisposable
             // so the loop is cheap and emits at most one displays.json write per Refresh.
             if (_knownDisplays.MarkDDCCapable(m.EDIDKey))
             {
-                WpfLog.Log(
+                WPFLog.Log(
                     $"MonitorService: recorded DDC/CI capability for '{m.Name}' ({m.EDIDKey})");
             }
         }
@@ -740,7 +740,7 @@ public sealed class MonitorService : IDisposable
     /// </summary>
     private void ScheduleStartupRecoverySweep()
     {
-        WpfLog.Log("MonitorService: startup recovery sweep scheduled");
+        WPFLog.Log("MonitorService: startup recovery sweep scheduled");
 
         _ = Task.Run(async () =>
         {
@@ -753,15 +753,15 @@ public sealed class MonitorService : IDisposable
 
                 if (AllKnownDDCCapableMonitorsAreSupported())
                 {
-                    WpfLog.Log("MonitorService: startup recovery sweep skipped (all known DDC monitors supported)");
+                    WPFLog.Log("MonitorService: startup recovery sweep skipped (all known DDC monitors supported)");
                     return;
                 }
 
-                WpfLog.Log($"MonitorService: startup recovery sweep tick (after {delayMs} ms)");
+                WPFLog.Log($"MonitorService: startup recovery sweep tick (after {delayMs} ms)");
                 try { Refresh(); }
                 catch (Exception ex)
                 {
-                    WpfLog.Log($"MonitorService: startup sweep Refresh failed: {ex.Message}");
+                    WPFLog.Log($"MonitorService: startup sweep Refresh failed: {ex.Message}");
                 }
             }
         });
@@ -888,7 +888,7 @@ public sealed class MonitorService : IDisposable
 
             if (!_display.TryGetMonitors(out IReadOnlyList<DDCMonitor> live, out string? enumError))
             {
-                WpfLog.Log($"MonitorService.TryRecoverMonitor: enumeration failed: {enumError}");
+                WPFLog.Log($"MonitorService.TryRecoverMonitor: enumeration failed: {enumError}");
                 return;
             }
 
@@ -1036,7 +1036,7 @@ public sealed class MonitorService : IDisposable
             info.SliderState, curveEngaged: false, inDisabledPeriod: false);
         info.LastDDCError = null;
         info.WasEverDDCCapable = true;
-        WpfLog.Log($"MonitorService: recovered '{ddc.Name}' to DDC/CI-supported");
+        WPFLog.Log($"MonitorService: recovered '{ddc.Name}' to DDC/CI-supported");
 
         // Belt-and-braces - RecordDDCCapableObservations on the next refresh would catch this anyway,
         // but the recovery loop is the canonical "we just saw DDC respond on this hardware" event,
@@ -1073,7 +1073,7 @@ public sealed class MonitorService : IDisposable
         }).ConfigureAwait(false);
         if (!ok)
         {
-            WpfLog.Log($"MonitorService: SetPowerState failed for '{entry.DDC.Name}': {errorMessage}");
+            WPFLog.Log($"MonitorService: SetPowerState failed for '{entry.DDC.Name}': {errorMessage}");
             return;
         }
 
@@ -1189,7 +1189,7 @@ public sealed class MonitorService : IDisposable
             EnqueueDirectBrightness(m, m.RoundedBrightness);
             count++;
         }
-        WpfLog.Log($"MonitorService.ReapplySliderState: re-pushed {count} entries");
+        WPFLog.Log($"MonitorService.ReapplySliderState: re-pushed {count} entries");
     }
 
     /// <summary>
@@ -1246,7 +1246,7 @@ public sealed class MonitorService : IDisposable
             }
 
             lastWriteError = writeErr;
-            WpfLog.Log(
+            WPFLog.Log(
                 $"MonitorService: SetVCPFeature attempt {attempt + 1}/{writeAttempts} failed for "
                 + $"'{entry.DDC.Name}': {writeErr}");
         }
@@ -1260,7 +1260,7 @@ public sealed class MonitorService : IDisposable
             // Only demote when retries are exhausted AND no fresher payload is queued.
             if (ctx.HasReplacement)
             {
-                WpfLog.Log(
+                WPFLog.Log(
                     $"MonitorService: write retries exhausted for '{entry.DDC.Name}' "
                     + "but a fresher payload is queued; deferring demote");
                 return;
@@ -1314,7 +1314,7 @@ public sealed class MonitorService : IDisposable
             switch (read)
             {
                 case false:
-                    WpfLog.Log($"MonitorService: verify read failed for '{entry.DDC.Name}': {readErr}");
+                    WPFLog.Log($"MonitorService: verify read failed for '{entry.DDC.Name}': {readErr}");
                     break;
                 case true when Math.Abs((long)actual - expectedRaw) <= Tolerance:
                     return;
@@ -1327,7 +1327,7 @@ public sealed class MonitorService : IDisposable
             // Catches stale handles that survived a topology change the primary pipeline missed;
             // cheap and only worth doing once since the second cause of mismatches (slow monitor) doesn't need it.
             if (attempt == 0 && _display.RefreshHandle(entry.DDC))
-                WpfLog.Log($"MonitorService: refreshed HMONITOR for '{entry.DDC.Name}' mid-verify");
+                WPFLog.Log($"MonitorService: refreshed HMONITOR for '{entry.DDC.Name}' mid-verify");
 
             // Re-apply, then wait the scaled dwell before the next read attempt.
             (bool reApplied, string? reApplyErr) = await WithDDCLockAsync(entry.DDC, () =>
@@ -1335,7 +1335,7 @@ public sealed class MonitorService : IDisposable
                 bool w = _display.TrySetVCPFeature(entry.DDC, VCPConstants.Brightness, expectedRaw, out string? e);
                 return (w, e);
             }).ConfigureAwait(false);
-            if (!reApplied) WpfLog.Log($"MonitorService: re-apply failed for '{entry.DDC.Name}': {reApplyErr}");
+            if (!reApplied) WPFLog.Log($"MonitorService: re-apply failed for '{entry.DDC.Name}': {reApplyErr}");
 
             // Wait for the NEXT attempt (attempt+1).
             // +1 because the helper's "wait before this attempt" semantic gives 0 for index 0;
@@ -1355,13 +1355,13 @@ public sealed class MonitorService : IDisposable
         // verify will get another shot when the user pauses.
         if (ctx.HasReplacement)
         {
-            WpfLog.Log(
+            WPFLog.Log(
                 $"MonitorService: verify exhausted for '{entry.DDC.Name}' "
                 + "but a fresher payload is queued; deferring demote");
             return;
         }
 
-        WpfLog.Log(
+        WPFLog.Log(
             $"MonitorService: verification exhausted for '{entry.DDC.Name}' - target raw={expectedRaw}");
         DemoteOnDDCFailure(entry, "Brightness write was not acknowledged after retry - DDC/CI link is unresponsive.");
     }
@@ -1405,7 +1405,7 @@ public sealed class MonitorService : IDisposable
 
             info.SliderState = SliderStateMachine.OnHardwareFailed();
             info.LastDDCError = error;
-            WpfLog.Log($"MonitorService: demoted '{entry.DDC.Name}' to DDC/CI-unavailable ({error})");
+            WPFLog.Log($"MonitorService: demoted '{entry.DDC.Name}' to DDC/CI-unavailable ({error})");
 
             // Wake the recovery loop now instead of waiting for the next tick -
             // mirrors what a Refresh-driven add does so the UI feedback is synchronous with the failure.
@@ -1480,7 +1480,7 @@ public sealed class MonitorService : IDisposable
         {
             if (DateTime.UtcNow >= deadline)
             {
-                WpfLog.Log(
+                WPFLog.Log(
                     $"MonitorService.BeginDrainAsync: timed out with {_activeDDCOps} DDC op(s) still in flight");
                 return false;
             }

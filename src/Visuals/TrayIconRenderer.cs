@@ -8,7 +8,7 @@ using FlowDirection = System.Windows.FlowDirection;
 using FontFamily = System.Windows.Media.FontFamily;
 using Point = System.Windows.Point;
 
-namespace BrightnessTrayAppWpf.Visuals;
+namespace BrightnessTrayAppWPF.Visuals;
 
 /// <summary>
 /// Renders brightness tray icons with proper theme-aware rendering.

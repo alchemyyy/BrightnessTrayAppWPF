@@ -1,4 +1,4 @@
-namespace BrightnessTrayAppWpf.DDCCI;
+namespace BrightnessTrayAppWPF.DDCCI;
 
 /// <summary>
 /// DDC/CI surface: enumerate monitors, query their capability strings,

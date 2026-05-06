@@ -1,4 +1,4 @@
-namespace BrightnessTrayAppWpf.Visuals;
+namespace BrightnessTrayAppWPF.Visuals;
 
 /// <summary>
 /// Canonical Segoe Fluent Icons codepoint strings used across the app.

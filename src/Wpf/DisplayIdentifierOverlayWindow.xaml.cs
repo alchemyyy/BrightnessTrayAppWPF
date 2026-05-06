@@ -2,7 +2,7 @@ using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Interop;
 
-namespace BrightnessTrayAppWpf.Wpf;
+namespace BrightnessTrayAppWPF.WPF;
 
 public partial class DisplayIdentifierOverlayWindow : Window
 {

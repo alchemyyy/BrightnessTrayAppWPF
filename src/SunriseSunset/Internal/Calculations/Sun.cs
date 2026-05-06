@@ -1,6 +1,6 @@
-using BrightnessTrayAppWpf.SunriseSunset.Internal.Utils;
+using BrightnessTrayAppWPF.SunriseSunset.Internal.Utils;
 
-namespace BrightnessTrayAppWpf.SunriseSunset.Internal.Calculations;
+namespace BrightnessTrayAppWPF.SunriseSunset.Internal.Calculations;
 
 internal static class Sun
 {

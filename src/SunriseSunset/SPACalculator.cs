@@ -1,8 +1,8 @@
-using BrightnessTrayAppWpf.SunriseSunset.Internal;
-using BrightnessTrayAppWpf.SunriseSunset.Internal.Calculations;
-using BrightnessTrayAppWpf.SunriseSunset.Internal.Utils;
+using BrightnessTrayAppWPF.SunriseSunset.Internal;
+using BrightnessTrayAppWPF.SunriseSunset.Internal.Calculations;
+using BrightnessTrayAppWPF.SunriseSunset.Internal.Utils;
 
-namespace BrightnessTrayAppWpf.SunriseSunset;
+namespace BrightnessTrayAppWPF.SunriseSunset;
 
 /// <summary>Public API for sunrise / sunset / solar position calculations based on the NREL SPA</summary>
 public static class SPACalculator

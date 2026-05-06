@@ -1,7 +1,7 @@
 using System.Windows;
 using Point = System.Windows.Point;
 
-namespace BrightnessTrayAppWpf.Wpf.Utils;
+namespace BrightnessTrayAppWPF.WPF.Utils;
 
 /// <summary>
 /// Per-gesture drag math shared by the flyout's undock-button drag and root-card drag handlers.

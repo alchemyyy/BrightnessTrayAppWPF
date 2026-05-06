@@ -1,4 +1,4 @@
-namespace BrightnessTrayAppWpf.SunriseSunset;
+namespace BrightnessTrayAppWPF.SunriseSunset;
 
 /// <summary>Solar position output values, all in degrees</summary>
 /// <param name="Zenith">Topocentric zenith angle</param>

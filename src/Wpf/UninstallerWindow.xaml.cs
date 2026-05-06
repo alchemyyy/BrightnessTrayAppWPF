@@ -1,11 +1,11 @@
 using System.Diagnostics;
 using System.Windows;
-using BrightnessTrayAppWpf.Localization;
-using BrightnessTrayAppWpf.Models;
-using BrightnessTrayAppWpf.Services;
-using BrightnessTrayAppWpf.Utils;
+using BrightnessTrayAppWPF.Localization;
+using BrightnessTrayAppWPF.Models;
+using BrightnessTrayAppWPF.Services;
+using BrightnessTrayAppWPF.Utils;
 
-namespace BrightnessTrayAppWpf.Wpf;
+namespace BrightnessTrayAppWPF.WPF;
 
 /// <summary>
 /// Confirmation dialog for the uninstall flow. Used in two modes:

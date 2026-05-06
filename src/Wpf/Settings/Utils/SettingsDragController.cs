@@ -10,7 +10,7 @@ using Point = System.Windows.Point;
 using Rectangle = System.Windows.Shapes.Rectangle;
 using Size = System.Windows.Size;
 
-namespace BrightnessTrayAppWpf.Wpf.Settings.Utils;
+namespace BrightnessTrayAppWPF.WPF.Settings.Utils;
 
 /// <summary>
 /// Browser-tab-style live drag-to-reorder for an <see cref="ItemsControl"/>.

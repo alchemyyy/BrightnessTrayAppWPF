@@ -1,8 +1,8 @@
 using System.IO;
 using System.Text.Json;
-using BrightnessTrayAppWpf.Models;
+using BrightnessTrayAppWPF.Models;
 
-namespace BrightnessTrayAppWpf.Utils;
+namespace BrightnessTrayAppWPF.Utils;
 
 /// <summary>
 /// Persistent registry of every unique display the app has ever enumerated, keyed by EDIDKey.
@@ -212,7 +212,7 @@ public sealed class KnownDisplaysStore(string path)
         }
         catch (Exception ex)
         {
-            WpfLog.Log($"KnownDisplaysStore: load failed ({path}): {ex.Message}");
+            WPFLog.Log($"KnownDisplaysStore: load failed ({path}): {ex.Message}");
             return false;
         }
     }
@@ -229,7 +229,7 @@ public sealed class KnownDisplaysStore(string path)
         }
         catch (Exception ex)
         {
-            WpfLog.Log($"KnownDisplaysStore: save failed ({path}): {ex.Message}");
+            WPFLog.Log($"KnownDisplaysStore: save failed ({path}): {ex.Message}");
         }
     }
 

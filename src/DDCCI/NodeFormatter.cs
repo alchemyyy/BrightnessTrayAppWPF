@@ -1,6 +1,6 @@
-using BrightnessTrayAppWpf.DDCCI.Parser.Nodes;
+using BrightnessTrayAppWPF.DDCCI.Parser.Nodes;
 
-namespace BrightnessTrayAppWpf.DDCCI;
+namespace BrightnessTrayAppWPF.DDCCI;
 
 /// <summary>
 /// Translates hex VCP codes and their sub-values into human-readable names using the MCCS specification tables.

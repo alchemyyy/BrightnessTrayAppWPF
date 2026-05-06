@@ -1,6 +1,6 @@
 using System.Runtime.InteropServices;
 
-namespace BrightnessTrayAppWpf.Interop;
+namespace BrightnessTrayAppWPF.Interop;
 
 /// <summary>
 /// DWMAPI.dll interop for Win11 title bar theming.

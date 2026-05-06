@@ -1,7 +1,7 @@
-using BrightnessTrayAppWpf.Models;
-using BrightnessTrayAppWpf.SunriseSunset;
+using BrightnessTrayAppWPF.Models;
+using BrightnessTrayAppWPF.SunriseSunset;
 
-namespace BrightnessTrayAppWpf.Utils;
+namespace BrightnessTrayAppWPF.Utils;
 
 /// <summary>
 /// Reanchors environmental curve points from one set of sun events to another.

@@ -1,11 +1,11 @@
 using System.IO;
 using System.Xml;
 using System.Xml.Serialization;
-using BrightnessTrayAppWpf.Models;
+using BrightnessTrayAppWPF.Models;
 using Microsoft.Win32;
 using Color = System.Windows.Media.Color;
 
-namespace BrightnessTrayAppWpf.Visuals;
+namespace BrightnessTrayAppWPF.Visuals;
 
 /// <summary>
 /// A pair of hex-string colors (light + dark theme variants), XML-serializable.

@@ -1,7 +1,7 @@
 using System.Runtime.InteropServices;
 using System.Text;
 
-namespace BrightnessTrayAppWpf.DDCCI.Interop;
+namespace BrightnessTrayAppWPF.DDCCI.Interop;
 
 /// <summary>
 /// P/Invoke bindings for dxva2.dll,

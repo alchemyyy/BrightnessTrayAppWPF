@@ -4,10 +4,10 @@ using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Interop;
 using System.Windows.Threading;
-using BrightnessTrayAppWpf.Models;
+using BrightnessTrayAppWPF.Models;
 using Point = System.Windows.Point;
 
-namespace BrightnessTrayAppWpf.Interop;
+namespace BrightnessTrayAppWPF.Interop;
 
 /// <summary>
 /// Low-level shell notification icon implementation using Win32 APIs.
@@ -179,7 +179,7 @@ internal sealed class ShellNotifyIcon : IDisposable
         // while the shell still holds a stale (GUID, hWnd) binding,
         // so issue a best-effort NIM_DELETE to clear it first.
         bool wasCreated = _isCreated;
-        if (wasCreated) WpfLog.Log("ShellNotifyIcon.Update: NIM_MODIFY failed, falling back to delete+add recovery");
+        if (wasCreated) WPFLog.Log("ShellNotifyIcon.Update: NIM_MODIFY failed, falling back to delete+add recovery");
         _ = Shell32.Shell_NotifyIconW(Shell32.NotifyIconMessage.NIM_DELETE, ref data);
         _isCreated = false;
 
@@ -192,7 +192,7 @@ internal sealed class ShellNotifyIcon : IDisposable
         else
         {
             int lastError = Marshal.GetLastWin32Error();
-            WpfLog.Log($"ShellNotifyIcon.Update: NIM_ADD failed after recovery (lastError=0x{lastError:X8}); icon will retry on next update");
+            WPFLog.Log($"ShellNotifyIcon.Update: NIM_ADD failed after recovery (lastError=0x{lastError:X8}); icon will retry on next update");
         }
     }
 

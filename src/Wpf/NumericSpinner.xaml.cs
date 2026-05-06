@@ -4,7 +4,7 @@ using System.Windows.Input;
 using KeyEventArgs = System.Windows.Input.KeyEventArgs;
 using UserControl = System.Windows.Controls.UserControl;
 
-namespace BrightnessTrayAppWpf.Wpf;
+namespace BrightnessTrayAppWPF.WPF;
 
 /// <summary>
 /// Reusable integer spinner with up/down chevron buttons, mouse-wheel and arrow-key adjustment,

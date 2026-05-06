@@ -1,11 +1,11 @@
 <Application
-    x:Class="BrightnessTrayAppWpf.Wpf.App"
+    x:Class="BrightnessTrayAppWPF.WPF.App"
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:sys="clr-namespace:System;assembly=mscorlib"
-    xmlns:local="clr-namespace:BrightnessTrayAppWpf.Wpf"
-    xmlns:utils="clr-namespace:BrightnessTrayAppWpf.Wpf.Settings.Utils"
-    xmlns:utils1="clr-namespace:BrightnessTrayAppWpf.Wpf.Utils"
+    xmlns:local="clr-namespace:BrightnessTrayAppWPF.WPF"
+    xmlns:utils="clr-namespace:BrightnessTrayAppWPF.WPF.Settings.Utils"
+    xmlns:utils1="clr-namespace:BrightnessTrayAppWPF.WPF.Utils"
     ShutdownMode="OnExplicitShutdown">
 
     <Application.Resources>

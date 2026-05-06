@@ -1,4 +1,4 @@
-namespace BrightnessTrayAppWpf;
+namespace BrightnessTrayAppWPF;
 
 // Central registry of hardcoded time values used across the app. Anything that
 // is genuinely user-configurable lives on AppSettings instead -- this file is

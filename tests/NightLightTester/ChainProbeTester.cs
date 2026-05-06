@@ -1,10 +1,10 @@
 using System.Reflection;
 using System.Runtime.InteropServices;
-using BrightnessTrayAppWpf.Interop.NightLight;
+using BrightnessTrayAppWPF.Interop.NightLight;
 using Microsoft.Win32;
 using Microsoft.Win32.SafeHandles;
 
-namespace BrightnessTrayAppWpf.Tests.NightLight;
+namespace BrightnessTrayAppWPF.Tests.NightLight;
 
 /// <summary>
 /// Walks the SettingsHandler chain band-by-band and reports where the signal stops propagating.

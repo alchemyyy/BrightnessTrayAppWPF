@@ -1,9 +1,9 @@
 using System.Reflection;
 using System.Windows.Interop;
-using BrightnessTrayAppWpf.Interop;
-using BrightnessTrayAppWpf.Models;
+using BrightnessTrayAppWPF.Interop;
+using BrightnessTrayAppWPF.Models;
 
-namespace BrightnessTrayAppWpf.Services;
+namespace BrightnessTrayAppWPF.Services;
 
 public sealed class HotkeyFiredEventArgs(HotkeyAction action, string parameter) : EventArgs
 {
@@ -157,7 +157,7 @@ public sealed class GlobalHotkeyService : IDisposable
         if (!_byId.TryGetValue(id, out HotkeyBinding? binding)) return IntPtr.Zero;
 
         try { Fired?.Invoke(this, new HotkeyFiredEventArgs(binding.Action, binding.Parameter)); }
-        catch (Exception ex) { WpfLog.Log($"GlobalHotkeyService.Fired handler threw: {ex}"); }
+        catch (Exception ex) { WPFLog.Log($"GlobalHotkeyService.Fired handler threw: {ex}"); }
 
         handled = true;
         return IntPtr.Zero;

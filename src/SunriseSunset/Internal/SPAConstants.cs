@@ -1,4 +1,4 @@
-namespace BrightnessTrayAppWpf.SunriseSunset.Internal;
+namespace BrightnessTrayAppWPF.SunriseSunset.Internal;
 
 /// <summary>
 /// Solar Position Algorithm constants and periodic-term tables.

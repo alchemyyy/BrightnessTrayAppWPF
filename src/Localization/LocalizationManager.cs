@@ -2,7 +2,7 @@ using System.ComponentModel;
 using System.Globalization;
 using Binding = System.Windows.Data.Binding;
 
-namespace BrightnessTrayAppWpf.Localization;
+namespace BrightnessTrayAppWPF.Localization;
 
 /// <summary>
 /// Single source of truth for the active UI culture and the bridge between

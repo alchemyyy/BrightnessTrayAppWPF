@@ -86,7 +86,7 @@ package "DUP-10  Timer inventory" $TINT_RESOLVED {
   [DDCRecoveryService._timer\n(System.Threading.Timer, retry tick)] as D10D
   [NightLightRegistry._resendTimer\n(System.Threading.Timer, debounced resend)] as D10E
   [DisplayIdentifierService._timer\n(DispatcherTimer, overlay auto-hide)] as D10F
-  [WpfLog._timer\n(System.Threading.Timer, async flush)] as D10G
+  [WPFLog._timer\n(System.Threading.Timer, async flush)] as D10G
   [ShellNotifyIcon._taskbarRecreateTimer\n(DispatcherTimer)] as D10H
   note bottom : Each timer owns a distinct domain.\nTrayIconManager itself is event-driven\n(no internal timer).
 }
@@ -95,7 +95,7 @@ package "DUP-10  Timer inventory" $TINT_RESOLVED {
 package "DUP-11  Hex color parsing / formatting" $TINT_PARTIAL {
   [Visuals/AppTheme.cs\n.ParseHex / .ToHex\n(throws on bad input)] as D11A
   [Models/AppSettings.cs\nThemeColorOverride.TryParse / .ToHex\n(returns nullable, swallows on error)] as D11B
-  [Wpf/TAWPFColorPicker.xaml.cs\n.TryParseHex (ARGB or RGBA order,\n3/4/6/8-char input)] as D11C
+  [WPF/TAWPFColorPicker.xaml.cs\n.TryParseHex (ARGB or RGBA order,\n3/4/6/8-char input)] as D11C
   D11A -[#orange]- D11B : same 6/8-char branch,\ndifferent error policy
   D11A -[#orange]- D11C : color-picker accepts\nshort forms the others reject
   note bottom

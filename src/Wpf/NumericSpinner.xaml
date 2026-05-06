@@ -1,5 +1,5 @@
 <UserControl
-    x:Class="BrightnessTrayAppWpf.Wpf.NumericSpinner"
+    x:Class="BrightnessTrayAppWPF.WPF.NumericSpinner"
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     Height="{StaticResource DwellBoxHeight}"

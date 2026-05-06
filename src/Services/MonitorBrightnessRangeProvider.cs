@@ -1,8 +1,8 @@
 using System.ComponentModel;
-using BrightnessTrayAppWpf.Models;
-using BrightnessTrayAppWpf.Wpf;
+using BrightnessTrayAppWPF.Models;
+using BrightnessTrayAppWPF.WPF;
 
-namespace BrightnessTrayAppWpf.Services;
+namespace BrightnessTrayAppWPF.Services;
 
 /// <summary>
 /// Tracks the live (min, max) manual-slider brightness range across all currently-enumerated monitors plus the

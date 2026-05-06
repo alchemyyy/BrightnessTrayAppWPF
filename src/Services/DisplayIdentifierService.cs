@@ -1,9 +1,9 @@
 using System.Runtime.InteropServices;
 using System.Windows.Threading;
-using BrightnessTrayAppWpf.DDCCI.Interop;
-using BrightnessTrayAppWpf.Wpf;
+using BrightnessTrayAppWPF.DDCCI.Interop;
+using BrightnessTrayAppWPF.WPF;
 
-namespace BrightnessTrayAppWpf.Services;
+namespace BrightnessTrayAppWPF.Services;
 
 /// <summary>
 /// Mirrors the visual behavior of Windows' "Identify" button in Settings &gt; Display: flashes each monitor's

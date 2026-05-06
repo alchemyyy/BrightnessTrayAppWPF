@@ -2,9 +2,9 @@ using System.ComponentModel;
 using System.Diagnostics;
 using System.IO;
 using System.Security.Principal;
-using BrightnessTrayAppWpf.Utils;
+using BrightnessTrayAppWPF.Utils;
 
-namespace BrightnessTrayAppWpf.Services;
+namespace BrightnessTrayAppWPF.Services;
 
 public enum InstallScope
 {
@@ -38,14 +38,14 @@ public sealed record InstallResult(bool Success, string? ErrorMessage = null, bo
 /// <summary>
 /// Manages copying the running exe into Program Files / LocalAppData and registering an Add-or-Remove-Programs entry.
 /// Uninstall is driven by <see cref="UninstallScript"/>:
-/// the WPF <see cref="Wpf.UninstallerWindow"/> collects keep-vs-delete-settings,
+/// the WPF <see cref="WPF.UninstallerWindow"/> collects keep-vs-delete-settings,
 /// then <see cref="RunUninstall"/> writes a self-deleting .bat to <c>%TEMP%</c>
 /// and queues <c>Application.Shutdown()</c> so the bat can take over file/registry cleanup
 /// once the watcher and monitored process have exited cleanly.
 /// </summary>
 public static class InstallationService
 {
-    public const string InstalledExeFileName = "BrightnessTrayAppWpf.exe";
+    public const string InstalledExeFileName = "BrightnessTrayAppWPF.exe";
 
     public static string LocalAppDataInstallDir =>
         Path.Combine(
@@ -77,7 +77,7 @@ public static class InstallationService
         }
         catch (Exception ex)
         {
-            WpfLog.Log($"InstallationService.IsElevated: {ex.Message}");
+            WPFLog.Log($"InstallationService.IsElevated: {ex.Message}");
             return false;
         }
     }
@@ -181,7 +181,7 @@ public static class InstallationService
         }
         catch (Exception ex)
         {
-            WpfLog.Log($"InstallationService.InstallToLocalAppData: {ex}");
+            WPFLog.Log($"InstallationService.InstallToLocalAppData: {ex}");
             return new InstallResult(false, ex.Message);
         }
     }
@@ -222,7 +222,7 @@ public static class InstallationService
         }
         catch (Exception ex)
         {
-            WpfLog.Log($"InstallationService.RunAdminInstallSystem: {ex}");
+            WPFLog.Log($"InstallationService.RunAdminInstallSystem: {ex}");
             return new InstallResult(false, ex.Message);
         }
     }
@@ -307,7 +307,7 @@ public static class InstallationService
         }
         catch (Exception ex)
         {
-            WpfLog.Log($"InstallationService.TryInvokeElevated: {ex}");
+            WPFLog.Log($"InstallationService.TryInvokeElevated: {ex}");
             return new InstallResult(false, ex.Message);
         }
     }

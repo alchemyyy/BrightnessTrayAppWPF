@@ -8,7 +8,7 @@ using TextBox = System.Windows.Controls.TextBox;
 using ComboBox = System.Windows.Controls.ComboBox;
 using RadioButton = System.Windows.Controls.RadioButton;
 
-namespace BrightnessTrayAppWpf.Wpf.Utils;
+namespace BrightnessTrayAppWPF.WPF.Utils;
 
 /// <summary>
 /// Routes arrow / Left / Right / Esc / Enter keys for the Settings window

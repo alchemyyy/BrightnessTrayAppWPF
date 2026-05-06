@@ -5,17 +5,17 @@ using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Diagnostics;
-using BrightnessTrayAppWpf.Localization;
-using BrightnessTrayAppWpf.Models;
-using BrightnessTrayAppWpf.Services;
-using BrightnessTrayAppWpf.Utils;
-using BrightnessTrayAppWpf.Wpf.Settings.Utils;
-using BrightnessTrayAppWpf.Wpf.Utils;
+using BrightnessTrayAppWPF.Localization;
+using BrightnessTrayAppWPF.Models;
+using BrightnessTrayAppWPF.Services;
+using BrightnessTrayAppWPF.Utils;
+using BrightnessTrayAppWPF.WPF.Settings.Utils;
+using BrightnessTrayAppWPF.WPF.Utils;
 using Button = System.Windows.Controls.Button;
 using TextBox = System.Windows.Controls.TextBox;
 using UserControl = System.Windows.Controls.UserControl;
 
-namespace BrightnessTrayAppWpf.Wpf.Settings.Pages;
+namespace BrightnessTrayAppWPF.WPF.Settings.Pages;
 
 /// <summary>
 /// One row in the "Rearrange profile data" list.
@@ -623,7 +623,7 @@ public partial class GeneralPage : UserControl
         }
         catch (Exception ex)
         {
-            WpfLog.Log($"GeneralPage.InstallLocalAppData_Click: {ex.Message}");
+            WPFLog.Log($"GeneralPage.InstallLocalAppData_Click: {ex.Message}");
         }
     }
 
@@ -662,7 +662,7 @@ public partial class GeneralPage : UserControl
         }
         catch (Exception ex)
         {
-            WpfLog.Log($"GeneralPage.InstallProgramFiles_Click: {ex.Message}");
+            WPFLog.Log($"GeneralPage.InstallProgramFiles_Click: {ex.Message}");
         }
     }
 

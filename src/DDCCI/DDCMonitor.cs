@@ -1,9 +1,9 @@
-namespace BrightnessTrayAppWpf.DDCCI;
+namespace BrightnessTrayAppWPF.DDCCI;
 
 /// <summary>
 /// Represents a monitor enumerated through EnumDisplayMonitors.
 /// Holds the HMONITOR handle needed to look up the associated physical monitor for DDC/CI transactions.
-/// Named <c>DDCMonitor</c> to avoid collision with <see cref="BrightnessTrayAppWpf.Models.MonitorInfo"/>.
+/// Named <c>DDCMonitor</c> to avoid collision with <see cref="BrightnessTrayAppWPF.Models.MonitorInfo"/>.
 /// </summary>
 public class DDCMonitor
 {

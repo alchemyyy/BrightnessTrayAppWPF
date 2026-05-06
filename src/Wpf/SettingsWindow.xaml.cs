@@ -3,14 +3,14 @@ using System.Diagnostics;
 using System.IO;
 using System.Windows;
 using System.Windows.Interop;
-using BrightnessTrayAppWpf.Interop;
-using BrightnessTrayAppWpf.Models;
-using BrightnessTrayAppWpf.Services;
-using BrightnessTrayAppWpf.Wpf.Settings.Utils;
+using BrightnessTrayAppWPF.Interop;
+using BrightnessTrayAppWPF.Models;
+using BrightnessTrayAppWPF.Services;
+using BrightnessTrayAppWPF.WPF.Settings.Utils;
 using Application = System.Windows.Application;
 using RadioButton = System.Windows.Controls.RadioButton;
 
-namespace BrightnessTrayAppWpf.Wpf;
+namespace BrightnessTrayAppWPF.WPF;
 
 public enum SettingsTab
 {

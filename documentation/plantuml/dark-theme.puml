@@ -1,4 +1,4 @@
-' Dark Theme for BrightnessTrayAppWpf diagrams.
+' Dark Theme for BrightnessTrayAppWPF diagrams.
 '
 ' Usage: place `!include dark-theme.puml` immediately after `@startuml <name>`,
 ' then use the $TINT_* variables for package / note backgrounds instead of

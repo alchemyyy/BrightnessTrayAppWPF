@@ -1,6 +1,6 @@
-using BrightnessTrayAppWpf.DDCCI.Parser.Nodes;
+using BrightnessTrayAppWPF.DDCCI.Parser.Nodes;
 
-namespace BrightnessTrayAppWpf.DDCCI;
+namespace BrightnessTrayAppWPF.DDCCI;
 
 public interface INodeFormatter
 {

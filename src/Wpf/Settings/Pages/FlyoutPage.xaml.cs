@@ -1,10 +1,10 @@
 using System.Windows;
 using System.Windows.Controls;
-using BrightnessTrayAppWpf.Models;
-using BrightnessTrayAppWpf.Wpf.Settings.Utils;
+using BrightnessTrayAppWPF.Models;
+using BrightnessTrayAppWPF.WPF.Settings.Utils;
 using UserControl = System.Windows.Controls.UserControl;
 
-namespace BrightnessTrayAppWpf.Wpf.Settings.Pages;
+namespace BrightnessTrayAppWPF.WPF.Settings.Pages;
 
 /// <summary>
 /// Flyout settings page. Owns the brightness-flyout visibility toggles, the master-slider tracking

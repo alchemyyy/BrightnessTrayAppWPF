@@ -1,6 +1,6 @@
 using System.Xml.Serialization;
 
-namespace BrightnessTrayAppWpf.Models;
+namespace BrightnessTrayAppWPF.Models;
 
 /// <summary>
 /// Stores the state of a single monitor within a profile.

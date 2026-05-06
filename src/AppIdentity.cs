@@ -1,4 +1,4 @@
-namespace BrightnessTrayAppWpf;
+namespace BrightnessTrayAppWPF;
 
 /// <summary>
 /// Immutable app identity used for path- and name-agnostic single-instance detection.

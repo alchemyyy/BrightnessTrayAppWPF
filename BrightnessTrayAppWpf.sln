@@ -2,7 +2,7 @@ Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 18
 VisualStudioVersion = 18.2.11415.280 d18.0
 MinimumVisualStudioVersion = 10.0.40219.1
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "BrightnessTrayAppWpf", "src\BrightnessTrayAppWpf.csproj", "{8B2C1A3D-4F5E-4A6B-9C7D-1E2F3A4B5C6D}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "BrightnessTrayAppWPF", "src\BrightnessTrayAppWPF.csproj", "{8B2C1A3D-4F5E-4A6B-9C7D-1E2F3A4B5C6D}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SunShifterCheck", "tests\SunShifterCheck\SunShifterCheck.csproj", "{A1B2C3D4-5E6F-4A7B-8C9D-0E1F2A3B4C5D}"
 EndProject

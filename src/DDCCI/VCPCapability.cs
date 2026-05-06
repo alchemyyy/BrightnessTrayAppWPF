@@ -1,4 +1,4 @@
-namespace BrightnessTrayAppWpf.DDCCI;
+namespace BrightnessTrayAppWPF.DDCCI;
 
 /// <summary>
 /// A VCP feature advertised by a monitor's capability string

@@ -1,4 +1,4 @@
-namespace BrightnessTrayAppWpf.DDCCI.Parser.Nodes;
+namespace BrightnessTrayAppWPF.DDCCI.Parser.Nodes;
 
 public class RootNode : INode
 {

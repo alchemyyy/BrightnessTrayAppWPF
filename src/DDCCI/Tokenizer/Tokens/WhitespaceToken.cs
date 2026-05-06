@@ -1,3 +1,3 @@
-namespace BrightnessTrayAppWpf.DDCCI.Tokenizer.Tokens;
+namespace BrightnessTrayAppWPF.DDCCI.Tokenizer.Tokens;
 
 public class WhitespaceToken : Token;

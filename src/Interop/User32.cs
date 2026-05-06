@@ -1,6 +1,6 @@
 using System.Runtime.InteropServices;
 
-namespace BrightnessTrayAppWpf.Interop;
+namespace BrightnessTrayAppWPF.Interop;
 
 /// <summary>
 /// User32.dll and GDI32.dll interop declarations for tray icon and DPI handling.

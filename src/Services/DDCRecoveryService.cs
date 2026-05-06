@@ -1,4 +1,4 @@
-namespace BrightnessTrayAppWpf.Services;
+namespace BrightnessTrayAppWPF.Services;
 
 /// <summary>
 /// Continuously probes monitors that are currently reporting DDC/CI unavailable but were previously observed to
@@ -75,7 +75,7 @@ public sealed class DDCRecoveryService(MonitorService monitorService) : IDisposa
     {
         if (_disposed || _timer != null) return;
 
-        WpfLog.Log("DDCRecoveryService: timer starting");
+        WPFLog.Log("DDCRecoveryService: timer starting");
         _timer = new System.Threading.Timer(OnTick, null, TimeConstants.DDCRecoveryTickIntervalMs, TimeConstants.DDCRecoveryTickIntervalMs);
     }
 
@@ -83,7 +83,7 @@ public sealed class DDCRecoveryService(MonitorService monitorService) : IDisposa
     {
         if (_timer == null) return;
 
-        WpfLog.Log("DDCRecoveryService: timer stopping (no candidates)");
+        WPFLog.Log("DDCRecoveryService: timer stopping (no candidates)");
         _timer.Dispose();
         _timer = null;
     }
@@ -112,9 +112,9 @@ public sealed class DDCRecoveryService(MonitorService monitorService) : IDisposa
             if ((now - _lastFullRefresh).TotalMilliseconds >= TimeConstants.DDCRecoveryFullRefreshIntervalMs)
             {
                 _lastFullRefresh = now;
-                WpfLog.Log("DDCRecoveryService: triggering full Refresh (rung 3)");
+                WPFLog.Log("DDCRecoveryService: triggering full Refresh (rung 3)");
                 try { monitorService.Refresh(); }
-                catch (Exception ex) { WpfLog.Log($"DDCRecoveryService: full Refresh failed: {ex.Message}"); }
+                catch (Exception ex) { WPFLog.Log($"DDCRecoveryService: full Refresh failed: {ex.Message}"); }
                 // Refresh marshals to UI thread asynchronously. The next tick will re-snapshot candidates;
                 // promotions land via OnMonitorsRefreshed. Don't probe individually this tick - let Refresh do
                 // its work.
@@ -146,20 +146,20 @@ public sealed class DDCRecoveryService(MonitorService monitorService) : IDisposa
                 }
                 catch (Exception ex)
                 {
-                    WpfLog.Log($"DDCRecoveryService: TryRecoverMonitor failed for '{id}': {ex.Message}");
+                    WPFLog.Log($"DDCRecoveryService: TryRecoverMonitor failed for '{id}': {ex.Message}");
                     ok = false;
                 }
 
                 if (ok)
                 {
-                    WpfLog.Log($"DDCRecoveryService: recovered '{id}' on attempt {attempt} via {action}");
+                    WPFLog.Log($"DDCRecoveryService: recovered '{id}' on attempt {attempt} via {action}");
                     lock (_statesLock) _states.Remove(id);
                 }
             }
         }
         catch (Exception ex)
         {
-            WpfLog.Log($"DDCRecoveryService.OnTick: {ex.Message}");
+            WPFLog.Log($"DDCRecoveryService.OnTick: {ex.Message}");
         }
         finally
         {

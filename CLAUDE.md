@@ -1,6 +1,6 @@
 # CLAUDE.md
 
-Project-specific instructions for Claude Code agents working in BrightnessTrayAppWpf.
+Project-specific instructions for Claude Code agents working in BrightnessTrayAppWPF.
 
 ## Workflow rules
 
@@ -25,7 +25,7 @@ These comment rules must be followed.
 
 - `.editorconfig` — whitespace, brace style, analyzer severities (the enforceable subset of this guide)
 - `Directory.Build.props` — build-number embedding, `obj/` redirect
-- `src/BrightnessTrayAppWpf.csproj` — Release publish settings (single-file, trimmed, ReadyToRun)
+- `src/BrightnessTrayAppWPF.csproj` — Release publish settings (single-file, trimmed, ReadyToRun)
 - `fix-ascii.py` — ASCII normalization pass
 
 
@@ -70,6 +70,4 @@ Use descriptive variable names. Single-letter names are reserved for tight loop 
 | UI      | `UI`    |
 | PID      | `PID`    |
 
-**Exception:** `Wpf` is PascalCase, not `WPF`. This matches the project name (`BrightnessTrayAppWpf`) and existing folders/types.
-
-Examples: `DDCMonitor`, `EDIDParser`, `VCPCode`, `CCDInterop`, `UIThread`, `APIClient`, `PIDController`, `WpfDispatcher`.
+Examples: `DDCMonitor`, `EDIDParser`, `VCPCode`, `CCDInterop`, `UIThread`, `APIClient`, `PIDController`, `WPFDispatcher`.

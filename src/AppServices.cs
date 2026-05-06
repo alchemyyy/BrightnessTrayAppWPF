@@ -1,9 +1,9 @@
-using BrightnessTrayAppWpf.Models;
-using BrightnessTrayAppWpf.Services;
-using BrightnessTrayAppWpf.Visuals;
-using BrightnessTrayAppWpf.Wpf;
+using BrightnessTrayAppWPF.Models;
+using BrightnessTrayAppWPF.Services;
+using BrightnessTrayAppWPF.Visuals;
+using BrightnessTrayAppWPF.WPF;
 
-namespace BrightnessTrayAppWpf;
+namespace BrightnessTrayAppWPF;
 
 /// <summary>
 /// Strongly-typed slots for the handful of process-singleton services shared between App,

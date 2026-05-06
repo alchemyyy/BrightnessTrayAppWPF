@@ -1,4 +1,4 @@
-namespace BrightnessTrayAppWpf.SunriseSunset;
+namespace BrightnessTrayAppWPF.SunriseSunset;
 
 /// <summary>
 /// Start/end window where either bound can be null at high latitudes,

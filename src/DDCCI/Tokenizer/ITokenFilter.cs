@@ -1,6 +1,6 @@
-using BrightnessTrayAppWpf.DDCCI.Tokenizer.Tokens;
+using BrightnessTrayAppWPF.DDCCI.Tokenizer.Tokens;
 
-namespace BrightnessTrayAppWpf.DDCCI.Tokenizer;
+namespace BrightnessTrayAppWPF.DDCCI.Tokenizer;
 
 public interface ITokenFilter<out T> where T : IToken
 {

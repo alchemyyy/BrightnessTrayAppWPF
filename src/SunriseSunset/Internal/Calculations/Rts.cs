@@ -1,6 +1,6 @@
-using BrightnessTrayAppWpf.SunriseSunset.Internal.Utils;
+using BrightnessTrayAppWPF.SunriseSunset.Internal.Utils;
 
-namespace BrightnessTrayAppWpf.SunriseSunset.Internal.Calculations;
+namespace BrightnessTrayAppWPF.SunriseSunset.Internal.Calculations;
 
 internal readonly record struct RaDecResult(double Alpha, double Delta, double Nu);
 

@@ -1,10 +1,10 @@
 using System.Diagnostics;
 using System.IO;
 using System.Text;
-using BrightnessTrayAppWpf.Models;
-using BrightnessTrayAppWpf.Services;
+using BrightnessTrayAppWPF.Models;
+using BrightnessTrayAppWPF.Services;
 
-namespace BrightnessTrayAppWpf.Utils;
+namespace BrightnessTrayAppWPF.Utils;
 
 /// <summary>
 /// Generates a self-deleting .bat in <c>%TEMP%</c> that removes the install exe,
@@ -27,7 +27,7 @@ public static class UninstallScript
         {
             string batPath = Path.Combine(
                 Path.GetTempPath(),
-                $"BrightnessTrayAppWpf-uninstall-{Guid.NewGuid():N}.bat");
+                $"BrightnessTrayAppWPF-uninstall-{Guid.NewGuid():N}.bat");
 
             string content = BuildScript(installDir, regScope, deleteSettings);
             File.WriteAllText(batPath, content, Encoding.ASCII);
@@ -48,7 +48,7 @@ public static class UninstallScript
         }
         catch (Exception ex)
         {
-            WpfLog.Log($"UninstallScript.Run: {ex}");
+            WPFLog.Log($"UninstallScript.Run: {ex}");
             return null;
         }
     }
@@ -97,7 +97,7 @@ public static class UninstallScript
         sb.AppendLine("set ERR=0");
         sb.AppendLine();
         sb.AppendLine("rem Kill processes whose executable path equals the install exe (and only those -");
-        sb.AppendLine("rem a portable copy of BrightnessTrayAppWpf running from elsewhere is untouched).");
+        sb.AppendLine("rem a portable copy of BrightnessTrayAppWPF running from elsewhere is untouched).");
         sb.AppendLine("rem Loops with a brief sleep so the watcher/monitored restart race resolves.");
         sb.AppendLine("powershell -NoProfile -ExecutionPolicy Bypass -Command "
             + "\"$p = '" + installExeForPs + "'; "

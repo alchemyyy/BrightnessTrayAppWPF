@@ -1,7 +1,7 @@
-using BrightnessTrayAppWpf.Models;
-using BrightnessTrayAppWpf.Utils;
+using BrightnessTrayAppWPF.Models;
+using BrightnessTrayAppWPF.Utils;
 
-namespace BrightnessTrayAppWpf.Tests;
+namespace BrightnessTrayAppWPF.Tests;
 
 /// <summary>
 /// Year-cycle round-trip check for <see cref="SunShifter"/>. Walks a non-trivial curve

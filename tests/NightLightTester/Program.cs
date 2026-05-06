@@ -1,4 +1,4 @@
-namespace BrightnessTrayAppWpf.Tests.NightLight;
+namespace BrightnessTrayAppWPF.Tests.NightLight;
 
 /// <summary>
 /// Direct driver for <see cref="NightLightSettingsHandlerTester"/>. Initialises the

@@ -1,4 +1,4 @@
-namespace BrightnessTrayAppWpf.Interop.NightLight;
+namespace BrightnessTrayAppWPF.Interop.NightLight;
 
 /// <summary>
 /// Kelvin range of Windows night-light and the strength-to-kelvin mapping used everywhere we touch the slider.

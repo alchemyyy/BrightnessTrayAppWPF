@@ -1,6 +1,6 @@
 using System.Runtime.InteropServices;
 
-namespace BrightnessTrayAppWpf.Interop;
+namespace BrightnessTrayAppWPF.Interop;
 
 /// <summary>
 /// Raw Input subscription helpers.
@@ -20,7 +20,7 @@ internal static class InputHelper
         };
 
         if (!RegisterRawInputDevice(device))
-            WpfLog.Log($"InputHelper.RegisterForMouseInput failed: {Marshal.GetLastWin32Error()}");
+            WPFLog.Log($"InputHelper.RegisterForMouseInput failed: {Marshal.GetLastWin32Error()}");
     }
 
     public static void UnregisterForMouseInput()
@@ -34,7 +34,7 @@ internal static class InputHelper
         };
 
         if (!RegisterRawInputDevice(device))
-            WpfLog.Log($"InputHelper.UnregisterForMouseInput failed: {Marshal.GetLastWin32Error()}");
+            WPFLog.Log($"InputHelper.UnregisterForMouseInput failed: {Marshal.GetLastWin32Error()}");
     }
 
     private static bool RegisterRawInputDevice(User32.RAWINPUTDEVICE device)

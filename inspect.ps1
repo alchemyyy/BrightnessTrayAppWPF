@@ -10,7 +10,7 @@ if (Test-Path -LiteralPath $path -PathType Leaf) {
 
 # Run inspection on just the WPF project (skips test/tooling projects in the solution).
 # Args are single-quoted so PowerShell's native-command arg pass doesn't mangle the dot in inspect.xml.
-jb inspectcode 'src/BrightnessTrayAppWpf.csproj' '-f=Xml' "-o=$path" '--severity=SUGGESTION'
+jb inspectcode 'src/BrightnessTrayAppWPF.csproj' '-f=Xml' "-o=$path" '--severity=SUGGESTION'
 
 # Regroup by category
 [xml]$r = Get-Content $path

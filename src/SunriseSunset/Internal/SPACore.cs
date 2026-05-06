@@ -1,7 +1,7 @@
-using BrightnessTrayAppWpf.SunriseSunset.Internal.Calculations;
-using BrightnessTrayAppWpf.SunriseSunset.Internal.Utils;
+using BrightnessTrayAppWPF.SunriseSunset.Internal.Calculations;
+using BrightnessTrayAppWPF.SunriseSunset.Internal.Utils;
 
-namespace BrightnessTrayAppWpf.SunriseSunset.Internal;
+namespace BrightnessTrayAppWPF.SunriseSunset.Internal;
 
 /// <summary>
 /// Core SPA orchestrator.

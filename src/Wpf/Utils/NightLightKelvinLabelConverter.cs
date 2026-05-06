@@ -1,9 +1,9 @@
 using System.Globalization;
 using System.Windows.Data;
-using BrightnessTrayAppWpf.Interop.NightLight;
-using BrightnessTrayAppWpf.Localization;
+using BrightnessTrayAppWPF.Interop.NightLight;
+using BrightnessTrayAppWPF.Localization;
 
-namespace BrightnessTrayAppWpf.Wpf.Utils;
+namespace BrightnessTrayAppWPF.WPF.Utils;
 
 /// <summary>
 /// Converts a slider position (0-100) plus an invert flag into a ": NNNNK" suffix (e.g. ": 4500K")

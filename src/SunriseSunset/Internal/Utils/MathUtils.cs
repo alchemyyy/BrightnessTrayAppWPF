@@ -1,4 +1,4 @@
-namespace BrightnessTrayAppWpf.SunriseSunset.Internal.Utils;
+namespace BrightnessTrayAppWPF.SunriseSunset.Internal.Utils;
 
 internal static class MathUtils
 {

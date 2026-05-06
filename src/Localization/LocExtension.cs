@@ -2,12 +2,12 @@ using System.Windows.Markup;
 using Binding = System.Windows.Data.Binding;
 using BindingMode = System.Windows.Data.BindingMode;
 
-namespace BrightnessTrayAppWpf.Localization;
+namespace BrightnessTrayAppWPF.Localization;
 
 /// <summary>
 /// XAML markup extension that binds a UI property to a localized string.
 /// Usage in XAML:
-///   xmlns:loc="clr-namespace:BrightnessTrayAppWpf.Localization"
+///   xmlns:loc="clr-namespace:BrightnessTrayAppWPF.Localization"
 ///   Text="{loc:Loc MyResourceKey}"
 /// Expands into a one-way Binding on LocalizationManager.Instance[Key];
 /// the manager raises Binding.IndexerName ("Item[]") on culture change so the binding refreshes.

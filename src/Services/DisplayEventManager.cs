@@ -3,11 +3,11 @@ using System.Runtime.InteropServices;
 using System.Text;
 using System.Windows.Threading;
 using System.Xml.Serialization;
-using BrightnessTrayAppWpf.Interop;
-using BrightnessTrayAppWpf.Models;
+using BrightnessTrayAppWPF.Interop;
+using BrightnessTrayAppWPF.Models;
 using Microsoft.Win32;
 
-namespace BrightnessTrayAppWpf.Services;
+namespace BrightnessTrayAppWPF.Services;
 
 /// <summary>
 /// Single owner of the WM_DEVICECHANGE / SystemEvents pipeline that signals "display topology might have
@@ -104,7 +104,7 @@ public sealed class DisplayEventManager : IDisposable
 
         if (AllProfileMonitorsLoaded())
         {
-            WpfLog.Log("DisplayEventManager: short-circuit (flyout)");
+            WPFLog.Log("DisplayEventManager: short-circuit (flyout)");
             return;
         }
         Task.Run(ScanAndReconcile);
@@ -169,7 +169,7 @@ public sealed class DisplayEventManager : IDisposable
         }
         catch (Exception ex)
         {
-            WpfLog.Log($"DisplayEventManager.OnCoalesceTick: {ex.Message}");
+            WPFLog.Log($"DisplayEventManager.OnCoalesceTick: {ex.Message}");
         }
     }
 
@@ -183,7 +183,7 @@ public sealed class DisplayEventManager : IDisposable
         if (_burstActive) return;
 
         _burstActive = true;
-        WpfLog.Log("DisplayEventManager: burst start");
+        WPFLog.Log("DisplayEventManager: burst start");
         _burstTimer = new System.Threading.Timer(OnBurstTick, null, 0, TimeConstants.DisplayEventBurstIntervalMs);
     }
 
@@ -198,24 +198,24 @@ public sealed class DisplayEventManager : IDisposable
 
             if (AllProfileMonitorsLoaded())
             {
-                WpfLog.Log("DisplayEventManager: short-circuit (burst)");
+                WPFLog.Log("DisplayEventManager: short-circuit (burst)");
                 StopBurst();
                 return;
             }
 
             _burstTickCount++;
-            WpfLog.Log($"DisplayEventManager: tick {_burstTickCount}");
+            WPFLog.Log($"DisplayEventManager: tick {_burstTickCount}");
             ScanAndReconcile();
 
             if (_burstTickCount >= BurstMaxTicks)
             {
-                WpfLog.Log("DisplayEventManager: burst timed out");
+                WPFLog.Log("DisplayEventManager: burst timed out");
                 StopBurst();
             }
         }
         catch (Exception ex)
         {
-            WpfLog.Log($"DisplayEventManager.OnBurstTick: {ex.Message}");
+            WPFLog.Log($"DisplayEventManager.OnBurstTick: {ex.Message}");
         }
     }
 
@@ -223,7 +223,7 @@ public sealed class DisplayEventManager : IDisposable
     {
         if (_burstActive && AllProfileMonitorsLoaded())
         {
-            WpfLog.Log("DisplayEventManager: short-circuit on refresh");
+            WPFLog.Log("DisplayEventManager: short-circuit on refresh");
             StopBurst();
         }
     }
@@ -254,13 +254,13 @@ public sealed class DisplayEventManager : IDisposable
 
             if (hwidGap || countGap)
             {
-                WpfLog.Log("DisplayEventManager: gap detected, calling Refresh");
+                WPFLog.Log("DisplayEventManager: gap detected, calling Refresh");
                 _monitorService.Refresh();
             }
         }
         catch (Exception ex)
         {
-            WpfLog.Log($"DisplayEventManager: scan failed: {ex.Message}");
+            WPFLog.Log($"DisplayEventManager: scan failed: {ex.Message}");
         }
         finally
         {
@@ -353,7 +353,7 @@ public sealed class DisplayEventManager : IDisposable
         }
         catch (Exception ex)
         {
-            WpfLog.Log($"DisplayEventManager: failed to read profiles.xml: {ex.Message}");
+            WPFLog.Log($"DisplayEventManager: failed to read profiles.xml: {ex.Message}");
             return null;
         }
     }
@@ -366,7 +366,7 @@ public sealed class DisplayEventManager : IDisposable
             ref classGuid, IntPtr.Zero, IntPtr.Zero, SetupAPI.DIGCF_PRESENT);
         if (hDevInfo == SetupAPI.INVALID_HANDLE_VALUE)
         {
-            WpfLog.Log(
+            WPFLog.Log(
                 $"DisplayEventManager: SetupDiGetClassDevs failed ({Marshal.GetLastWin32Error()})");
             return result;
         }

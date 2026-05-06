@@ -2,14 +2,14 @@ using System.Diagnostics;
 using System.IO;
 using System.Text;
 
-namespace BrightnessTrayAppWpf;
+namespace BrightnessTrayAppWPF;
 
 /// <summary>
 /// Singular file-backed logger for the app. Calls to <see cref="Log"/> append a timestamped line to an in-memory buffer
 /// that is flushed to disk every ~2 seconds, so logging stays cheap on hot paths
 /// (DDC retries, event-storm coalescers, etc.) and a process kill loses at most ~2s.
 ///
-/// Two files live alongside settings.xml at <c>%LOCALAPPDATA%\BrightnessTrayAppWpf\</c>:
+/// Two files live alongside settings.xml at <c>%LOCALAPPDATA%\BrightnessTrayAppWPF\</c>:
 ///   * <c>btawpf-active.log</c>: current.
 ///   * <c>btawpf-old.log</c>: previous rollover.
 /// Either trigger rotates - active file at or above 10 MB, or active file at least 7 days old.
@@ -18,7 +18,7 @@ namespace BrightnessTrayAppWpf;
 /// The logger is best-effort: it never throws back to callers. I/O failures are swallowed
 /// so the app keeps running even if the log directory is read-only or the file is locked.
 /// </summary>
-internal static class WpfLog
+internal static class WPFLog
 {
     private const long MaxBytes = 10L * 1024 * 1024;
     private const string ActiveName = "btawpf-active.log";

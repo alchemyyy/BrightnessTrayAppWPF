@@ -5,9 +5,9 @@ using System.Runtime.InteropServices;
 using System.Text;
 using System.Xml;
 using System.Xml.Serialization;
-using BrightnessTrayAppWpf.Models;
+using BrightnessTrayAppWPF.Models;
 
-namespace BrightnessTrayAppWpf.Interop.NightLight;
+namespace BrightnessTrayAppWPF.Interop.NightLight;
 
 /// <summary>
 /// Drives the night-light kelvin slider by calling <c>BlueLightSingleton::SetTargetColorTemperature</c> via
@@ -68,7 +68,7 @@ internal static class NightLightCloudStore
     // Verified RVAs for known builds. Falls through to PDBSymbolResolver on miss; the resolver caches its
     // result so the symbol-server hit is a one-time cost per Windows update.
     //
-    // Defaults are mirrored to %LocalAppData%\BrightnessTrayAppWpf\nightlight_known_rvas.xml on first run so
+    // Defaults are mirrored to %LocalAppData%\BrightnessTrayAppWPF\nightlight_known_rvas.xml on first run so
     // users can add entries for new Windows builds without recompiling. If the file matches the canonical
     // default serialization byte-for-byte we keep the in-memory defaults; if it has been hand-edited we
     // discard defaults and load the file. See LoadKnownRvas for the full reconciliation logic.
@@ -130,7 +130,7 @@ internal static class NightLightCloudStore
         }
         catch (Exception ex)
         {
-            WpfLog.Log(
+            WPFLog.Log(
                 $"NightLightCloudStore.SaveSettingsKelvinAsync: delegate marshalling threw: {ex.Message}");
             return false;
         }
@@ -153,7 +153,7 @@ internal static class NightLightCloudStore
         }
         catch (Exception ex)
         {
-            WpfLog.Log(
+            WPFLog.Log(
                 $"NightLightCloudStore.SaveSettingsKelvinAsync: bracket emission threw: {ex.Message}");
             return false;
         }
@@ -194,7 +194,7 @@ internal static class NightLightCloudStore
 
             if (initError != null)
             {
-                WpfLog.Log($"NightLightCloudStore init failed: {initError.Message}");
+                WPFLog.Log($"NightLightCloudStore init failed: {initError.Message}");
                 return;
             }
 
@@ -284,7 +284,7 @@ internal static class NightLightCloudStore
                 $"(state=0x{stateInner.ToInt64():X16}, settings=0x{settingsInner.ToInt64():X16})");
         }
 
-        WpfLog.Log("NightLightCloudStore: BlueLight singleton initialized");
+        WPFLog.Log("NightLightCloudStore: BlueLight singleton initialized");
     }
 
     [DllImport("kernel32.dll", SetLastError = true, CharSet = CharSet.Unicode)]
@@ -311,7 +311,7 @@ internal static class NightLightCloudStore
 
     /// <summary>
     /// Reconciles the in-source defaults from <see cref="BuildDefaultKnownRvas"/> with a user-editable XML
-    /// mirror at <c>%LocalAppData%\BrightnessTrayAppWpf\nightlight_known_rvas.xml</c>. First run writes the
+    /// mirror at <c>%LocalAppData%\BrightnessTrayAppWPF\nightlight_known_rvas.xml</c>. First run writes the
     /// defaults; subsequent runs use byte-equality against the canonical default serialization to decide
     /// whether the file is unmodified (keep defaults) or has been hand-edited (clear defaults, load file).
     /// Any IO/parse failure logs and falls back to in-memory defaults so init never blocks on filesystem
@@ -334,7 +334,7 @@ internal static class NightLightCloudStore
         }
         catch (Exception ex)
         {
-            WpfLog.Log(
+            WPFLog.Log(
                 $"NightLightCloudStore.LoadKnownRvas: setup failed, using in-memory defaults: {ex.Message}");
             return defaults;
         }
@@ -352,7 +352,7 @@ internal static class NightLightCloudStore
         }
         catch (Exception ex)
         {
-            WpfLog.Log(
+            WPFLog.Log(
                 $"NightLightCloudStore.LoadKnownRvas: file IO/parse failed, using in-memory defaults: {ex.Message}");
             return defaults;
         }

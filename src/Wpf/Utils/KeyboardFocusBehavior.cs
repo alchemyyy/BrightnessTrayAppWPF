@@ -2,7 +2,7 @@ using System.Windows;
 using System.Windows.Input;
 using KeyEventArgs = System.Windows.Input.KeyEventArgs;
 
-namespace BrightnessTrayAppWpf.Wpf.Utils;
+namespace BrightnessTrayAppWPF.WPF.Utils;
 
 /// <summary>
 /// Attached behavior that shows focus visuals only on keyboard navigation.

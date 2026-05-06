@@ -2,7 +2,7 @@ using System.IO;
 using System.Windows.Media.Imaging;
 using Color = System.Windows.Media.Color;
 
-namespace BrightnessTrayAppWpf.Visuals;
+namespace BrightnessTrayAppWPF.Visuals;
 
 /// <summary>
 /// Developer-only tool: generates the application icon (app.ico)
@@ -12,7 +12,7 @@ namespace BrightnessTrayAppWpf.Visuals;
 /// Invoked automatically at the start of <see cref="Program.Main"/> in Debug builds,
 /// so the icon stays in sync with the renderer.
 /// The resulting app.ico is picked up at compile time
-/// via &lt;ApplicationIcon&gt; in BrightnessTrayAppWpf.csproj.
+/// via &lt;ApplicationIcon&gt; in BrightnessTrayAppWPF.csproj.
 /// </summary>
 public static class AppIconGenerator
 {

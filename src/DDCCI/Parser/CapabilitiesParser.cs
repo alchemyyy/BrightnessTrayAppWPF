@@ -1,7 +1,7 @@
-using BrightnessTrayAppWpf.DDCCI.Parser.Nodes;
-using BrightnessTrayAppWpf.DDCCI.Tokenizer.Tokens;
+using BrightnessTrayAppWPF.DDCCI.Parser.Nodes;
+using BrightnessTrayAppWPF.DDCCI.Tokenizer.Tokens;
 
-namespace BrightnessTrayAppWpf.DDCCI.Parser;
+namespace BrightnessTrayAppWPF.DDCCI.Parser;
 
 /// <summary>
 /// Parser for MCCS capability strings.

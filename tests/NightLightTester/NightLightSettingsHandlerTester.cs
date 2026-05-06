@@ -1,14 +1,14 @@
 using System.Diagnostics;
 using System.Runtime.InteropServices;
-using BrightnessTrayAppWpf.Interop.NightLight;
+using BrightnessTrayAppWPF.Interop.NightLight;
 
-namespace BrightnessTrayAppWpf.Tests.NightLight;
+namespace BrightnessTrayAppWPF.Tests.NightLight;
 
 /// <summary>
 /// Verbose, single-threaded clone of <see cref="NightLightSettingsHandler"/> for direct
 /// experimentation. Differences from production:
 ///
-/// 1. All <c>WpfLog.Log</c> calls are replaced with <see cref="ConsoleLog"/> writes plus
+/// 1. All <c>WPFLog.Log</c> calls are replaced with <see cref="ConsoleLog"/> writes plus
 ///    extra trace points at every step of init / SetValue / cleanup, so the entire
 ///    SettingsHandlers_Display vtable pipeline shows up in the console.
 /// 2. The async throttler / latest-pending-wins scheduler is gone. The driver calls

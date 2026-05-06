@@ -1,4 +1,4 @@
-namespace BrightnessTrayAppWpf.DDCCI;
+namespace BrightnessTrayAppWPF.DDCCI;
 
 /// <summary>
 /// Depth-first flattening extension used to walk the capability-string parse tree.

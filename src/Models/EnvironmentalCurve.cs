@@ -1,7 +1,7 @@
 using System.Globalization;
 using System.Xml.Serialization;
 
-namespace BrightnessTrayAppWpf.Models;
+namespace BrightnessTrayAppWPF.Models;
 
 /// <summary>
 /// Combined anchor state for one end of a sun-shift:

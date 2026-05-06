@@ -1,6 +1,6 @@
-using BrightnessTrayAppWpf.Interop.NightLight;
+using BrightnessTrayAppWPF.Interop.NightLight;
 
-namespace BrightnessTrayAppWpf.Tests.NightLight;
+namespace BrightnessTrayAppWPF.Tests.NightLight;
 
 /// <summary>
 /// Drives <see cref="NightLightCloudStore.SaveSettingsKelvin"/> through a sweep so we can

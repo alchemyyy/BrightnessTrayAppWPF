@@ -5,7 +5,7 @@
          downlevel-compatibility shims. The main project is WPF/WinExe; this app
          only consumes its non-UI types (Models, Services). -->
     <TargetFramework>net9.0-windows10.0.22621.0</TargetFramework>
-    <RootNamespace>BrightnessTrayAppWpf.Tests</RootNamespace>
+    <RootNamespace>BrightnessTrayAppWPF.Tests</RootNamespace>
     <AssemblyName>SunShifterCheck</AssemblyName>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
@@ -22,6 +22,6 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\src\BrightnessTrayAppWpf.csproj" />
+    <ProjectReference Include="..\..\src\BrightnessTrayAppWPF.csproj" />
   </ItemGroup>
 </Project>

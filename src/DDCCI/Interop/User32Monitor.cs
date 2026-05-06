@@ -1,10 +1,10 @@
 using System.Runtime.InteropServices;
 
-namespace BrightnessTrayAppWpf.DDCCI.Interop;
+namespace BrightnessTrayAppWPF.DDCCI.Interop;
 
 /// <summary>
 /// Subset of user32.dll needed for monitor enumeration.
-/// Kept separate from the app-wide <c>BrightnessTrayAppWpf.Interop.User32</c> so DDCCI stays self-contained
+/// Kept separate from the app-wide <c>BrightnessTrayAppWPF.Interop.User32</c> so DDCCI stays self-contained
 /// and the struct marshalling stays compatible with the Monitor Configuration API.
 /// </summary>
 internal static class User32Monitor

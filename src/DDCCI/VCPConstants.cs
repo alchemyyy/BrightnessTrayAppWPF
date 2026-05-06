@@ -1,4 +1,4 @@
-namespace BrightnessTrayAppWpf.DDCCI;
+namespace BrightnessTrayAppWPF.DDCCI;
 
 /// <summary>
 /// Named constants for commonly used Virtual Control Panel codes

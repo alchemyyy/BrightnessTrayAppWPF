@@ -1,6 +1,6 @@
 using System.Runtime.InteropServices;
 
-namespace BrightnessTrayAppWpf.Interop;
+namespace BrightnessTrayAppWPF.Interop;
 
 /// <summary>
 /// Shell32.dll interop declarations for system tray notification icons.

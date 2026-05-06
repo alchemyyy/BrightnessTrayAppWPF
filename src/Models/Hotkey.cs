@@ -1,6 +1,6 @@
 using System.Xml.Serialization;
 
-namespace BrightnessTrayAppWpf.Models;
+namespace BrightnessTrayAppWPF.Models;
 
 public enum HotkeyAction
 {

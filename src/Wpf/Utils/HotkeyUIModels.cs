@@ -5,11 +5,11 @@ using System.Runtime.CompilerServices;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
-using BrightnessTrayAppWpf.Interop;
-using BrightnessTrayAppWpf.Localization;
-using BrightnessTrayAppWpf.Models;
+using BrightnessTrayAppWPF.Interop;
+using BrightnessTrayAppWPF.Localization;
+using BrightnessTrayAppWPF.Models;
 
-namespace BrightnessTrayAppWpf.Wpf.Utils;
+namespace BrightnessTrayAppWPF.WPF.Utils;
 
 /// <summary>
 /// Picks the right hotkey-row template:

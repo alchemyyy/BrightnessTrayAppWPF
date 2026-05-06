@@ -1,6 +1,6 @@
-using BrightnessTrayAppWpf.Services;
+using BrightnessTrayAppWPF.Services;
 
-namespace BrightnessTrayAppWpf.Interop.NightLight;
+namespace BrightnessTrayAppWPF.Interop.NightLight;
 
 /// <summary>
 /// Drives the night-light kelvin slider via <see cref="NightLightCloudStore"/>,

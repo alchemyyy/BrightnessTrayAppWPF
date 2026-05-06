@@ -1,7 +1,7 @@
 using System.Text.RegularExpressions;
-using BrightnessTrayAppWpf.DDCCI.Tokenizer.Tokens;
+using BrightnessTrayAppWPF.DDCCI.Tokenizer.Tokens;
 
-namespace BrightnessTrayAppWpf.DDCCI.Tokenizer;
+namespace BrightnessTrayAppWPF.DDCCI.Tokenizer;
 
 /// <summary>
 /// Splits a raw MCCS capability string such as <c>(prot(monitor)type(lcd)vcp(10 12 60(01 11)))</c>

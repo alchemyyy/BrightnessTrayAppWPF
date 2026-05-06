@@ -1,7 +1,7 @@
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
 
-namespace BrightnessTrayAppWpf.Models;
+namespace BrightnessTrayAppWPF.Models;
 
 /// <summary>
 /// Single-value-of-truth visible state of a slider row.

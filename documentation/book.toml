@@ -2,7 +2,7 @@
 authors = ["alchemyyy"]
 language = "en"
 src = "docs"
-title = "BrightnessTrayAppWpf Documentation"
+title = "BrightnessTrayAppWPF Documentation"
 
 [build]
 build-dir = ".mdbook"

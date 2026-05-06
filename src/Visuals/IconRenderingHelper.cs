@@ -1,8 +1,8 @@
 using System.IO;
 using System.Windows.Media.Imaging;
-using BrightnessTrayAppWpf.Interop;
+using BrightnessTrayAppWPF.Interop;
 
-namespace BrightnessTrayAppWpf.Visuals;
+namespace BrightnessTrayAppWPF.Visuals;
 
 internal static class IconRenderingHelper
 {

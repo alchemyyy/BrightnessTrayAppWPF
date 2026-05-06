@@ -3,16 +3,16 @@ using System.Globalization;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
-using BrightnessTrayAppWpf.Localization;
-using BrightnessTrayAppWpf.Models;
-using BrightnessTrayAppWpf.Services;
-using BrightnessTrayAppWpf.Wpf.Utils;
+using BrightnessTrayAppWPF.Localization;
+using BrightnessTrayAppWPF.Models;
+using BrightnessTrayAppWPF.Services;
+using BrightnessTrayAppWPF.WPF.Utils;
 using Button = System.Windows.Controls.Button;
 using KeyEventArgs = System.Windows.Input.KeyEventArgs;
 using TextBox = System.Windows.Controls.TextBox;
 using UserControl = System.Windows.Controls.UserControl;
 
-namespace BrightnessTrayAppWpf.Wpf.Settings.Pages;
+namespace BrightnessTrayAppWPF.WPF.Settings.Pages;
 
 /// <summary>
 /// Hotkeys settings page. One <see cref="HotkeyRowViewModel"/> per (Action, Parameter) group;
@@ -299,7 +299,7 @@ public partial class HotkeysPage : UserControl
         try { result = hotkeyService.Apply(_settings.Hotkeys); }
         catch (Exception ex)
         {
-            WpfLog.Log($"HotkeysPage.ReapplyHotkeysAndUpdateStatuses: {ex.Message}");
+            WPFLog.Log($"HotkeysPage.ReapplyHotkeysAndUpdateStatuses: {ex.Message}");
             return;
         }
 
@@ -425,7 +425,7 @@ public partial class HotkeysPage : UserControl
 
         if (vk == 0x7B) // VK_F12 - reserved by the kernel debugger
         {
-            WpfLog.Log("HotkeysPage: F12 is reserved by the debugger and cannot be bound.");
+            WPFLog.Log("HotkeysPage: F12 is reserved by the debugger and cannot be bound.");
             e.Handled = true;
             return;
         }

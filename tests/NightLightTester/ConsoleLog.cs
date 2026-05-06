@@ -1,4 +1,4 @@
-namespace BrightnessTrayAppWpf.Tests.NightLight;
+namespace BrightnessTrayAppWPF.Tests.NightLight;
 
 /// <summary>
 /// Console logger for the night-light tester. Timestamped, color-coded, and lock-serialized

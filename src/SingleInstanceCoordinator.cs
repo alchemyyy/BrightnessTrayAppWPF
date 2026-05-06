@@ -1,7 +1,7 @@
 using System.Diagnostics;
 using System.IO.MemoryMappedFiles;
 
-namespace BrightnessTrayAppWpf;
+namespace BrightnessTrayAppWPF;
 
 /// <summary>
 /// Owns the single-instance Mutex and PID-bulletin MMF for the watcher's lifetime.

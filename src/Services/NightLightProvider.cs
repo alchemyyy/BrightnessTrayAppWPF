@@ -1,7 +1,7 @@
-using BrightnessTrayAppWpf.Interop.NightLight;
-using BrightnessTrayAppWpf.Models;
+using BrightnessTrayAppWPF.Interop.NightLight;
+using BrightnessTrayAppWPF.Models;
 
-namespace BrightnessTrayAppWpf.Services;
+namespace BrightnessTrayAppWPF.Services;
 
 /// <summary>
 /// Unified entry point for night-light control.
@@ -135,7 +135,7 @@ internal static class NightLightProvider
             _settings.NightLightLastNonZeroStrength = percent;
             try { lock (_gate) _settings.Save(); }
             catch (Exception ex)
-            { WpfLog.Log($"NightLightProvider.SetStrength persist last-strength: {ex.Message}"); }
+            { WPFLog.Log($"NightLightProvider.SetStrength persist last-strength: {ex.Message}"); }
         }
 
         // Optional auto-off at zero.
@@ -156,7 +156,7 @@ internal static class NightLightProvider
     /// Toggling off preserves the live strength so the next toggle-on returns the user's same warmth.
     /// Returns true if the underlying backend wrote the requested state and the readback
     /// matched; false if the registry write failed, the readback diverged, or no backend is
-    /// available. Failures are logged via <see cref="WpfLog"/>.
+    /// available. Failures are logged via <see cref="WPFLog"/>.
     /// </summary>
     public static bool SetEnabled(bool enabled)
     {
@@ -172,7 +172,7 @@ internal static class NightLightProvider
 
         if (!ok)
         {
-            WpfLog.Log(
+            WPFLog.Log(
                 $"NightLightProvider.SetEnabled({enabled}) returned false on backend {backend} "
                 + "(write rejected or readback diverged from request).");
         }
@@ -196,7 +196,7 @@ internal static class NightLightProvider
     /// <summary>
     /// Flips the enabled state on the active backend. Returns true if the toggle landed
     /// (post-write readback shows the inverted state), false on write failure, readback
-    /// divergence, or no backend available. Failures are logged via <see cref="WpfLog"/>.
+    /// divergence, or no backend available. Failures are logged via <see cref="WPFLog"/>.
     /// </summary>
     public static bool Toggle()
     {
@@ -213,7 +213,7 @@ internal static class NightLightProvider
 
         if (!ok)
         {
-            WpfLog.Log(
+            WPFLog.Log(
                 $"NightLightProvider.Toggle returned false on backend {backend} "
                 + "(write rejected or readback didn't show the flip).");
         }
@@ -258,7 +258,7 @@ internal static class NightLightProvider
             try { resolved = ResolveBackend(); }
             catch (Exception ex)
             {
-                WpfLog.Log($"NightLightProvider.GetCachedBackend probe: {ex.Message}");
+                WPFLog.Log($"NightLightProvider.GetCachedBackend probe: {ex.Message}");
                 resolved = Backend.None;
             }
             _lastResolvedBackend = resolved;

@@ -1,6 +1,6 @@
 using System.Runtime.InteropServices;
 
-namespace BrightnessTrayAppWpf.DDCCI.Interop;
+namespace BrightnessTrayAppWPF.DDCCI.Interop;
 
 /// <summary>
 /// Subset of the Windows Connecting and Configuring Displays (CCD) API

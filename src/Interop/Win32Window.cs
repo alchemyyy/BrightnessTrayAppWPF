@@ -1,4 +1,4 @@
-namespace BrightnessTrayAppWpf.Interop;
+namespace BrightnessTrayAppWPF.Interop;
 
 /// <summary>
 /// A minimal Win32 window for receiving shell notification messages.
@@ -21,7 +21,7 @@ internal sealed class Win32Window : NativeWindow, IDisposable
         if (_windowProcedureCallback != null)
         {
             try { _windowProcedureCallback(message); }
-            catch (Exception ex) { WpfLog.Log($"Win32Window.WndProc: {ex.Message}"); }
+            catch (Exception ex) { WPFLog.Log($"Win32Window.WndProc: {ex.Message}"); }
         }
         base.WndProc(ref message);
     }

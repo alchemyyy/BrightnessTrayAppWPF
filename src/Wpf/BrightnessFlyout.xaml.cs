@@ -9,12 +9,12 @@ using System.Windows.Controls.Primitives;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Threading;
-using BrightnessTrayAppWpf.Localization;
-using BrightnessTrayAppWpf.Models;
-using BrightnessTrayAppWpf.Services;
-using BrightnessTrayAppWpf.Utils;
-using BrightnessTrayAppWpf.Visuals;
-using BrightnessTrayAppWpf.Wpf.Utils;
+using BrightnessTrayAppWPF.Localization;
+using BrightnessTrayAppWPF.Models;
+using BrightnessTrayAppWPF.Services;
+using BrightnessTrayAppWPF.Utils;
+using BrightnessTrayAppWPF.Visuals;
+using BrightnessTrayAppWPF.WPF.Utils;
 using Application = System.Windows.Application;
 using Button = System.Windows.Controls.Button;
 using KeyEventArgs = System.Windows.Input.KeyEventArgs;
@@ -23,7 +23,7 @@ using Point = System.Windows.Point;
 using Size = System.Windows.Size;
 using Slider = System.Windows.Controls.Slider;
 
-namespace BrightnessTrayAppWpf.Wpf;
+namespace BrightnessTrayAppWPF.WPF;
 
 /// <summary>
 /// Windows 11-style flyout for brightness control.
@@ -782,7 +782,7 @@ public partial class BrightnessFlyout : Window, INotifyPropertyChanged
         if (sender is Button { DataContext: ProfileButtonItem item })
         {
             SelectProfileApplyingMode(item.Index);
-            WpfLog.Log($"Profile {item.Index + 1} selected");
+            WPFLog.Log($"Profile {item.Index + 1} selected");
         }
     }
 
@@ -792,7 +792,7 @@ public partial class BrightnessFlyout : Window, INotifyPropertyChanged
             Monitors,
             CurrentMasterSliderMode,
             FlipIfNightLightInverted(NightLightMonitor.RoundedBrightness));
-        WpfLog.Log($"Saved to profile {_profileManager.SelectedIndex + 1}");
+        WPFLog.Log($"Saved to profile {_profileManager.SelectedIndex + 1}");
 
         // State now matches profile - clear the glow.
         CheckAndUpdateUnsavedChanges();
@@ -1356,13 +1356,13 @@ public partial class BrightnessFlyout : Window, INotifyPropertyChanged
     protected override void OnLostFocus(RoutedEventArgs e)
     {
         base.OnLostFocus(e);
-        WpfLog.Log($"OnLostFocus fired - IsActive: {IsActive}, IsFocused: {IsFocused}");
+        WPFLog.Log($"OnLostFocus fired - IsActive: {IsActive}, IsFocused: {IsFocused}");
     }
 
     protected override void OnLostKeyboardFocus(KeyboardFocusChangedEventArgs e)
     {
         base.OnLostKeyboardFocus(e);
-        WpfLog.Log($"OnLostKeyboardFocus fired - IsActive: {IsActive}, NewFocus: {e.NewFocus}");
+        WPFLog.Log($"OnLostKeyboardFocus fired - IsActive: {IsActive}, NewFocus: {e.NewFocus}");
     }
 
     private void BrightnessSlider_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
@@ -1561,7 +1561,7 @@ public partial class BrightnessFlyout : Window, INotifyPropertyChanged
         }
         catch (Exception ex)
         {
-            WpfLog.Log($"Failed to open display settings: {ex.Message}");
+            WPFLog.Log($"Failed to open display settings: {ex.Message}");
         }
     }
 
@@ -2011,7 +2011,7 @@ public partial class BrightnessFlyout : Window, INotifyPropertyChanged
             }
             catch (Exception ex)
             {
-                WpfLog.Log($"BrightnessFlyout: hard power-off threw for '{edidSerial}': {ex.Message}");
+                WPFLog.Log($"BrightnessFlyout: hard power-off threw for '{edidSerial}': {ex.Message}");
                 ok = false;
                 error = ex.Message;
             }

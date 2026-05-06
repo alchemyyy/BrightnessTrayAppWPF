@@ -1,12 +1,12 @@
 using System.Windows.Controls;
 using System.Windows.Threading;
-using BrightnessTrayAppWpf.Interop;
-using BrightnessTrayAppWpf.Models;
-using BrightnessTrayAppWpf.Visuals;
+using BrightnessTrayAppWPF.Interop;
+using BrightnessTrayAppWPF.Models;
+using BrightnessTrayAppWPF.Visuals;
 using Color = System.Windows.Media.Color;
 using Point = System.Windows.Point;
 
-namespace BrightnessTrayAppWpf;
+namespace BrightnessTrayAppWPF;
 
 /// <summary>
 /// Manages the tray icon lifecycle, rendering, and updates.
@@ -192,7 +192,7 @@ public sealed class TrayIconManager : IDisposable
         }
         catch (Exception ex)
         {
-            WpfLog.Log($"TrayIconManager.OnTooltipPopup: {ex.Message}");
+            WPFLog.Log($"TrayIconManager.OnTooltipPopup: {ex.Message}");
         }
     }
 
@@ -265,7 +265,7 @@ public sealed class TrayIconManager : IDisposable
         catch (Exception ex)
         {
             _isOnCooldown = false;
-            WpfLog.Log($"TrayIconManager.StartCooldown: {ex.Message}");
+            WPFLog.Log($"TrayIconManager.StartCooldown: {ex.Message}");
         }
     }
 

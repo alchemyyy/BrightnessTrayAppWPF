@@ -1,11 +1,11 @@
-using BrightnessTrayAppWpf.Services;
-using BrightnessTrayAppWpf.Wpf;
+using BrightnessTrayAppWPF.Services;
+using BrightnessTrayAppWPF.WPF;
 using System.Diagnostics;
 using System.IO;
-using BrightnessTrayAppWpf.Utils;
-using BrightnessTrayAppWpf.Visuals;
+using BrightnessTrayAppWPF.Utils;
+using BrightnessTrayAppWPF.Visuals;
 
-namespace BrightnessTrayAppWpf;
+namespace BrightnessTrayAppWPF;
 
 /// <summary>
 /// Application entry point that handles crash handler modes.
@@ -17,7 +17,7 @@ internal static class Program
     /// </summary>
     public static int? WatcherPID { get; private set; }
 
-    public const string ApplicationName = "BrightnessTrayAppWpf";
+    public const string ApplicationName = "BrightnessTrayAppWPF";
 
     /// <summary>
     /// True when this process was started with <c>--uninstall</c>.
@@ -44,8 +44,8 @@ internal static class Program
         // Bring the file logger up before any branch
         // so even the short-lived admin / uninstaller / watcher entry points get a logged trail.
         // ProcessExit ensures the buffer flushes on every exit path.
-        WpfLog.Initialize();
-        AppDomain.CurrentDomain.ProcessExit += (_, _) => WpfLog.Flush();
+        WPFLog.Initialize();
+        AppDomain.CurrentDomain.ProcessExit += (_, _) => WPFLog.Flush();
 
         // Privileged branches: re-entered with runas. No watcher, no WPF - just do the action and exit.
         if (TryGetArgValue(args, "--admin-action") is { } adminVerb) return RunAdminAction(adminVerb, args);
@@ -135,7 +135,7 @@ internal static class Program
                 return result.Success ? 0 : 1;
             }
             default:
-                WpfLog.Log($"Program.RunAdminAction: unknown verb '{verb}'");
+                WPFLog.Log($"Program.RunAdminAction: unknown verb '{verb}'");
                 return 1;
         }
     }

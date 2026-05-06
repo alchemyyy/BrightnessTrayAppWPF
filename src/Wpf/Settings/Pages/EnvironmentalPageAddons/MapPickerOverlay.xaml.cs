@@ -11,7 +11,7 @@ using Point = System.Windows.Point;
 using Size = System.Windows.Size;
 using UserControl = System.Windows.Controls.UserControl;
 
-namespace BrightnessTrayAppWpf.Wpf.Settings.Pages.EnvironmentalPageAddons;
+namespace BrightnessTrayAppWPF.WPF.Settings.Pages.EnvironmentalPageAddons;
 
 /// <summary>
 /// Modal overlay that lets the user pick a geographic coordinate on a world map.

@@ -1,6 +1,6 @@
-using BrightnessTrayAppWpf.Models;
+using BrightnessTrayAppWPF.Models;
 
-namespace BrightnessTrayAppWpf.Utils;
+namespace BrightnessTrayAppWPF.Utils;
 
 /// <summary>
 /// Stateless evaluator for <see cref="EnvironmentalCurve"/> at a given normalised time-of-day.

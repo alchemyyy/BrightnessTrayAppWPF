@@ -1,10 +1,10 @@
 using System.Windows.Controls;
 using System.Windows.Input;
-using BrightnessTrayAppWpf.Models;
+using BrightnessTrayAppWPF.Models;
 using CheckBox = System.Windows.Controls.CheckBox;
 using ComboBox = System.Windows.Controls.ComboBox;
 
-namespace BrightnessTrayAppWpf.Wpf.Settings.Utils;
+namespace BrightnessTrayAppWPF.WPF.Settings.Utils;
 
 /// <summary>
 /// Generic Tag-based dispatch helpers shared by every per-section settings UserControl.

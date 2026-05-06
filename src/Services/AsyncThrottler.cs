@@ -1,4 +1,4 @@
-namespace BrightnessTrayAppWpf.Services;
+namespace BrightnessTrayAppWPF.Services;
 
 /// <summary>
 /// Per-key "latest-pending-wins" payload scheduler.
@@ -209,7 +209,7 @@ public sealed class AsyncThrottler<TKey>(int cooldownMs, IEqualityComparer<TKey>
             catch (OperationCanceledException) { /* expected on dispose / external cancel */ }
             catch (Exception exception)
             {
-                WpfLog.Log($"AsyncThrottler: payload for key '{key}' threw: {exception.Message}");
+                WPFLog.Log($"AsyncThrottler: payload for key '{key}' threw: {exception.Message}");
             }
             finally
             {

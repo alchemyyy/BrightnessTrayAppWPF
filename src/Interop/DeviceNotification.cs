@@ -1,6 +1,6 @@
 using System.Runtime.InteropServices;
 
-namespace BrightnessTrayAppWpf.Interop;
+namespace BrightnessTrayAppWPF.Interop;
 
 /// <summary>
 /// P/Invoke surface for <c>RegisterDeviceNotification</c>, filtered to the monitor device-interface class.
@@ -47,7 +47,7 @@ internal static class DeviceNotification
     /// <summary>
     /// Registers <paramref name="hwnd"/> for monitor-scoped <c>WM_DEVICECHANGE</c> notifications.
     /// Returns the registration handle, or <see cref="IntPtr.Zero"/> on failure
-    /// (logged via <see cref="WpfLog.Log(string)"/>).
+    /// (logged via <see cref="WPFLog.Log(string)"/>).
     /// <paramref name="ownerLabel"/> is the diagnostic log prefix (e.g. <c>"DisplayEventWatcher"</c>);
     /// <paramref name="failureModeSuffix"/> describes the caller's fallback behavior.
     /// </summary>
@@ -68,7 +68,7 @@ internal static class DeviceNotification
 
             if (handle == IntPtr.Zero)
             {
-                WpfLog.Log(
+                WPFLog.Log(
                     $"{ownerLabel}: RegisterDeviceNotification failed " +
                     $"({Marshal.GetLastWin32Error()}) - {failureModeSuffix}");
             }

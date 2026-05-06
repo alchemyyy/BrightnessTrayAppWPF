@@ -10,7 +10,7 @@
   </PropertyGroup>
 
   <!-- Bake the build number into the assembly at compile time as a
-       `const int BrightnessTrayAppWpf.BuildInfo.BuildNumber`.
+       `const int BrightnessTrayAppWPF.BuildInfo.BuildNumber`.
        The constant is inlined at every use site by the C# compiler, so no
        reflection or attribute lookup is needed at runtime.
 
@@ -19,7 +19,7 @@
        GenerateAssemblyInfo can fire more than once across the
        outer-build / inner-publish chain triggered by Release (and within
        a single MSBuild process under some WPF/publish target paths).
-       The bump lives in PublishAfterBuild (BrightnessTrayAppWpf.csproj),
+       The bump lives in PublishAfterBuild (BrightnessTrayAppWPF.csproj),
        which fires exactly once before the publish Exec, so the inner
        publish reads the already-bumped value. -->
   <Target Name="EmbedBuildNumber" BeforeTargets="GenerateAssemblyInfo"
@@ -34,7 +34,7 @@
     <MakeDir Directories="$(IntermediateOutputPath)" />
     <ItemGroup>
       <_BuildInfoLines Include="// &lt;auto-generated/&gt;" />
-      <_BuildInfoLines Include="namespace BrightnessTrayAppWpf%3B" />
+      <_BuildInfoLines Include="namespace BrightnessTrayAppWPF%3B" />
       <_BuildInfoLines Include="internal static class BuildInfo" />
       <_BuildInfoLines Include="{" />
       <_BuildInfoLines Include="    public const int BuildNumber = $(BuildNumber)%3B" />

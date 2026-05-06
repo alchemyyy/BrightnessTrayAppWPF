@@ -1,4 +1,4 @@
-namespace BrightnessTrayAppWpf.DDCCI.Tokenizer.Tokens;
+namespace BrightnessTrayAppWPF.DDCCI.Tokenizer.Tokens;
 
 public interface IToken
 {

@@ -5,19 +5,19 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Threading;
-using BrightnessTrayAppWpf.Localization;
-using BrightnessTrayAppWpf.Models;
-using BrightnessTrayAppWpf.Services;
-using BrightnessTrayAppWpf.Utils;
-using BrightnessTrayAppWpf.Wpf.Settings.Pages.EnvironmentalPageAddons;
-using BrightnessTrayAppWpf.Wpf.Settings.Utils;
+using BrightnessTrayAppWPF.Localization;
+using BrightnessTrayAppWPF.Models;
+using BrightnessTrayAppWPF.Services;
+using BrightnessTrayAppWPF.Utils;
+using BrightnessTrayAppWPF.WPF.Settings.Pages.EnvironmentalPageAddons;
+using BrightnessTrayAppWPF.WPF.Settings.Utils;
 using Button = System.Windows.Controls.Button;
 using CheckBox = System.Windows.Controls.CheckBox;
 using KeyEventArgs = System.Windows.Input.KeyEventArgs;
 using TextBox = System.Windows.Controls.TextBox;
 using UserControl = System.Windows.Controls.UserControl;
 
-namespace BrightnessTrayAppWpf.Wpf.Settings.Pages;
+namespace BrightnessTrayAppWPF.WPF.Settings.Pages;
 
 /// <summary>
 /// Environmental settings page.
@@ -1497,7 +1497,7 @@ public partial class EnvironmentalPage : UserControl
         }
         catch (Exception ex)
         {
-            WpfLog.Log($"EnvironmentalPage.ApproximateFromIp_Click: {ex.Message}");
+            WPFLog.Log($"EnvironmentalPage.ApproximateFromIp_Click: {ex.Message}");
         }
     }
 

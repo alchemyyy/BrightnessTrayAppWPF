@@ -3,7 +3,7 @@ using System.Xml;
 using System.Xml.Serialization;
 using Color = System.Windows.Media.Color;
 
-namespace BrightnessTrayAppWpf.Models;
+namespace BrightnessTrayAppWPF.Models;
 
 public enum ThemeMode
 {
@@ -489,7 +489,7 @@ public class AppSettings
     public bool TurnOffNightLightAtZeroStrength { get; set; } = false;
 
     /// <summary>
-    /// HTTP timeout (seconds) used by <see cref="BrightnessTrayAppWpf.Interop.NightLight.PDBSymbolResolver"/>
+    /// HTTP timeout (seconds) used by <see cref="BrightnessTrayAppWPF.Interop.NightLight.PDBSymbolResolver"/>
     /// when fetching SettingsHandlers_Display.dll's PDB from the Microsoft public symbol server.
     /// The resolver only runs after a Windows update introduces an unknown DLL build,
     /// so this fires at most once per build-version transition;

@@ -562,7 +562,7 @@ Requires at least one slider in the flyout to be set to curve mode.</value>
     <value>This will copy the running exe to "{0}" and register it in Windows Settings &gt; Apps.</value>
   </data>
   <data name="Settings_General_InstallConfirm_Title" xml:space="preserve">
-    <value>Install BrightnessTrayAppWpf?</value>
+    <value>Install BrightnessTrayAppWPF?</value>
   </data>
   <data name="Settings_General_InstallFailed_Title" xml:space="preserve">
     <value>Install failed</value>
@@ -571,7 +571,7 @@ Requires at least one slider in the flyout to be set to curve mode.</value>
     <value>This will copy the running exe to "{0}" and register it in Windows Settings &gt; Apps. Requires admin.</value>
   </data>
   <data name="Settings_General_InstallSystemWideConfirm_Title" xml:space="preserve">
-    <value>Install BrightnessTrayAppWpf system-wide?</value>
+    <value>Install BrightnessTrayAppWPF system-wide?</value>
   </data>
   <data name="Settings_General_Install_Button" xml:space="preserve">
     <value>Install</value>
@@ -634,7 +634,7 @@ Requires at least one slider in the flyout to be set to curve mode.</value>
     <value> (requires admin)</value>
   </data>
   <data name="Settings_General_RunOnStartup_Description" xml:space="preserve">
-    <value>Launch BrightnessTrayAppWpf when you sign in to Windows.</value>
+    <value>Launch BrightnessTrayAppWPF when you sign in to Windows.</value>
   </data>
   <data name="Settings_General_RunOnStartup_OnDescriptionFormat" xml:space="preserve">
     <value>{0}
@@ -1371,10 +1371,10 @@ Night Light: {0}%</value>
     <value>Close</value>
   </data>
   <data name="Uninstaller_DefaultDescription" xml:space="preserve">
-    <value>This will remove the installed copy of BrightnessTrayAppWpf and its registration in Windows Apps. Choose what to do with your settings.</value>
+    <value>This will remove the installed copy of BrightnessTrayAppWPF and its registration in Windows Apps. Choose what to do with your settings.</value>
   </data>
   <data name="Uninstaller_DeleteSettings_DefaultDescription" xml:space="preserve">
-    <value>Also remove the BrightnessTrayAppWpf folder under %LOCALAPPDATA%, including settings.xml.</value>
+    <value>Also remove the BrightnessTrayAppWPF folder under %LOCALAPPDATA%, including settings.xml.</value>
   </data>
   <data name="Uninstaller_DeleteSettings_Description_Format" xml:space="preserve">
     <value>Also remove "{0}" including settings.xml.</value>
@@ -1383,7 +1383,7 @@ Night Light: {0}%</value>
     <value>Delete my settings</value>
   </data>
   <data name="Uninstaller_Description_Format" xml:space="preserve">
-    <value>This will remove BrightnessTrayAppWpf installed at "{0}" and its entry in Windows Settings &gt; Apps. Choose what to do with your settings.</value>
+    <value>This will remove BrightnessTrayAppWPF installed at "{0}" and its entry in Windows Settings &gt; Apps. Choose what to do with your settings.</value>
   </data>
   <data name="Uninstaller_KeepSettings_Description" xml:space="preserve">
     <value>Leave settings.xml in place so a future install picks them up.</value>
@@ -1392,10 +1392,10 @@ Night Light: {0}%</value>
     <value>Keep my settings</value>
   </data>
   <data name="Uninstaller_SectionHeader" xml:space="preserve">
-    <value>Uninstall BrightnessTrayAppWpf</value>
+    <value>Uninstall BrightnessTrayAppWPF</value>
   </data>
   <data name="Uninstaller_Title" xml:space="preserve">
-    <value>Uninstall BrightnessTrayAppWpf</value>
+    <value>Uninstall BrightnessTrayAppWPF</value>
   </data>
   <data name="Uninstaller_UninstallButton" xml:space="preserve">
     <value>Uninstall</value>

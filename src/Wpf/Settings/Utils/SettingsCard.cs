@@ -1,7 +1,7 @@
 using System.Windows;
 using Control = System.Windows.Controls.Control;
 
-namespace BrightnessTrayAppWpf.Wpf.Settings.Utils;
+namespace BrightnessTrayAppWPF.WPF.Settings.Utils;
 
 /// <summary>
 /// Standard settings-row container: title + optional description on the left, single content slot
