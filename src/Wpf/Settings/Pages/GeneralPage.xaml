@@ -1,0 +1,383 @@
+<UserControl
+    x:Class="BrightnessTrayAppWpf.Wpf.Settings.Pages.GeneralPage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:local="clr-namespace:BrightnessTrayAppWpf.Wpf"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    xmlns:pages="clr-namespace:BrightnessTrayAppWpf.Wpf.Settings.Pages"
+    xmlns:utils="clr-namespace:BrightnessTrayAppWpf.Wpf.Settings.Utils"
+    xmlns:utils1="clr-namespace:BrightnessTrayAppWpf.Wpf.Utils"
+    mc:Ignorable="d"
+    d:DesignWidth="660"
+    d:DesignHeight="594"
+    d:Background="#1F1F1F"
+    utils1:SettingsKeyboardNavigation.IsContentSection="True">
+    <StackPanel>
+        <TextBlock Style="{StaticResource SectionHeaderStyle}" Text="General"/>
+
+        <utils:SettingsCard x:Name="RunOnStartupCard"
+                               Title="Run on startup automatically"
+                               Description="Launch BrightnessTrayAppWpf when you sign in to Windows.">
+            <utils:SettingsCard.Control>
+                <CheckBox x:Name="RunOnStartupToggle"
+                          Style="{StaticResource ToggleSwitchStyle}"
+                          Checked="RunOnStartup_Changed"
+                          Unchecked="RunOnStartup_Changed"/>
+            </utils:SettingsCard.Control>
+        </utils:SettingsCard>
+
+        <utils:SettingsCard Title="Apply brightness when app opens"
+                               Description="Restore the last-saved brightness profile on launch.">
+            <utils:SettingsCard.Control>
+                <CheckBox x:Name="ApplyBrightnessOnStartupToggle"
+                          Style="{StaticResource ToggleSwitchStyle}"
+                          Tag="ApplyBrightnessOnStartup" Checked="BoolToggle_Changed"
+                          Unchecked="BoolToggle_Changed"/>
+            </utils:SettingsCard.Control>
+        </utils:SettingsCard>
+
+        <TextBlock Text="Installation"
+                   Style="{StaticResource SubsectionHeaderStyle}"/>
+
+        <Border Style="{StaticResource SettingsCardStyle}">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+                <StackPanel Style="{StaticResource SettingsCardTitlePanel}">
+                    <TextBlock Style="{StaticResource SettingTitleStyle}" Text="Local user"/>
+                    <TextBlock x:Name="InstallLocalAppDataStatusText"
+                               Style="{StaticResource SettingDescriptionStyle}"
+                               Text="..."/>
+                </StackPanel>
+                <StackPanel Grid.Column="1"
+                            Orientation="Horizontal"
+                            VerticalAlignment="Center">
+                    <Button x:Name="InstallLocalAppDataButton"
+                            Style="{StaticResource SettingsButtonStyle}"
+                            Content="Install"
+                            Padding="14,6"
+                            Margin="{StaticResource RightSpacerSmall}"
+                            Click="InstallLocalAppData_Click"/>
+                    <Button x:Name="UninstallLocalAppDataButton"
+                            Style="{StaticResource SettingsButtonStyle}"
+                            Content="Uninstall"
+                            Padding="14,6"
+                            Click="UninstallLocalAppData_Click"/>
+                </StackPanel>
+            </Grid>
+        </Border>
+
+        <Border Style="{StaticResource SettingsCardStyle}">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+                <StackPanel Style="{StaticResource SettingsCardTitlePanel}">
+                    <TextBlock Style="{StaticResource SettingTitleStyle}" Text="System wide"/>
+                    <TextBlock x:Name="InstallProgramFilesStatusText"
+                               Style="{StaticResource SettingDescriptionStyle}"
+                               Text="..."/>
+                </StackPanel>
+                <StackPanel Grid.Column="1"
+                            Orientation="Horizontal"
+                            VerticalAlignment="Center">
+                    <Button x:Name="InstallProgramFilesButton"
+                            Style="{StaticResource SettingsButtonStyle}"
+                            Content="Install"
+                            Padding="14,6"
+                            Margin="{StaticResource RightSpacerSmall}"
+                            Click="InstallProgramFiles_Click"/>
+                    <Button x:Name="UninstallProgramFilesButton"
+                            Style="{StaticResource SettingsButtonStyle}"
+                            Content="Uninstall"
+                            Padding="14,6"
+                            Click="UninstallProgramFiles_Click"/>
+                </StackPanel>
+            </Grid>
+        </Border>
+
+        <Border Style="{StaticResource SettingsCardStyle}">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+                <StackPanel Style="{StaticResource SettingsCardTitlePanel}">
+                    <TextBlock Style="{StaticResource SettingTitleStyle}" Text="Windows Store app bundle"/>
+                    <TextBlock x:Name="InstallStoreStatusText"
+                               Style="{StaticResource SettingDescriptionStyle}"
+                               Text="..."/>
+                </StackPanel>
+            </Grid>
+        </Border>
+
+        <TextBlock Text="Night Light"
+                   Style="{StaticResource SubsectionHeaderStyle}"/>
+
+        <utils:SettingsCard Title="Enable Night Light control"
+                               Description="Show the night light strength slider in the brightness flyout. When off, the slider row is hidden.">
+            <utils:SettingsCard.Control>
+                <CheckBox x:Name="ShowNightLightSliderToggle"
+                          Style="{StaticResource ToggleSwitchStyle}"
+                          Tag="ShowNightLightSlider" Checked="BoolToggle_Changed"
+                          Unchecked="BoolToggle_Changed"/>
+            </utils:SettingsCard.Control>
+        </utils:SettingsCard>
+
+        <utils:SettingsCard Title="Invert night light slider"
+                               Description="Reverse the night light slider so dragging left increases warmth and dragging right cools the screen.">
+            <utils:SettingsCard.Control>
+                <CheckBox x:Name="InvertNightLightSliderToggle"
+                          Style="{StaticResource ToggleSwitchStyle}"
+                          Tag="InvertNightLightSlider" Checked="BoolToggle_Changed"
+                          Unchecked="BoolToggle_Changed"/>
+            </utils:SettingsCard.Control>
+        </utils:SettingsCard>
+
+        <utils:SettingsCard Title="Turn off night light at zero strength"
+                               Description="When the night light slider hits 0, also disable night light. Toggling night light back on restores the last non-zero strength.">
+            <utils:SettingsCard.Control>
+                <CheckBox x:Name="TurnOffNightLightAtZeroStrengthToggle"
+                          Style="{StaticResource ToggleSwitchStyle}"
+                          Tag="TurnOffNightLightAtZeroStrength" Checked="BoolToggle_Changed"
+                          Unchecked="BoolToggle_Changed"/>
+            </utils:SettingsCard.Control>
+        </utils:SettingsCard>
+
+        <!-- Hidden gamma-ramp toggle:
+             the underlying backend implementation has been removed;
+             this card is left in the tree (collapsed) so the affordance can be revived
+             without re-authoring the XAML if the backend is ever reinstated.
+             Selecting this mode no-ops at runtime - the resolver falls through to Registry. -->
+        <utils:SettingsCard Title="Use gamma-ramp night light"
+                               Description="Drive night light by writing the GPU's gamma LUT directly instead of going through Windows Night Light. Survives locked-down profiles and stuck BlueLightReduction services. Doesn't work on HDR displays."
+                               Visibility="Collapsed">
+            <utils:SettingsCard.Control>
+                <CheckBox x:Name="GammaRampNightLightToggle"
+                          Style="{StaticResource ToggleSwitchStyle}"
+                          Checked="GammaRampNightLight_Changed"
+                          Unchecked="GammaRampNightLight_Changed"/>
+            </utils:SettingsCard.Control>
+        </utils:SettingsCard>
+
+        <!-- SettingsHandler night-light:
+             drive the slider through the same SetValue path the Windows Settings UI uses.
+             Internally this triggers BlueLightSingleton::SetTargetColorTemperature ->
+             SaveSettingsAsync -> CloudStore Save -> broker notification, which is the
+             only path that reliably refreshes BOTH the live filter AND the Settings UI's
+             cached slider position. -->
+        <utils:SettingsCard Title="Use Settings UI handler"
+                               Description="Route night-light writes through the same setting handler that the Windows Settings slider uses. Keeps the Settings UI's cached slider position in sync with what the flyout is showing. Recommended on builds where the BlueLightReduction service goes stale and the registry path stops being picked up.">
+            <utils:SettingsCard.Control>
+                <CheckBox x:Name="SettingsHandlerNightLightToggle"
+                          Style="{StaticResource ToggleSwitchStyle}"
+                          Checked="SettingsHandlerNightLight_Changed"
+                          Unchecked="SettingsHandlerNightLight_Changed"/>
+            </utils:SettingsCard.Control>
+        </utils:SettingsCard>
+
+        <!-- Force-pulse on strength change:
+             escape hatch for the 24H2/26200 BlueLightReduction regression where strength
+             writes sometimes don't take effect on the live filter until night light is
+             toggled off and back on. When enabled, every strength write is followed by an
+             off/on pulse - briefly visible as flicker, but guarantees the new strength
+             takes effect. Independent of the selected backend; off by default. -->
+        <utils:SettingsCard Title="Force-apply strength changes"
+                               Description="If sliding the night-light strength does nothing visible until you toggle night light off and back on, enable this. Each strength change is followed by a brief off/on pulse so Windows re-applies the new value. Adds a momentary flicker per change. Applies to whichever backend is selected.">
+            <utils:SettingsCard.Control>
+                <CheckBox x:Name="NightLightPulseOnStrengthChangeToggle"
+                          Style="{StaticResource ToggleSwitchStyle}"
+                          Tag="NightLightPulseOnStrengthChange" Checked="BoolToggle_Changed"
+                          Unchecked="BoolToggle_Changed"/>
+            </utils:SettingsCard.Control>
+        </utils:SettingsCard>
+
+        <!-- PDB symbol download timeout.
+             Only fires when the SettingsHandler backend hits an unknown SettingsHandlers_Display.dll
+             build (post-Windows-update) and has to fetch the matching PDB from the Microsoft public
+             symbol server. 60s is fine on a typical home connection; metered or high-latency links
+             may need more. -->
+        <utils:SettingsCard Title="Night Light symbol download timeout"
+                               Description="HTTP timeout the night-light fallback uses when downloading the SettingsHandlers_Display PDB from Microsoft's symbol server. Only matters after a Windows update changes the binary layout; raise this on slow or metered connections.">
+            <utils:SettingsCard.Control>
+                <local:NumericSpinner Style="{StaticResource DwellTimeSpinnerStyle}"
+                                      x:Name="NightLightPDBDownloadTimeoutBox"
+                                      Suffix="s"
+                                      Minimum="5" Maximum="600"/>
+            </utils:SettingsCard.Control>
+        </utils:SettingsCard>
+
+        <!-- Environmental curve tick interval.
+             Drives BrightnessFlyout.EvaluateCurves cadence.
+             Default 5s keeps twilight transitions feeling smooth;
+             users who want finer control over a fast-changing curve can drop it lower,
+             and users who want minimal background work can raise it. -->
+        <utils:SettingsCard Title="Environmental curve tick interval"
+                               Description="How often the brightness / night-light curves re-sample and apply. Lower = quicker reaction to fast-changing curves; higher = less background work. Identical values across ticks are filtered before any DDC write.">
+            <utils:SettingsCard.Control>
+                <local:NumericSpinner Style="{StaticResource DwellTimeSpinnerStyle}"
+                                      x:Name="EnvironmentalCurveTickIntervalBox"
+                                      Minimum="250" Maximum="60000"/>
+            </utils:SettingsCard.Control>
+        </utils:SettingsCard>
+
+        <TextBlock Text="Profiles"
+                   Style="{StaticResource SubsectionHeaderStyle}"/>
+
+        <!-- Two-column layout: rearrange card on the left, autosave card on the right. -->
+        <Grid>
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="*"/>
+            </Grid.ColumnDefinitions>
+
+            <!-- Outer 6px left margin sits on the UserControl while the inner Border keeps the
+                 SettingsCardStyle default 0,0,0,6 bottom margin, so net spacing matches the
+                 original card-direct 6,0,0,6 margin (6 left + 6 below). -->
+            <utils:SettingsCard Grid.Column="1"
+                                   VerticalAlignment="Top"
+                                   Margin="6,0,0,0"
+                                   Title="Auto-save"
+                                   Description="Automatically save to the selected profile whenever a monitor setting changes.">
+                <utils:SettingsCard.Control>
+                    <CheckBox x:Name="AutosaveToggle"
+                              Style="{StaticResource ToggleSwitchStyle}"
+                              Tag="Autosave" Checked="BoolToggle_Changed"
+                              Unchecked="BoolToggle_Changed"/>
+                </utils:SettingsCard.Control>
+            </utils:SettingsCard>
+
+            <Border Grid.Column="0"
+                    Style="{StaticResource SettingsCardStyle}"
+                    Margin="0,0,6,6">
+                <StackPanel>
+                    <TextBlock Text="Rearrange and rename profile data"
+                               Style="{StaticResource SettingTitleStyle}"
+                               FontWeight="SemiBold"/>
+                    <TextBlock Style="{StaticResource SettingDescriptionStyle}"
+                               Text="Drag the cards to reorder them, then Apply to swap the profiles' saved data between slots."
+                               Margin="0,4,0,12"/>
+
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+
+                        <!-- Fixed slot-number column.
+                             Heights/margins mirror the cards on the right
+                             so each number lines up with its slot. -->
+                        <ItemsControl Grid.Column="0" x:Name="ProfileSlotLabels">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <Border Width="20"
+                                            Height="{StaticResource DwellBoxHeight}"
+                                            Margin="0,0,12,8"
+                                            VerticalAlignment="Center">
+                                        <TextBlock Text="{Binding}"
+                                                   Foreground="{DynamicResource ThemeForeground}"
+                                                   FontSize="14"
+                                                   FontWeight="SemiBold"
+                                                   HorizontalAlignment="Center"
+                                                   VerticalAlignment="Center"/>
+                                    </Border>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+
+                        <!-- Draggable profile cards.
+                             Styled like a single-row SettingsTextBoxStyle
+                             (ThemeControlBackground, medium radius, 32 high).
+                             Double-click the name to rename. -->
+                        <ItemsControl Grid.Column="1" x:Name="ProfileSwapListPanel">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate DataType="{x:Type pages:ProfileSlotEntry}">
+                                    <Grid Margin="0,0,0,8"
+                                          d:DataContext="{d:DesignInstance Type=pages:ProfileSlotEntry}">
+                                        <Border x:Name="DragCardContent"
+                                                Background="{DynamicResource ThemeControlBackground}"
+                                                CornerRadius="{DynamicResource CornerRadiusMedium}"
+                                                Height="{StaticResource DwellBoxHeight}"
+                                                Padding="10,0"
+                                                Cursor="Hand"
+                                                Tag="{Binding Key}"
+                                                ToolTip="Drag or Ctrl+&#x2191;/&#x2193; to reorder; double-click or type to rename"
+                                                Focusable="True"
+                                                utils1:KeyboardFocusBehavior.ShowKeyboardFocus="True"
+                                                PreviewMouseLeftButtonDown="ProfileGripper_PreviewMouseLeftButtonDown"
+                                                PreviewMouseMove="ProfileGripper_PreviewMouseMove"
+                                                PreviewKeyDown="ProfileCard_PreviewKeyDown"
+                                                PreviewTextInput="ProfileCard_PreviewTextInput">
+                                            <Grid>
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="*"/>
+                                                    <ColumnDefinition Width="Auto"/>
+                                                </Grid.ColumnDefinitions>
+                                                <StackPanel Grid.Column="0"
+                                                            Orientation="Horizontal"
+                                                            VerticalAlignment="Center">
+                                                    <Grid>
+                                                        <TextBlock Text="{Binding Name}"
+                                                                   Foreground="{DynamicResource ThemeForeground}"
+                                                                   FontSize="14"
+                                                                   VerticalAlignment="Center"
+                                                                   IsHitTestVisible="False"
+                                                                   Visibility="{Binding IsNotEditing, Converter={StaticResource BoolToVisibility}}"/>
+                                                        <TextBox x:Name="ProfileNameEditBox"
+                                                                 Text="{Binding Name, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                                                 FontSize="14"
+                                                                 MinWidth="40"
+                                                                 VerticalAlignment="Center"
+                                                                 BorderThickness="0"
+                                                                 Background="Transparent"
+                                                                 Foreground="{DynamicResource ThemeForeground}"
+                                                                 Padding="0"
+                                                                 Cursor="IBeam"
+                                                                 Visibility="{Binding IsEditing, Converter={StaticResource BoolToVisibility}}"
+                                                                 KeyDown="ProfileNameEdit_KeyDown"
+                                                                 LostKeyboardFocus="ProfileNameEdit_LostKeyboardFocus"/>
+                                                    </Grid>
+                                                    <TextBlock Text="{Binding SlotSuffix}"
+                                                               Foreground="{DynamicResource ThemeForeground}"
+                                                               FontSize="14"
+                                                               VerticalAlignment="Center"
+                                                               IsHitTestVisible="False"/>
+                                                </StackPanel>
+                                                <TextBlock Grid.Column="1"
+                                                           Text="&#xE784;"
+                                                           FontFamily="Segoe Fluent Icons"
+                                                           FontSize="16"
+                                                           Foreground="{DynamicResource ThemeForeground}"
+                                                           Opacity="0.7"
+                                                           Margin="8,0,0,0"
+                                                           HorizontalAlignment="Center"
+                                                           VerticalAlignment="Center"
+                                                           IsHitTestVisible="False"/>
+                                            </Grid>
+                                        </Border>
+                                        <Rectangle x:Name="DragSlotCover"
+                                                   Fill="{DynamicResource ThemeCardBackground}"
+                                                   Visibility="Collapsed"
+                                                   IsHitTestVisible="False"/>
+                                    </Grid>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </Grid>
+
+                    <Button x:Name="ApplyProfileSwapsButton"
+                            Style="{StaticResource SettingsButtonStyle}"
+                            Content="Apply"
+                            HorizontalAlignment="Right"
+                            MinWidth="120"
+                            Margin="0,4,0,0"
+                            Click="ApplyProfileSwaps_Click"/>
+                </StackPanel>
+            </Border>
+        </Grid>
+    </StackPanel>
+</UserControl>

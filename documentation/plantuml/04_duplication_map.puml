@@ -1,0 +1,127 @@
+@startuml duplication_map
+!include dark-theme.puml
+title Duplication map - status of repeated code & parallel implementations
+
+legend top right
+  |= color |= meaning |
+  |<$TINT_RESOLVED>| RESOLVED |
+  |<$TINT_PARTIAL>| PARTIAL |
+  |<$TINT_OPEN>| OPEN |
+endlegend
+
+' ----- DUP-1: WM_DEVICECHANGE listeners merged -----
+package "DUP-1  WM_DEVICECHANGE listeners" $TINT_RESOLVED {
+  [DisplayEventManager\n(single owner)\nsrc/Services/DisplayEventManager.cs] as D1A
+  note bottom of D1A
+    One HWND owns the only DeviceNotification registration.
+    Fast path: DispatcherTimer 250 ms coalescer.
+    Slow path: System.Threading.Timer 1 s x 10 burst.
+    App.xaml.cs only consumes events; it does not register a sink.
+  end note
+}
+
+' ----- DUP-2: NumericSpinner is the single spinner control -----
+package "DUP-2  Numeric spinners" $TINT_RESOLVED {
+  [NumericSpinner.xaml.cs\n(single UserControl)] as D2X
+  [MonitorsPage / GeneralPage / FlyoutPage\ncall sites] as D2A
+  D2X -[#green]- D2A : single source
+}
+
+' ----- DUP-3: curve apply owned by EnvironmentalCurveService -----
+package "DUP-3  Curve application" $TINT_RESOLVED {
+  [EnvironmentalCurveService.ApplyCurveCore\nsrc/Services/EnvironmentalCurveService.cs] as D3A
+  [.ApplyBrightnessCurve / .ApplyNightLightCurve\n(thin wrappers around ApplyCurveCore)] as D3B
+  D3A -[#green]- D3B : single owner
+}
+
+' ----- DUP-4: WindowDragHelper owns drag/snap math -----
+package "DUP-4  Window-drag snap-zone math" $TINT_RESOLVED {
+  [WindowDragHelper.cs] as D4X
+  [BrightnessFlyout\nUndockButton + RootCard handlers] as D4A
+  D4X -[#green]- D4A : both handlers delegate\nBeginDrag / ComputeNatural /\nApplyDragPosition / IsCurrentlySnapped
+}
+
+' ----- DUP-5: DPI / icon helpers consolidated -----
+package "DUP-5  DPI + icon-conversion helpers" $TINT_RESOLVED {
+  [IconRenderingHelper\n.GetTaskbarDpi /\n.GetIconSizeForDpi /\n.BitmapToIcon] as D5X
+  [TrayIconRenderer\n+ NightLightIconRenderer] as D5C
+  D5X -[#green]- D5C : single source
+}
+
+' ----- DUP-6: GlyphCatalog is the single glyph source -----
+package "DUP-6  Glyph definitions" $TINT_RESOLVED {
+  [Visuals/GlyphCatalog.cs\n(canonical codepoints)] as D6X
+  [ThemeGlyphs (defaults from D6X,\nXML-overridable in ThemeSettings.xml)] as D6B
+  [TrayIconRenderer / NightLightIconRenderer\n(consume GlyphCatalog directly)] as D6C
+  D6X -[#green]- D6B
+  D6X -[#green]- D6C
+}
+
+' ----- DUP-7: theme palette vs brightness-aware dimming (orthogonal layers) -----
+package "DUP-7  Color resolution" $TINT_RESOLVED {
+  [AppTheme.ResolveForeground /\nResolveBackground\n(user override -> theme default)] as D7A
+  [TrayIconRenderer.ResolveForegroundColor\n(brightness-aware dimming\non top of theme default)] as D7B
+  D7A -[#green]- D7B : layered by design,\nnot a duplicate
+}
+
+' ----- DUP-8 OPEN: P/Invoke struct duplication -----
+package "DUP-8  P/Invoke structs" $TINT_OPEN {
+  [Interop/Shell32.cs\nRECT (Left/Top/Right/Bottom\n+ Contains helper)] as D8A
+  [DDCCI/Interop/User32Monitor.cs\nRect (left/top/right/bottom)] as D8B
+  D8A -[#red]- D8B : same layout,\ndiffers only in casing &\nthe Contains convenience.\nGammaRamp.cs has been removed,\nso DISPLAY_DEVICE is now\nsingle-sourced in User32Monitor.
+}
+
+' ----- DUP-9: tray-icon refresh single funnel -----
+package "DUP-9  Tray icon refresh" $TINT_RESOLVED {
+  [App.RequestTrayRefresh\n(single funnel)] as D9X
+  [TrayIconManager.Update\n(only invoked via D9X)] as D9Y
+  D9X -[#green]- D9Y : startup, theme, settings,\ntopology, brightness, scroll all\nflow through RequestTrayRefresh
+}
+
+' ----- DUP-10: timer inventory (by-design split) -----
+package "DUP-10  Timer inventory" $TINT_RESOLVED {
+  [DisplayEventManager._coalesce\n(DispatcherTimer, 250 ms)] as D10A
+  [DisplayEventManager._burstTimer\n(System.Threading.Timer, 1 s x 10)] as D10B
+  [EnvironmentalCurveService._curveTimer\n+ _curveEventThrottleTimer\n(both DispatcherTimer)] as D10C
+  [DDCRecoveryService._timer\n(System.Threading.Timer, retry tick)] as D10D
+  [NightLightRegistry._resendTimer\n(System.Threading.Timer, debounced resend)] as D10E
+  [DisplayIdentifierService._timer\n(DispatcherTimer, overlay auto-hide)] as D10F
+  [WpfLog._timer\n(System.Threading.Timer, async flush)] as D10G
+  [ShellNotifyIcon._taskbarRecreateTimer\n(DispatcherTimer)] as D10H
+  note bottom : Each timer owns a distinct domain.\nTrayIconManager itself is event-driven\n(no internal timer).
+}
+
+' ----- DUP-11 PARTIAL: hex color parsing (three slightly different copies) -----
+package "DUP-11  Hex color parsing / formatting" $TINT_PARTIAL {
+  [Visuals/AppTheme.cs\n.ParseHex / .ToHex\n(throws on bad input)] as D11A
+  [Models/AppSettings.cs\nThemeColorOverride.TryParse / .ToHex\n(returns nullable, swallows on error)] as D11B
+  [Wpf/TAWPFColorPicker.xaml.cs\n.TryParseHex (ARGB or RGBA order,\n3/4/6/8-char input)] as D11C
+  D11A -[#orange]- D11B : same 6/8-char branch,\ndifferent error policy
+  D11A -[#orange]- D11C : color-picker accepts\nshort forms the others reject
+  note bottom
+    Three call-site shapes (validating ctor,
+    nullable model getter, picker text input)
+    are real - but the 6/8-char Convert.ToByte
+    blocks are byte-for-byte parallel and
+    could share a primitive.
+  end note
+}
+
+' ----- DUP-12 PARTIAL: monitor-id prefix vocabulary -----
+package "DUP-12  Monitor-id prefix vocabulary" $TINT_PARTIAL {
+  [MonitorService.GetIdentityKey\n(produces edid: / port: / num:)] as D12A
+  [DisplayEventManager.ExtractHwid\n(strips port: prefix,\nsplits DISPLAY\\... / MONITOR\\...)] as D12B
+  [Models/Hotkey.cs HotkeyTarget\n(EdidPrefix const "edid:")] as D12C
+  [Services/ProfileManager.cs\n(EdidIdPrefix const "edid:",\nlegacy migration only)] as D12D
+  D12A -[#orange]- D12B : producer / consumer
+  D12C -[#orange]- D12D : same literal,\ntwo private const fields
+  note bottom
+    The "edid:" / "port:" / "num:" tokens
+    are produced in one place but each consumer
+    re-declares its own const string for the
+    prefix it cares about. Cheap to share via
+    a small MonitorIdPrefixes static.
+  end note
+}
+
+@enduml

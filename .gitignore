@@ -1,0 +1,6 @@
+.vs/
+bin/
+obj/
+
+# Visual Studio XAML designer regenerates these on every preview render.
+*_wpftmp.csproj

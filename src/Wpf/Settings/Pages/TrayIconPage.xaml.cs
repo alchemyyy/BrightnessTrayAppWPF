@@ -1,0 +1,114 @@
+using System.Windows;
+using System.Windows.Controls;
+using BrightnessTrayAppWpf.Models;
+using BrightnessTrayAppWpf.Wpf.Settings.Utils;
+using ComboBox = System.Windows.Controls.ComboBox;
+using UserControl = System.Windows.Controls.UserControl;
+
+namespace BrightnessTrayAppWpf.Wpf.Settings.Pages;
+
+/// <summary>
+/// Tray-icon settings page. Owns its UI, handlers, and the click-action combo seeding.
+/// Instantiated by the shell's XAML; the shell calls <see cref="LoadFromSettings"/> after construction
+/// to inject AppSettings and seed control values. Routes generic Tag-based mutations through
+/// <see cref="SettingsBindings"/> so other pages share the same dispatch tables.
+/// </summary>
+public partial class TrayIconPage : UserControl
+{
+    private static readonly (string Tag, string Display)[] TrayClickActionOptions =
+    [
+        ("Nothing", "Nothing"),
+        ("TurnOffAllDisplays", "All displays OFF"),
+        ("TurnOnAllDisplays", "All displays ON"),
+        ("FullBright", "Full bright"),
+        ("FullDim", "Full dim")
+    ];
+
+    private AppSettings? _settings;
+    private bool _suppressChangeEvents;
+
+    public TrayIconPage()
+    {
+        InitializeComponent();
+        PopulateClickActionCombos();
+    }
+
+    /// <summary>
+    /// Injects the AppSettings instance and seeds every control's value from it.
+    /// The shell calls this from its own LoadFromSettings;
+    /// subsequent calls re-seed the page (used when settings are reloaded externally).
+    /// </summary>
+    public void LoadFromSettings(AppSettings settings)
+    {
+        _settings = settings;
+        _suppressChangeEvents = true;
+        try
+        {
+            TrayScrollEnableToggle.IsChecked = settings.TrayScrollEnabled;
+            ShowProfileSelectorsToggle.IsChecked = settings.ShowProfileSelectorsInMenu;
+            ShowMonitorPowerToggle.IsChecked = settings.ShowMonitorPowerButtons;
+            ShowAllDisplaysPowerToggle.IsChecked = settings.ShowAllDisplaysPowerButton;
+
+            SettingsBindings.SelectComboByTag(ContextMenuPositionCombo, settings.ContextMenuPosition.ToString());
+            SettingsBindings.SelectComboByTag(TrayWheelActionCombo, settings.TrayWheelAction.ToString());
+            SettingsBindings.SelectComboByTag(TrayCtrlWheelActionCombo, settings.TrayCtrlWheelAction.ToString());
+            SettingsBindings.SelectComboByTag(TrayAltWheelActionCombo, settings.TrayAltWheelAction.ToString());
+            SettingsBindings.SelectComboByTag(TrayDoubleClickActionCombo, settings.TrayDoubleClickAction.ToString());
+            SettingsBindings.SelectComboByTag(
+                TrayCtrlLeftClickActionCombo, settings.TrayCtrlLeftClickAction.ToString());
+            SettingsBindings.SelectComboByTag(TrayAltLeftClickActionCombo, settings.TrayAltLeftClickAction.ToString());
+            SettingsBindings.SelectComboByTag(
+                TrayCtrlRightClickActionCombo, settings.TrayCtrlRightClickAction.ToString());
+            SettingsBindings.SelectComboByTag(
+                TrayAltRightClickActionCombo, settings.TrayAltRightClickAction.ToString());
+            SettingsBindings.SelectComboByTag(
+                TrayCtrlDoubleLeftClickActionCombo, settings.TrayCtrlDoubleLeftClickAction.ToString());
+            SettingsBindings.SelectComboByTag(
+                TrayAltDoubleLeftClickActionCombo, settings.TrayAltDoubleLeftClickAction.ToString());
+        }
+        finally
+        {
+            _suppressChangeEvents = false;
+        }
+    }
+
+    private void PopulateClickActionCombos()
+    {
+        ComboBox[] combos =
+        [
+            TrayDoubleClickActionCombo,
+            TrayCtrlLeftClickActionCombo,
+            TrayAltLeftClickActionCombo,
+            TrayCtrlRightClickActionCombo,
+            TrayAltRightClickActionCombo,
+            TrayCtrlDoubleLeftClickActionCombo,
+            TrayAltDoubleLeftClickActionCombo
+        ];
+
+        foreach (ComboBox combo in combos)
+        {
+            foreach ((string tag, string display) in TrayClickActionOptions)
+                combo.Items.Add(new ComboBoxItem { Tag = tag, Content = display });
+        }
+    }
+
+    private void BoolToggle_Changed(object sender, RoutedEventArgs e)
+    {
+        if (_settings == null) return;
+        SettingsBindings.HandleBoolToggle(sender, _settings, SaveAndNotify, () => _suppressChangeEvents);
+    }
+
+    private void EnumCombo_Changed(object sender, SelectionChangedEventArgs e)
+    {
+        if (_settings == null) return;
+        SettingsBindings.HandleEnumCombo(
+            sender, _settings, SaveAndNotify, () => _suppressChangeEvents, this);
+    }
+
+    private void SaveAndNotify()
+    {
+        if (_settings == null) return;
+        _settings.Save();
+        _settings.RaiseChanged();
+    }
+}

@@ -1,0 +1,1188 @@
+<Window
+    x:Class="BrightnessTrayAppWpf.Wpf.BrightnessFlyout"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:models="clr-namespace:BrightnessTrayAppWpf.Models"
+    xmlns:local="clr-namespace:BrightnessTrayAppWpf"
+    xmlns:utils="clr-namespace:BrightnessTrayAppWpf.Wpf.Utils"
+    utils:KeyboardFocusBehavior.EnableKeyboardOnlyFocus="True"
+    utils:KeyboardFocusBehavior.FocusStyle="{StaticResource KeyboardFocusVisualStyle}"
+    Title="Brightness"
+    Width="330"
+    SizeToContent="Height"
+    WindowStyle="None"
+    AllowsTransparency="True"
+    Background="Transparent"
+    ResizeMode="NoResize"
+    ShowInTaskbar="False"
+    Topmost="True"
+    PreviewKeyDown="Window_PreviewKeyDown">
+
+    <Window.Resources>
+        <!-- Boolean to Opacity Converter -->
+        <BooleanToVisibilityConverter x:Key="BoolToVisibility"/>
+
+        <!-- Profile-preview helpers -->
+        <utils:SliderPreviewXConverter x:Key="SliderPreviewXConverter"/>
+        <utils:SliderTrackPercentConverter x:Key="SliderTrackPercentConverter"/>
+
+        <!-- Night-light kelvin label converter -->
+        <utils:NightLightKelvinLabelConverter x:Key="NightLightKelvinLabel"/>
+
+        <!-- Night-light slider icon mask.
+             Bitmap source is assigned in code-behind so the brush stays themed via DynamicResource on the Rectangle Fill.
+             Defined at Window scope so the DataTemplate's nightlight row can resolve it. -->
+        <ImageBrush x:Key="NightLightSliderIconBrush" Stretch="Uniform"/>
+
+        <!-- Monitor Icon Toggle Button Style -->
+        <Style x:Key="MonitorIconToggleStyle" TargetType="Button">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Width" Value="32"/>
+            <Setter Property="Height" Value="32"/>
+            <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
+            <Setter Property="utils:KeyboardFocusBehavior.ShowKeyboardFocus" Value="True"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="ButtonBorder"
+                                Background="{TemplateBinding Background}"
+                                CornerRadius="{DynamicResource CornerRadiusMedium}">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="ButtonBorder" Property="Background" Value="{DynamicResource ThemeButtonHover}"/>
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="ButtonBorder" Property="Background" Value="{DynamicResource ThemeButtonPressed}"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- Slider Thumb Style.
+             Outer Grid carries the curve-controlled opacity dim:
+             absolute mode + the row's curve enabled + not in disabled period dims to 0.4
+             so the user sees the thumb is "view-only" while the curve drives the value.
+             Released individuals (touched in absolute mode) un-dim until re-engaged. -->
+        <Style x:Key="SliderThumbStyle" TargetType="Thumb">
+            <Setter Property="Focusable" Value="False"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Thumb">
+                        <Grid>
+                            <Grid.Style>
+                                <Style TargetType="Grid">
+                                    <Setter Property="Opacity" Value="1.0"/>
+                                    <Style.Triggers>
+                                        <!-- Single trigger collapses the previous master / nightlight / individual chain.
+                                             SliderState == CurveActive already encodes "curve engaged for THIS row's
+                                             curve column AND not in the disabled period AND not Released / Disabled / Failed",
+                                             which is exactly what the old MultiDataTrigger computed. The absolute-mode
+                                             condition stays separate because offset-mode lets the user own the slider's
+                                             value (the curve stacks on top), so we don't dim the thumb in that mode.
+                                             The transitions for sleep enter/exit and release/re-engage all flow through
+                                             SliderState now, so XAML doesn't need to subscribe to multiple booleans. -->
+                                        <MultiDataTrigger>
+                                            <MultiDataTrigger.Conditions>
+                                                <Condition Binding="{Binding SliderState}" Value="{x:Static models:SliderState.CurveActive}"/>
+                                                <Condition Binding="{Binding IsCurveAbsoluteMode, RelativeSource={RelativeSource AncestorType=Window}}" Value="True"/>
+                                            </MultiDataTrigger.Conditions>
+                                            <Setter Property="Opacity" Value="0.4"/>
+                                        </MultiDataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </Grid.Style>
+                            <TextBlock Text="{DynamicResource SliderThumbGlyph}"
+                                       FontFamily="{DynamicResource SliderThumbGlyphFont}"
+                                       FontSize="{DynamicResource SliderThumbGlyphSize}"
+                                       Width="{DynamicResource SliderThumbGlyphWidth}"
+                                       Height="{DynamicResource SliderThumbGlyphHeight}"
+                                       Foreground="{DynamicResource ThemeSliderThumb}"
+                                       TextAlignment="Center"
+                                       VerticalAlignment="Center"
+                                       HorizontalAlignment="Center"
+                                       Visibility="{DynamicResource SliderThumbGlyphVisibility}">
+                                <TextBlock.LayoutTransform>
+                                    <ScaleTransform ScaleX="{DynamicResource SliderThumbGlyphScaleX}" ScaleY="1"/>
+                                </TextBlock.LayoutTransform>
+                            </TextBlock>
+                            <Border Width="{DynamicResource SliderThumbGlyphWidth}"
+                                    Height="{DynamicResource SliderThumbGlyphHeight}"
+                                    CornerRadius="{DynamicResource CornerRadiusCapsule}"
+                                    Background="{DynamicResource ThemeSliderThumb}"
+                                    HorizontalAlignment="Center"
+                                    VerticalAlignment="Center"
+                                    Visibility="{DynamicResource SliderThumbCapsuleVisibility}"/>
+                        </Grid>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- Slider Decrease Button Style (progress/filled portion).
+             In CurveActive the natural fill is hidden; PART_CurveFill below paints the bar to
+             CurveTargetBrightness instead, so the visible fill tracks what the curve is actually
+             writing to hardware rather than the slider thumb's manual value. Other states keep the
+             thumb-driven natural fill (smooth during user drag, since it's bound to Slider.Value
+             internally rather than MonitorInfo.Brightness's integer-gated PropertyChanged). -->
+        <Style x:Key="SliderDecreaseButtonStyle" TargetType="RepeatButton">
+            <Setter Property="Background" Value="{DynamicResource ThemeSliderProgress}"/>
+            <Setter Property="Focusable" Value="False"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="RepeatButton">
+                        <Border Background="{TemplateBinding Background}" Height="4" CornerRadius="{DynamicResource CornerRadiusSmall}"/>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding SliderState}" Value="{x:Static models:SliderState.CurveActive}">
+                    <Setter Property="Background" Value="Transparent"/>
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
+
+        <!-- Slider Increase Button Style (unfilled portion) -->
+        <Style x:Key="SliderIncreaseButtonStyle" TargetType="RepeatButton">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="Focusable" Value="False"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="RepeatButton">
+                        <Border Background="{TemplateBinding Background}" Height="4" CornerRadius="{DynamicResource CornerRadiusSmall}"/>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- Base Brightness Slider Style -->
+        <Style x:Key="BaseBrightnessSliderStyle" TargetType="Slider">
+            <Setter Property="Minimum" Value="0"/>
+            <Setter Property="Maximum" Value="100"/>
+            <Setter Property="IsSnapToTickEnabled" Value="False"/>
+            <Setter Property="IsMoveToPointEnabled" Value="False"/>
+            <Setter Property="LargeChange" Value="0.1"/>
+            <Setter Property="SmallChange" Value="0.1"/>
+            <Setter Property="Margin" Value="0"/>
+            <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
+            <Setter Property="utils:KeyboardFocusBehavior.ShowKeyboardFocus" Value="True"/>
+        </Style>
+
+        <!-- Horizontal Slider Style (Twinkle Tray style) -->
+        <Style x:Key="BrightnessSliderStyle" TargetType="Slider" BasedOn="{StaticResource BaseBrightnessSliderStyle}">
+            <Setter Property="Height" Value="24"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Slider">
+                        <Grid>
+                            <!-- Invisible expanded hit area -->
+                            <Rectangle Fill="Transparent" Height="24"/>
+                            <!-- Visual track background (4px high, centered, rounded) -->
+                            <Border x:Name="TrackBackground"
+                                    Height="4"
+                                    Background="{DynamicResource ThemeSliderTrack}"
+                                    CornerRadius="{DynamicResource CornerRadiusSmall}"
+                                    VerticalAlignment="Center"
+                                    IsHitTestVisible="False"/>
+                            <!-- Curve-driven fill bar.
+                                 Renders the progress/filled portion at CurveTargetBrightness instead of
+                                 the slider thumb's manual position whenever the curve is actually writing
+                                 hardware (SliderState == CurveActive). Width = percent * trackWidth (via
+                                 SliderTrackPercentConverter with no offset), so the fill ends exactly at
+                                 the curve indicator dot's center — no gap at high values like the previous
+                                 thumb-aligned (sliderWidth - 18) math left behind once the dot was un-padded.
+                                 Layered between TrackBackground and Track so it paints over the gray track
+                                 but the thumb glyph (inside Track) still renders on top. The Decrease
+                                 button's background is set to Transparent in CurveActive (see
+                                 SliderDecreaseButtonStyle) so the only visible fill is this one — no
+                                 double-fill at low slider values. -->
+                            <Border x:Name="PART_CurveFill"
+                                    Height="4"
+                                    Background="{DynamicResource ThemeSliderProgress}"
+                                    CornerRadius="{DynamicResource CornerRadiusSmall}"
+                                    HorizontalAlignment="Left"
+                                    VerticalAlignment="Center"
+                                    IsHitTestVisible="False">
+                                <Border.Width>
+                                    <MultiBinding Converter="{StaticResource SliderTrackPercentConverter}">
+                                        <Binding Path="CurveTargetBrightness"/>
+                                        <Binding Path="ActualWidth" RelativeSource="{RelativeSource TemplatedParent}"/>
+                                    </MultiBinding>
+                                </Border.Width>
+                                <Border.Style>
+                                    <Style TargetType="Border">
+                                        <Setter Property="Visibility" Value="Collapsed"/>
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding SliderState}" Value="{x:Static models:SliderState.CurveActive}">
+                                                <Setter Property="Visibility" Value="Visible"/>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </Border.Style>
+                            </Border>
+                            <!-- Actual track -->
+                            <Track x:Name="PART_Track" VerticalAlignment="Center">
+                                <Track.DecreaseRepeatButton>
+                                    <RepeatButton Style="{StaticResource SliderDecreaseButtonStyle}"/>
+                                </Track.DecreaseRepeatButton>
+                                <Track.Thumb>
+                                    <Thumb Style="{StaticResource SliderThumbStyle}"/>
+                                </Track.Thumb>
+                                <Track.IncreaseRepeatButton>
+                                    <RepeatButton Style="{StaticResource SliderIncreaseButtonStyle}"/>
+                                </Track.IncreaseRepeatButton>
+                            </Track>
+                            <!-- Profile preview ghost thumb.
+                                 DataContext is inherited from the Slider (which is MonitorInfo in the row DataTemplate). -->
+                            <Grid x:Name="PART_PreviewThumb"
+                                  Opacity="0.33"
+                                  HorizontalAlignment="Left"
+                                  VerticalAlignment="Center"
+                                  IsHitTestVisible="False"
+                                  Visibility="{Binding ShowPreview, Converter={StaticResource BoolToVisibility}, FallbackValue=Collapsed}">
+                                <Grid.RenderTransform>
+                                    <TranslateTransform>
+                                        <TranslateTransform.X>
+                                            <MultiBinding Converter="{StaticResource SliderPreviewXConverter}">
+                                                <Binding Path="PreviewBrightness"/>
+                                                <Binding Path="ActualWidth" RelativeSource="{RelativeSource TemplatedParent}"/>
+                                            </MultiBinding>
+                                        </TranslateTransform.X>
+                                    </TranslateTransform>
+                                </Grid.RenderTransform>
+                                <TextBlock Text="{DynamicResource SliderThumbGlyph}"
+                                           FontFamily="{DynamicResource SliderThumbGlyphFont}"
+                                           FontSize="{DynamicResource SliderThumbGlyphSize}"
+                                           Width="{DynamicResource SliderThumbGlyphWidth}"
+                                           Height="{DynamicResource SliderThumbGlyphHeight}"
+                                           Foreground="{DynamicResource ThemeSliderThumb}"
+                                           TextAlignment="Center"
+                                           VerticalAlignment="Center"
+                                           HorizontalAlignment="Center"
+                                           Visibility="{DynamicResource SliderThumbGlyphVisibility}">
+                                    <TextBlock.LayoutTransform>
+                                        <ScaleTransform ScaleX="{DynamicResource SliderThumbGlyphScaleX}" ScaleY="1"/>
+                                    </TextBlock.LayoutTransform>
+                                </TextBlock>
+                                <Border Width="{DynamicResource SliderThumbGlyphWidth}"
+                                        Height="{DynamicResource SliderThumbGlyphHeight}"
+                                        CornerRadius="{DynamicResource CornerRadiusCapsule}"
+                                        Background="{DynamicResource ThemeSliderThumb}"
+                                        HorizontalAlignment="Center"
+                                        VerticalAlignment="Center"
+                                        Visibility="{DynamicResource SliderThumbCapsuleVisibility}"/>
+                            </Grid>
+                            <!-- Curve target indicator.
+                                 Small glyph sitting at the curve's current target value on the slider's 0-100 range.
+                                 Two independent triggers gate Visibility (default Collapsed):
+                                 the brightness curve drives the indicator on master + every individual row,
+                                 and the night-light curve drives the indicator on the night-light row.
+                                 Both require a row that's actually curve-driven (HasCurveTarget=true)
+                                 and that the disabled period isn't passing through.
+                                 Released individuals (HasCurveTarget=false) drop out by that route alone.
+                                 Width=18 keeps the inner glyph centered inside its container; X translation comes
+                                 from SliderTrackPercentConverter with ConverterParameter=-9, so the Grid's left edge
+                                 sits at percent * trackWidth - 9 and the glyph's center lands on the percentage point
+                                 along the visible bar — letting the dot reach both ends. The primary thumb keeps
+                                 SliderPreviewXConverter's 9-DIP edge padding because its visual fills the full 18
+                                 DIPs; the curve dot's visual is much smaller and shouldn't be limited the same way. -->
+                            <Grid x:Name="PART_CurveIndicator"
+                                  Width="18"
+                                  HorizontalAlignment="Left"
+                                  VerticalAlignment="Center"
+                                  IsHitTestVisible="False">
+                                <Grid.RenderTransform>
+                                    <TranslateTransform>
+                                        <TranslateTransform.X>
+                                            <MultiBinding Converter="{StaticResource SliderTrackPercentConverter}"
+                                                          ConverterParameter="-9">
+                                                <Binding Path="CurveTargetBrightness"/>
+                                                <Binding Path="ActualWidth" RelativeSource="{RelativeSource TemplatedParent}"/>
+                                            </MultiBinding>
+                                        </TranslateTransform.X>
+                                    </TranslateTransform>
+                                </Grid.RenderTransform>
+                                <Grid.Style>
+                                    <Style TargetType="Grid">
+                                        <Setter Property="Visibility" Value="Collapsed"/>
+                                        <Style.Triggers>
+                                            <!-- IsCurveDriven covers both CurveActive and CurveSleeping, so the
+                                                 indicator dot stays visible through a disabled-period window
+                                                 (just dimmed via the inner TextBlock's Opacity trigger). It hides
+                                                 itself for CurveReleased / Disabled / Failed / Enabled rows.
+                                                 Per-row state (master vs night-light) already encodes which curve
+                                                 column drives this row, so the previous IsBrightnessCurveEnabled /
+                                                 IsNightLightCurveEnabled split is redundant and was dropped. -->
+                                            <DataTrigger Binding="{Binding IsCurveDriven}" Value="True">
+                                                <Setter Property="Visibility" Value="Visible"/>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </Grid.Style>
+                                <!-- FontSize 12 lands a Segoe MDL2 glyph at ~8 DIPs visible height,
+                                     2 DIPs taller than the 4-DIP slider track and large enough to read at a glance.
+                                     The user-spec "+2 points" sized literally would have produced a glyph
+                                     below WPF's effective rendering threshold; this is the smallest size that reliably renders. -->
+                                <TextBlock Text="&#xEA3B;"
+                                           FontFamily="Segoe MDL2 Assets"
+                                           FontSize="12"
+                                           TextAlignment="Center"
+                                           VerticalAlignment="Center"
+                                           HorizontalAlignment="Center">
+                                    <TextBlock.Style>
+                                        <Style TargetType="TextBlock">
+                                            <Setter Property="Foreground" Value="{DynamicResource EnvironmentalBrightnessCurveBrush}"/>
+                                            <Setter Property="Opacity" Value="1.0"/>
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding IsNightLight}" Value="True">
+                                                    <Setter Property="Foreground" Value="{DynamicResource EnvironmentalNightLightCurveBrush}"/>
+                                                </DataTrigger>
+                                                <!-- Disabled-period: the dot stays visible but reads as inactive at
+                                                     reduced opacity. Per-row IsCurveSleeping is true exactly when
+                                                     the row's curve is engaged AND the window is currently passing
+                                                     through, which is what we want to dim - dropping the previous
+                                                     window-level binding lets a row that's not curve-driven (e.g.
+                                                     master in offset mode while individual is released) keep its
+                                                     own opacity unaffected by the global flag. -->
+                                                <DataTrigger Binding="{Binding IsCurveSleeping}" Value="True">
+                                                    <Setter Property="Opacity" Value="0.4"/>
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </TextBlock.Style>
+                                </TextBlock>
+                            </Grid>
+                        </Grid>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- Power Button Style.
+             Padding is template-bound so individual buttons can grow their hit area without redefining the template. -->
+        <Style x:Key="PowerButtonStyle" TargetType="Button">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Padding" Value="10,4"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
+            <Setter Property="utils:KeyboardFocusBehavior.ShowKeyboardFocus" Value="True"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border Background="{TemplateBinding Background}"
+                                CornerRadius="{DynamicResource CornerRadiusMedium}"
+                                Padding="{TemplateBinding Padding}">
+                            <ContentPresenter/>
+                        </Border>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+            <Style.Triggers>
+                <Trigger Property="IsMouseOver" Value="True">
+                    <Setter Property="Background" Value="{DynamicResource ThemePressed}"/>
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+
+        <!-- Header Icon Button Style.
+             Small (24x24) variant for the top-right undock/redock button.
+             Same hover treatment as the footer buttons so the affordance reads as part of the same family. -->
+        <Style x:Key="HeaderIconButtonStyle" TargetType="Button">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Width" Value="40"/>
+            <Setter Property="Height" Value="32"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
+            <Setter Property="utils:KeyboardFocusBehavior.ShowKeyboardFocus" Value="True"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border Background="{TemplateBinding Background}"
+                                CornerRadius="{DynamicResource CornerRadiusMedium}">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+            <Style.Triggers>
+                <Trigger Property="IsMouseOver" Value="True">
+                    <Setter Property="Background" Value="{DynamicResource ThemePressed}"/>
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+
+        <!-- Footer Icon Button Style -->
+        <Style x:Key="FooterIconButtonStyle" TargetType="Button">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Width" Value="40"/>
+            <Setter Property="Height" Value="40"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
+            <Setter Property="utils:KeyboardFocusBehavior.ShowKeyboardFocus" Value="True"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border Background="{TemplateBinding Background}"
+                                CornerRadius="{DynamicResource CornerRadiusMedium}">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+            <Style.Triggers>
+                <Trigger Property="IsMouseOver" Value="True">
+                    <Setter Property="Background" Value="{DynamicResource ThemePressed}"/>
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+
+        <!-- Profile Button Style (narrower width, same height as Footer Icon Button) -->
+        <Style x:Key="ProfileButtonStyle" TargetType="Button">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Width" Value="32"/>
+            <Setter Property="Height" Value="40"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
+            <Setter Property="utils:KeyboardFocusBehavior.ShowKeyboardFocus" Value="True"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border Background="{TemplateBinding Background}"
+                                CornerRadius="{DynamicResource CornerRadiusMedium}">
+                            <ContentPresenter HorizontalAlignment="Stretch" VerticalAlignment="Stretch"/>
+                        </Border>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+            <Style.Triggers>
+                <Trigger Property="IsMouseOver" Value="True">
+                    <Setter Property="Background" Value="{DynamicResource ThemePressed}"/>
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+    </Window.Resources>
+
+    <!-- Main Container with Shadow.
+         RootCard's MouseLeftButton handlers drive drag-to-move when the flyout is undocked.
+         Bubbled events from interactive children (sliders, buttons) are handled before reaching here,
+         so only clicks on the empty card surface initiate a drag. -->
+    <Border x:Name="RootCard"
+            Background="{DynamicResource ThemeBackground}"
+            CornerRadius="{DynamicResource CornerRadiusFlyout}"
+            BorderBrush="{DynamicResource ThemeBorder}"
+            BorderThickness="1"
+            Padding="16,16,12,8"
+            MouseLeftButtonDown="RootCard_MouseLeftButtonDown"
+            MouseMove="RootCard_MouseMove"
+            MouseLeftButtonUp="RootCard_MouseLeftButtonUp">
+        <Border.Effect>
+            <DropShadowEffect BlurRadius="30" ShadowDepth="4" Opacity="0.6" Direction="270"/>
+        </Border.Effect>
+
+        <Grid>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
+            </Grid.RowDefinitions>
+
+            <!-- Monitor List.
+                 Individual monitors, the master "All Displays" row,
+                 and the nightlight pseudo-row all share the same DataTemplate
+                 so per-row spacing and styling stay defined in one place. -->
+            <ItemsControl Grid.Row="0" x:Name="MonitorList" ItemsSource="{Binding AllItems}">
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate DataType="{x:Type models:MonitorInfo}">
+                        <Grid Background="Transparent" PreviewMouseWheel="MonitorGrid_PreviewMouseWheel" Tag="{Binding}">
+                            <Grid.Style>
+                                <Style TargetType="Grid">
+                                    <Setter Property="Opacity" Value="1.0"/>
+                                    <Setter Property="Margin" Value="0,0,0,12"/>
+                                    <Setter Property="Visibility" Value="Visible"/>
+                                    <Style.Triggers>
+                                        <!-- Disabled (user excluded from master) and Failed (DDC unreachable) both
+                                             dim the row to 0.4. Two separate triggers since they have different
+                                             semantics for the warning glyph / tooltip elsewhere, but visually they
+                                             share the dim treatment. -->
+                                        <DataTrigger Binding="{Binding IsDisabled}" Value="True">
+                                            <Setter Property="Opacity" Value="0.4"/>
+                                        </DataTrigger>
+                                        <DataTrigger Binding="{Binding IsFailed}" Value="True">
+                                            <Setter Property="Opacity" Value="0.4"/>
+                                        </DataTrigger>
+                                        <!-- Preview enablement flip.
+                                             Show a middle-ground visibility (~70%) so the row reads as "light-ish grey"
+                                             — darker than enabled, lighter than disabled — regardless of current state.
+                                             Declared after the dim triggers so it wins when both apply. -->
+                                        <DataTrigger Binding="{Binding PreviewEnablementDiffers}" Value="True">
+                                            <Setter Property="Opacity" Value="0.7"/>
+                                        </DataTrigger>
+                                        <!-- NightLight row dims when night light is currently off,
+                                             mirroring how monitor rows dim when their slider is disabled. -->
+                                        <MultiDataTrigger>
+                                            <MultiDataTrigger.Conditions>
+                                                <Condition Binding="{Binding IsNightLight}" Value="True"/>
+                                                <Condition Binding="{Binding IsNightLightActive, RelativeSource={RelativeSource AncestorType=Window}}" Value="False"/>
+                                            </MultiDataTrigger.Conditions>
+                                            <Setter Property="Opacity" Value="0.4"/>
+                                        </MultiDataTrigger>
+                                        <!-- Hide master row when ShowMasterSlider is off. -->
+                                        <MultiDataTrigger>
+                                            <MultiDataTrigger.Conditions>
+                                                <Condition Binding="{Binding IsMaster}" Value="True"/>
+                                                <Condition Binding="{Binding ShowMasterSlider, RelativeSource={RelativeSource AncestorType=Window}}" Value="False"/>
+                                            </MultiDataTrigger.Conditions>
+                                            <Setter Property="Visibility" Value="Collapsed"/>
+                                            <Setter Property="Margin" Value="0"/>
+                                        </MultiDataTrigger>
+                                        <!-- Hide individual monitor rows when ShowIndividualSliders is off.
+                                             Excludes the master and night-light rows; those have their own visibility settings. -->
+                                        <MultiDataTrigger>
+                                            <MultiDataTrigger.Conditions>
+                                                <Condition Binding="{Binding IsMaster}" Value="False"/>
+                                                <Condition Binding="{Binding IsNightLight}" Value="False"/>
+                                                <Condition Binding="{Binding ShowIndividualSliders, RelativeSource={RelativeSource AncestorType=Window}}" Value="False"/>
+                                            </MultiDataTrigger.Conditions>
+                                            <Setter Property="Visibility" Value="Collapsed"/>
+                                            <Setter Property="Margin" Value="0"/>
+                                        </MultiDataTrigger>
+                                        <!-- Hide nightlight row when the slider isn't currently visible.
+                                             Visibility is driven solely by the ShowNightLightSlider setting.
+                                             The footer button toggles it alongside the night-light state,
+                                             while the row's icon-toggle only flips state. -->
+                                        <MultiDataTrigger>
+                                            <MultiDataTrigger.Conditions>
+                                                <Condition Binding="{Binding IsNightLight}" Value="True"/>
+                                                <Condition Binding="{Binding IsNightLightSliderVisible, RelativeSource={RelativeSource AncestorType=Window}}" Value="False"/>
+                                            </MultiDataTrigger.Conditions>
+                                            <Setter Property="Visibility" Value="Collapsed"/>
+                                            <Setter Property="Margin" Value="0"/>
+                                        </MultiDataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </Grid.Style>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/>
+                            </Grid.RowDefinitions>
+
+                            <!-- Monitor Icon Toggle Button.
+                                 Individual rows: toggles group membership (master-affectability).
+                                 Or — when the row is in the DDC-failed warning state (!IsDDCCISupported && WasEverDDCCapable) —
+                                 retries DDC and surfaces the failure reason via the tooltip.
+                                 Master row: force-syncs every individual monitor's brightness to the master slider's current value. -->
+                            <Button Grid.Row="0" Grid.Column="0"
+                                    Click="MonitorIconToggle_Click"
+                                    Tag="{Binding}"
+                                    Margin="0,0,8,0"
+                                    ToolTipService.ShowDuration="{x:Static local:TimeConstants.HardPowerOffTooltipShowDurationMs}">
+                                <Button.Style>
+                                    <Style TargetType="Button" BasedOn="{StaticResource MonitorIconToggleStyle}">
+                                        <Setter Property="ToolTip" Value="Toggle control by All Displays"/>
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding IsMaster}" Value="True">
+                                                <Setter Property="ToolTip" Value="Sync all displays to master brightness&#x0A;Ctrl+click: sync all displays to the brightest individual"/>
+                                            </DataTrigger>
+                                            <DataTrigger Binding="{Binding IsNightLight}" Value="True">
+                                                <Setter Property="ToolTip" Value="Toggle night light"/>
+                                            </DataTrigger>
+                                            <!-- Warning state.
+                                                 Monitor was DDC-capable before but currently isn't responding.
+                                                 Click retries DDC. -->
+                                            <MultiDataTrigger>
+                                                <MultiDataTrigger.Conditions>
+                                                    <Condition Binding="{Binding IsFailed}" Value="True"/>
+                                                    <Condition Binding="{Binding WasEverDDCCapable}" Value="True"/>
+                                                </MultiDataTrigger.Conditions>
+                                                <Setter Property="ToolTip">
+                                                    <Setter.Value>
+                                                        <Binding Path="LastDDCError"
+                                                                 StringFormat="DDC/CI unavailable: {0}&#x0A;Click to retry."
+                                                                 TargetNullValue="DDC/CI unavailable. Click to retry."
+                                                                 FallbackValue="DDC/CI unavailable. Click to retry."/>
+                                                    </Setter.Value>
+                                                </Setter>
+                                            </MultiDataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </Button.Style>
+                                <Grid>
+                                    <TextBlock FontFamily="Segoe Fluent Icons"
+                                               FontWeight="Black"
+                                               RenderOptions.BitmapScalingMode="HighQuality"
+                                               TextOptions.TextFormattingMode="Ideal"
+                                               TextOptions.TextRenderingMode="Grayscale">
+                                        <TextBlock.Style>
+                                            <Style TargetType="TextBlock">
+                                                <Setter Property="Foreground" Value="{DynamicResource ThemeIconForeground}"/>
+                                                <Setter Property="FontSize" Value="20"/>
+                                                <Setter Property="Text" Value="{Binding IconGlyph}"/>
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding IsMaster}" Value="True">
+                                                        <Setter Property="FontSize" Value="21"/>
+                                                    </DataTrigger>
+                                                    <!-- DDC/CI unreachable.
+                                                         Swap to the "alert" glyph so the row reads as broken at a glance,
+                                                         alongside the dim overlay. -->
+                                                    <DataTrigger Binding="{Binding IsFailed}" Value="True">
+                                                        <Setter Property="Text" Value="&#xE7BA;"/>
+                                                    </DataTrigger>
+                                                    <!-- NightLight row uses a rendered bitmap mask rather than a glyph.
+                                                         Hide the glyph so the Rectangle below shows. -->
+                                                    <DataTrigger Binding="{Binding IsNightLight}" Value="True">
+                                                        <Setter Property="Visibility" Value="Collapsed"/>
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </TextBlock.Style>
+                                    </TextBlock>
+                                    <!-- NightLight icon.
+                                         Themed Rectangle with the rendered bulb-bitmap used as an OpacityMask.
+                                         Visibility flips on for the nightlight row only. -->
+                                    <Rectangle Width="22" Height="22"
+                                               Fill="{DynamicResource ThemeIconForeground}"
+                                               OpacityMask="{StaticResource NightLightSliderIconBrush}">
+                                        <Rectangle.Style>
+                                            <Style TargetType="Rectangle">
+                                                <Setter Property="Visibility" Value="Collapsed"/>
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding IsNightLight}" Value="True">
+                                                        <Setter Property="Visibility" Value="Visible"/>
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </Rectangle.Style>
+                                    </Rectangle>
+                                    <!-- Display-number badge drawn inside the monitor glyph's "screen" area.
+                                         Uses the same icon foreground as the glyph so it reads as part of the icon rather than punched-out.
+                                         Hidden on the master row, when DDC/CI failed (icon swaps to a warning glyph),
+                                         and when the display number couldn't be resolved. -->
+                                    <TextBlock Text="{Binding DisplayNumber}"
+                                               FontFamily="Segoe UI"
+                                               FontWeight="Bold"
+                                               FontSize="10"
+                                               Foreground="{DynamicResource ThemeIconForeground}"
+                                               TextOptions.TextFormattingMode="Display"
+                                               TextOptions.TextRenderingMode="Aliased"
+                                               HorizontalAlignment="Center"
+                                               VerticalAlignment="Center"
+                                               Margin="0,-3,0,0"
+                                               IsHitTestVisible="False">
+                                        <TextBlock.Style>
+                                            <Style TargetType="TextBlock">
+                                                <Setter Property="Visibility" Value="Visible"/>
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding ShowFlyoutMonitorNumberBadge, RelativeSource={RelativeSource AncestorType=Window}}" Value="False">
+                                                        <Setter Property="Visibility" Value="Collapsed"/>
+                                                    </DataTrigger>
+                                                    <DataTrigger Binding="{Binding IsMaster}" Value="True">
+                                                        <Setter Property="Visibility" Value="Collapsed"/>
+                                                    </DataTrigger>
+                                                    <DataTrigger Binding="{Binding IsFailed}" Value="True">
+                                                        <Setter Property="Visibility" Value="Collapsed"/>
+                                                    </DataTrigger>
+                                                    <DataTrigger Binding="{Binding DisplayNumber}" Value="0">
+                                                        <Setter Property="Visibility" Value="Collapsed"/>
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </TextBlock.Style>
+                                    </TextBlock>
+                                </Grid>
+                            </Button>
+
+                            <!-- Row label.
+                                 Trailing Kelvin TextBlock is only visible on the nightlight row when ShowNightLightKelvinLabel is on. -->
+                            <StackPanel Grid.Row="0" Grid.Column="1"
+                                        Orientation="Horizontal"
+                                        VerticalAlignment="Center">
+                                <TextBlock Text="{Binding Name}"
+                                           FontSize="15"
+                                           Foreground="{DynamicResource ThemeForeground}"/>
+                                <TextBlock FontSize="15"
+                                           Foreground="{DynamicResource ThemeForeground}">
+                                    <TextBlock.Text>
+                                        <MultiBinding Converter="{StaticResource NightLightKelvinLabel}">
+                                            <Binding Path="RoundedBrightness"/>
+                                            <Binding Path="InvertNightLightSlider" RelativeSource="{RelativeSource AncestorType=Window}"/>
+                                        </MultiBinding>
+                                    </TextBlock.Text>
+                                    <TextBlock.Style>
+                                        <Style TargetType="TextBlock">
+                                            <Setter Property="Visibility" Value="Collapsed"/>
+                                            <Style.Triggers>
+                                                <MultiDataTrigger>
+                                                    <MultiDataTrigger.Conditions>
+                                                        <Condition Binding="{Binding IsNightLight}" Value="True"/>
+                                                        <Condition Binding="{Binding ShowNightLightKelvinLabel, RelativeSource={RelativeSource AncestorType=Window}}" Value="True"/>
+                                                    </MultiDataTrigger.Conditions>
+                                                    <Setter Property="Visibility" Value="Visible"/>
+                                                </MultiDataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </TextBlock.Style>
+                                </TextBlock>
+                            </StackPanel>
+
+                            <!-- Power Button.
+                                 Hidden on master row — master icon-toggle is the group power button. -->
+                            <Button Grid.Row="0" Grid.Column="2"
+                                    Click="PowerButton_Click"
+                                    Tag="{Binding}"
+                                    VerticalAlignment="Center"
+                                    Margin="0,0,50,0">
+                                <Button.Style>
+                                    <Style TargetType="Button" BasedOn="{StaticResource PowerButtonStyle}">
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding IsMaster}" Value="True">
+                                                <Setter Property="Visibility" Value="Collapsed"/>
+                                            </DataTrigger>
+                                            <DataTrigger Binding="{Binding ShowFlyoutMonitorPowerButtons, RelativeSource={RelativeSource AncestorType=Window}}" Value="False">
+                                                <Setter Property="Visibility" Value="Collapsed"/>
+                                            </DataTrigger>
+                                            <!-- Power control is a VCP write too; hide when hardware can't be reached. -->
+                                            <DataTrigger Binding="{Binding IsHardwareFunctional}" Value="False">
+                                                <Setter Property="Visibility" Value="Collapsed"/>
+                                            </DataTrigger>
+                                            <DataTrigger Binding="{Binding IsNightLight}" Value="True">
+                                                <Setter Property="Visibility" Value="Collapsed"/>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </Button.Style>
+                                <TextBlock Text="{DynamicResource GlyphPower}"
+                                           FontFamily="Segoe MDL2 Assets"
+                                           FontSize="20"
+                                           Foreground="{DynamicResource ThemeIconForeground}"
+                                           VerticalAlignment="Center"/>
+                            </Button>
+
+                            <!-- Master / night-light curve toggle button.
+                                 Shares the per-row power slot but is a distinct control:
+                                 the master row's instance toggles the brightness curve,
+                                 the nightlight row's instance toggles the night-light curve.
+                                 Click routes through CurveToggle_Click which dispatches by row type.
+                                 Glyph opacity tracks whichever curve flag this row owns (full when its curve is on, dimmed when off).
+                                 Padding overrides PowerButtonStyle's default to grow the hit area to match the larger glyph. -->
+                            <Button Grid.Row="0" Grid.Column="2"
+                                    Click="CurveToggle_Click"
+                                    Tag="{Binding}"
+                                    VerticalAlignment="Center"
+                                    Margin="0,-4,47,0"
+                                    Padding="8,0">
+                                <Button.Style>
+                                    <Style TargetType="Button" BasedOn="{StaticResource PowerButtonStyle}">
+                                        <Setter Property="Visibility" Value="Collapsed"/>
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding IsMaster}" Value="True">
+                                                <Setter Property="Visibility" Value="Visible"/>
+                                                <Setter Property="ToolTip" Value="Toggle brightness curve"/>
+                                            </DataTrigger>
+                                            <DataTrigger Binding="{Binding IsNightLight}" Value="True">
+                                                <Setter Property="Visibility" Value="Visible"/>
+                                                <Setter Property="ToolTip" Value="Toggle night light curve"/>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </Button.Style>
+                                <TextBlock FontFamily="Segoe MDL2 Assets"
+                                           FontSize="28"
+                                           Foreground="{DynamicResource ThemeIconForeground}"
+                                           VerticalAlignment="Center">
+                                    <TextBlock.Style>
+                                        <Style TargetType="TextBlock">
+                                            <!-- Default Text lives in a Setter (not a local attribute) so the
+                                                 disabled-period DataTrigger below can override it. WPF property
+                                                 precedence: local value beats style triggers, so a local Text=
+                                                 attribute would have shadowed the trigger's Text setter. -->
+                                            <Setter Property="Text" Value="&#xED3A;"/>
+                                            <Setter Property="Opacity" Value="0.4"/>
+                                            <Style.Triggers>
+                                                <!-- Master row: lit when the brightness curve is engaged. -->
+                                                <MultiDataTrigger>
+                                                    <MultiDataTrigger.Conditions>
+                                                        <Condition Binding="{Binding IsMaster}" Value="True"/>
+                                                        <Condition Binding="{Binding IsBrightnessCurveEnabled, RelativeSource={RelativeSource AncestorType=Window}}" Value="True"/>
+                                                    </MultiDataTrigger.Conditions>
+                                                    <Setter Property="Opacity" Value="1.0"/>
+                                                </MultiDataTrigger>
+                                                <!-- NightLight row: lit when the night-light curve is engaged. -->
+                                                <MultiDataTrigger>
+                                                    <MultiDataTrigger.Conditions>
+                                                        <Condition Binding="{Binding IsNightLight}" Value="True"/>
+                                                        <Condition Binding="{Binding IsNightLightCurveEnabled, RelativeSource={RelativeSource AncestorType=Window}}" Value="True"/>
+                                                    </MultiDataTrigger.Conditions>
+                                                    <Setter Property="Opacity" Value="1.0"/>
+                                                </MultiDataTrigger>
+                                                <!-- Disabled-period: swap to crescent moon. Default to dim opacity so the
+                                                     glyph reads as informational ("the period is passing through")
+                                                     when nothing is actually being suppressed, e.g. the user has the
+                                                     row's curve toggled off. Active-suppression triggers below bump
+                                                     opacity back to 1.0 only when this row's curve is actually engaged
+                                                     and being held back by the period. Triggers apply in declaration
+                                                     order with last-wins for the same property. -->
+                                                <DataTrigger Binding="{Binding IsInCurveDisabledPeriod, RelativeSource={RelativeSource AncestorType=Window}}" Value="True">
+                                                    <Setter Property="Text" Value="{DynamicResource GlyphCurveDisabledPeriod}"/>
+                                                    <Setter Property="Opacity" Value="0.4"/>
+                                                </DataTrigger>
+                                                <MultiDataTrigger>
+                                                    <MultiDataTrigger.Conditions>
+                                                        <Condition Binding="{Binding IsMaster}" Value="True"/>
+                                                        <Condition Binding="{Binding IsBrightnessCurveEnabled, RelativeSource={RelativeSource AncestorType=Window}}" Value="True"/>
+                                                        <Condition Binding="{Binding IsInCurveDisabledPeriod, RelativeSource={RelativeSource AncestorType=Window}}" Value="True"/>
+                                                    </MultiDataTrigger.Conditions>
+                                                    <Setter Property="Opacity" Value="1.0"/>
+                                                </MultiDataTrigger>
+                                                <MultiDataTrigger>
+                                                    <MultiDataTrigger.Conditions>
+                                                        <Condition Binding="{Binding IsNightLight}" Value="True"/>
+                                                        <Condition Binding="{Binding IsNightLightCurveEnabled, RelativeSource={RelativeSource AncestorType=Window}}" Value="True"/>
+                                                        <Condition Binding="{Binding IsInCurveDisabledPeriod, RelativeSource={RelativeSource AncestorType=Window}}" Value="True"/>
+                                                    </MultiDataTrigger.Conditions>
+                                                    <Setter Property="Opacity" Value="1.0"/>
+                                                </MultiDataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </TextBlock.Style>
+                                </TextBlock>
+                            </Button>
+
+                            <!-- Brightness Slider Row.
+                                 IsEnabled tracks IsParticipatingInMaster so both Failed (hardware unreachable)
+                                 and Disabled (user-excluded from group) lock the slider entirely - drag, keyboard,
+                                 and the row's wheel handler all gate on the same flag. -->
+                            <Grid Grid.Row="1" Grid.Column="0" Grid.ColumnSpan="3">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+
+                                <Slider Grid.Column="0"
+                                        Style="{StaticResource BrightnessSliderStyle}"
+                                        Value="{Binding Brightness, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                        IsEnabled="{Binding IsParticipatingInMaster}"
+                                        ValueChanged="BrightnessSlider_ValueChanged"
+                                        PreviewMouseLeftButtonDown="Slider_PreviewMouseLeftButtonDown"
+                                        PreviewMouseLeftButtonUp="Slider_PreviewMouseLeftButtonUp"
+                                        PreviewMouseMove="Slider_PreviewMouseMove"
+                                        MouseLeave="Slider_MouseLeave"
+                                        PreviewKeyDown="Slider_PreviewKeyDown"
+                                        Tag="{Binding}"/>
+
+                                <!-- Value label: shows the actual current brightness applied to the hardware,
+                                     not the slider thumb's position.
+                                     EffectiveRoundedBrightness returns CurveTargetBrightness rounded
+                                     when the curve is driving this row, otherwise RoundedBrightness
+                                     — so when curve mode is engaged the number tracks the curve-driven hardware value
+                                     (where the indicator glyph sits) instead of lying about what the bus is doing. -->
+                                <TextBlock Grid.Column="1"
+                                           Text="{Binding EffectiveRoundedBrightness}"
+                                           FontSize="20"
+                                           FontWeight="Normal"
+                                           Foreground="{DynamicResource ThemeForeground}"
+                                           VerticalAlignment="Center"
+                                           Margin="8,-4,0,0"
+                                           MinWidth="32"
+                                           TextAlignment="Right"/>
+                            </Grid>
+                        </Grid>
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+
+            <!-- Footer -->
+            <Border Grid.Row="1" Background="{DynamicResource ThemeFooterBackground}" CornerRadius="{DynamicResource CornerRadiusFooterBottom}" Margin="-16,0,-12,-8">
+                <Border.Style>
+                    <Style TargetType="Border">
+                        <Setter Property="Padding" Value="12,12,12,8"/>
+                        <Style.Triggers>
+                            <!-- Tighten horizontal padding only when every footer button is on screen.
+                                 EnvironmentalCurves + FooterPower + DisplaySettings + the always-shown Settings button (4 right-side buttons),
+                                 plus the manual-save button on the left (visible when Autosave is off).
+                                 Triggering earlier crowds the layout when there's still slack to spare. -->
+                            <MultiDataTrigger>
+                                <MultiDataTrigger.Conditions>
+                                    <Condition Binding="{Binding ShowEnvironmentalCurvesButton, RelativeSource={RelativeSource AncestorType=Window}}" Value="True"/>
+                                    <Condition Binding="{Binding ShowFlyoutFooterPowerButton, RelativeSource={RelativeSource AncestorType=Window}}" Value="True"/>
+                                    <Condition Binding="{Binding ShowFlyoutDisplaySettingsButton, RelativeSource={RelativeSource AncestorType=Window}}" Value="True"/>
+                                    <Condition Binding="{Binding IsManualSaveButtonVisible, RelativeSource={RelativeSource AncestorType=Window}}" Value="True"/>
+                                </MultiDataTrigger.Conditions>
+                                <Setter Property="Padding" Value="4,12,4,8"/>
+                            </MultiDataTrigger>
+                        </Style.Triggers>
+                    </Style>
+                </Border.Style>
+                <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+
+                <!-- Profile Buttons (Left side).
+                     Items come from BrightnessFlyout.ProfileButtons (built once in BuildProfileButtonItems);
+                     the save button is a sibling element so its visibility / dirty-state opacity stay independent
+                     of the per-profile DataTemplate. -->
+                <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
+                    <ItemsControl ItemsSource="{Binding ProfileButtons, RelativeSource={RelativeSource AncestorType=Window}}">
+                        <ItemsControl.ItemsPanel>
+                            <ItemsPanelTemplate>
+                                <StackPanel Orientation="Horizontal"/>
+                            </ItemsPanelTemplate>
+                        </ItemsControl.ItemsPanel>
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <Button Style="{StaticResource ProfileButtonStyle}"
+                                        Click="ProfileButton_Click"
+                                        MouseEnter="ProfileButton_PreviewEnter"
+                                        MouseLeave="ProfileButton_PreviewLeave"
+                                        GotKeyboardFocus="ProfileButton_PreviewEnter"
+                                        LostKeyboardFocus="ProfileButton_PreviewLeave"
+                                        ToolTip="Switch to This Profile">
+                                    <Grid>
+                                        <TextBlock Text="{Binding Glyph}"
+                                                   FontFamily="Segoe UI"
+                                                   FontSize="16"
+                                                   FontWeight="Bold"
+                                                   Foreground="{DynamicResource ThemeIconForeground}"
+                                                   HorizontalAlignment="Center"
+                                                   VerticalAlignment="Center"/>
+                                        <Border Background="{DynamicResource ThemeForeground}"
+                                                Height="2"
+                                                Width="16"
+                                                HorizontalAlignment="Center"
+                                                VerticalAlignment="Bottom"
+                                                Margin="0,0,0,4"
+                                                CornerRadius="1">
+                                            <Border.Style>
+                                                <Style TargetType="Border">
+                                                    <Setter Property="Visibility" Value="Collapsed"/>
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding IsSelected}" Value="True">
+                                                            <Setter Property="Visibility" Value="Visible"/>
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </Border.Style>
+                                        </Border>
+                                    </Grid>
+                                </Button>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+
+                    <!-- Save button. Lives outside the ItemsControl because its chrome is distinct:
+                         visibility tracks the autosave setting (IsManualSaveButtonVisible) and
+                         the glyph opacity tracks dirty state (HasUnsavedChanges) via a DataTrigger. -->
+                    <Button Style="{StaticResource ProfileButtonStyle}"
+                            Click="SaveProfileButton_Click"
+                            ToolTip="Save to Selected Profile"
+                            Visibility="{Binding IsManualSaveButtonVisible, Converter={StaticResource BoolToVisibility}, RelativeSource={RelativeSource AncestorType=Window}}">
+                        <Grid>
+                            <TextBlock FontFamily="Segoe Fluent Icons"
+                                       FontSize="16"
+                                       Foreground="{DynamicResource ThemeIconForeground}"
+                                       HorizontalAlignment="Center"
+                                       VerticalAlignment="Center"
+                                       Text="{Binding GlyphProfileSave, RelativeSource={RelativeSource AncestorType=Window}}">
+                                <TextBlock.Style>
+                                    <Style TargetType="TextBlock">
+                                        <Setter Property="Opacity" Value="0.4"/>
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding HasUnsavedChanges, RelativeSource={RelativeSource AncestorType=Window}}" Value="True">
+                                                <Setter Property="Opacity" Value="1.0"/>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </TextBlock.Style>
+                            </TextBlock>
+                            <!-- Hidden glyph kept for layout parity with profile buttons (matches the legacy spacer). -->
+                            <TextBlock FontFamily="Segoe Fluent Icons"
+                                       FontSize="12"
+                                       Foreground="{DynamicResource ThemeForeground}"
+                                       HorizontalAlignment="Center"
+                                       VerticalAlignment="Top"
+                                       Visibility="Hidden"
+                                       Text="{Binding GlyphProfileIndicator, RelativeSource={RelativeSource AncestorType=Window}}"/>
+                        </Grid>
+                    </Button>
+                </StackPanel>
+
+                <!-- Footer Action Buttons (Right side) -->
+                <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
+                    <!-- Environmental Curves Toggle.
+                         Lit when either the brightness curve or the night-light curve is engaged (OR);
+                         a press flips both flags to the same target: any-on -> both off, all-off -> both on.
+                         Glyph matches the per-row curve toggles (Equalizer ED3A). -->
+                    <Button Style="{StaticResource FooterIconButtonStyle}"
+                            Click="EnvironmentalCurvesToggle_Click"
+                            ToolTip="Toggle environmental curves"
+                            Visibility="{Binding ShowEnvironmentalCurvesButton, Converter={StaticResource BoolToVisibility}, RelativeSource={RelativeSource AncestorType=Window}}">
+                        <TextBlock Text="&#xED3A;"
+                                   FontFamily="Segoe MDL2 Assets"
+                                   FontSize="23"
+                                   Foreground="{DynamicResource ThemeIconForeground}">
+                            <TextBlock.Style>
+                                <Style TargetType="TextBlock">
+                                    <!-- Footer button stays the equalizer glyph through every state; it does not
+                                         swap to the disabled-period crescent like the per-row toggles do. Opacity
+                                         is 1.0 whenever any curve is engaged, 0.4 otherwise — and that holds
+                                         through a disabled-period window too, so the footer reads as "curves are
+                                         on" continuously instead of dimming when sleep passes through. -->
+                                    <Setter Property="Opacity" Value="0.4"/>
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding IsBrightnessCurveEnabled, RelativeSource={RelativeSource AncestorType=Window}}" Value="True">
+                                            <Setter Property="Opacity" Value="1.0"/>
+                                        </DataTrigger>
+                                        <DataTrigger Binding="{Binding IsNightLightCurveEnabled, RelativeSource={RelativeSource AncestorType=Window}}" Value="True">
+                                            <Setter Property="Opacity" Value="1.0"/>
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </TextBlock.Style>
+                        </TextBlock>
+                    </Button>
+
+                    <!-- Footer Power Button (dummy) -->
+                    <Button Click="FooterPowerButton_Click"
+                            ToolTip="Power"
+                            Visibility="{Binding ShowFlyoutFooterPowerButton, Converter={StaticResource BoolToVisibility}}">
+                        <Button.Style>
+                            <Style TargetType="Button" BasedOn="{StaticResource FooterIconButtonStyle}"/>
+                        </Button.Style>
+                        <TextBlock Text="{DynamicResource GlyphPower}"
+                                   FontFamily="Segoe MDL2 Assets"
+                                   FontSize="16"
+                                   Foreground="{DynamicResource ThemeIconForeground}"/>
+                    </Button>
+
+                    <!-- Display Settings Button -->
+                    <Button Click="DisplaySettingsButton_Click"
+                            ToolTip="Display settings"
+                            Visibility="{Binding ShowFlyoutDisplaySettingsButton, Converter={StaticResource BoolToVisibility}}">
+                        <Button.Style>
+                            <Style TargetType="Button" BasedOn="{StaticResource FooterIconButtonStyle}"/>
+                        </Button.Style>
+                        <TextBlock Text="{DynamicResource GlyphDisplaySettings}"
+                                   FontFamily="Segoe Fluent Icons"
+                                   FontSize="18"
+                                   Foreground="{DynamicResource ThemeIconForeground}"/>
+                    </Button>
+
+                    <!-- Settings Button -->
+                    <Button Style="{StaticResource FooterIconButtonStyle}"
+                            Click="SettingsButton_Click"
+                            ToolTip="Settings">
+                        <TextBlock Text="{DynamicResource GlyphSettings}"
+                                   FontFamily="Segoe Fluent Icons"
+                                   FontSize="18"
+                                   Foreground="{DynamicResource ThemeIconForeground}"/>
+                    </Button>
+                </StackPanel>
+                </Grid>
+            </Border>
+
+            <!-- One-shot confirmation overlay for the warning-triangle hard power-off.
+                 Spans both rows so it covers slider list + footer.
+                 Negative margin extends the dim layer through RootCard's padding to the rounded edge;
+                 matching CornerRadius keeps the dim from leaking past it.
+                 Visibility flipped from MonitorIconToggle_Click; persisted acknowledgement lives on
+                 AppSettings.HasAcknowledgedHardPowerOffWarning so the prompt only shows once per user. -->
+            <Border x:Name="HardPowerOffConfirmOverlay"
+                    Grid.Row="0" Grid.RowSpan="2"
+                    Panel.ZIndex="100"
+                    Visibility="Collapsed"
+                    Background="{DynamicResource FlyoutOverlayBackdropBrush}"
+                    CornerRadius="{DynamicResource CornerRadiusFlyout}"
+                    Margin="-16,-16,-12,-8">
+                <Border Background="{DynamicResource ThemeBackground}"
+                        BorderBrush="{DynamicResource ThemeBorder}"
+                        BorderThickness="1"
+                        CornerRadius="{DynamicResource CornerRadiusMedium}"
+                        Padding="16"
+                        HorizontalAlignment="Center"
+                        VerticalAlignment="Center"
+                        MinWidth="260"
+                        MaxWidth="290">
+                    <StackPanel>
+                        <TextBlock Text="Warning, this action will power off the selected display. This warning will not show again."
+                                   Foreground="{DynamicResource ThemeForeground}"
+                                   TextWrapping="Wrap"
+                                   FontSize="13"
+                                   Margin="0,0,0,12"/>
+                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                            <Button x:Name="HardPowerOffAbortButton"
+                                    Style="{StaticResource SettingsButtonStyle}"
+                                    Content="Abort"
+                                    Margin="0,0,8,0"
+                                    Click="HardPowerOffAbort_Click"/>
+                            <Button x:Name="HardPowerOffConfirmButton"
+                                    Style="{StaticResource SettingsButtonStyle}"
+                                    Content="Confirm"
+                                    Click="HardPowerOffConfirm_Click"/>
+                        </StackPanel>
+                    </StackPanel>
+                </Border>
+            </Border>
+
+            <!-- Floating overlay layer for the undock/redock button.
+                 Sits in row 0 as a sibling of the slider list, declared after it so it paints on top.
+                 The slider list is always taller than the button, so Auto-row sizing is driven entirely by the list
+                 — flipping this button's Visibility never reflows the rest of the flyout.
+                 The negative top margin lifts the button into the Border's top padding so it visually sits in the corner.
+                 The negative right margin nudges it past the inner Grid edge toward the Border edge.
+                 Click toggles dock state.
+                 Press-and-drag undocks (forgetting any saved position) and follows the cursor until released.
+                 Snap-back to the docked corner is handled in code-behind. -->
+            <Button x:Name="UndockButton"
+                    Grid.Row="0"
+                    Panel.ZIndex="1"
+                    HorizontalAlignment="Right"
+                    VerticalAlignment="Top"
+                    Margin="0,-10,-5,0"
+                    Click="UndockButton_Click"
+                    PreviewMouseLeftButtonDown="UndockButton_PreviewMouseLeftButtonDown"
+                    PreviewMouseMove="UndockButton_PreviewMouseMove"
+                    PreviewMouseLeftButtonUp="UndockButton_PreviewMouseLeftButtonUp"
+                    Visibility="{Binding AllowFlyoutUndock, Converter={StaticResource BoolToVisibility}}">
+                <Button.Style>
+                    <Style TargetType="Button" BasedOn="{StaticResource HeaderIconButtonStyle}">
+                        <Setter Property="ToolTip" Value="Undock"/>
+                        <Style.Triggers>
+                            <DataTrigger Binding="{Binding IsUndocked, RelativeSource={RelativeSource AncestorType=Window}}" Value="True">
+                                <Setter Property="ToolTip" Value="Redock"/>
+                            </DataTrigger>
+                        </Style.Triggers>
+                    </Style>
+                </Button.Style>
+                <TextBlock FontFamily="Segoe Fluent Icons"
+                           FontSize="20"
+                           Foreground="{DynamicResource ThemeIconForeground}">
+                    <TextBlock.Style>
+                        <Style TargetType="TextBlock">
+                            <Setter Property="Text" Value="&#xE75B;"/>
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding IsUndocked, RelativeSource={RelativeSource AncestorType=Window}}" Value="True">
+                                    <Setter Property="Text" Value="&#xE75A;"/>
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </TextBlock.Style>
+                </TextBlock>
+            </Button>
+        </Grid>
+    </Border>
+</Window>

@@ -1,0 +1,564 @@
+<UserControl
+    x:Class="BrightnessTrayAppWpf.Wpf.Settings.Pages.EnvironmentalPage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    xmlns:environmentalPageAddons="clr-namespace:BrightnessTrayAppWpf.Wpf.Settings.Pages.EnvironmentalPageAddons"
+    xmlns:utils="clr-namespace:BrightnessTrayAppWpf.Wpf.Utils"
+    mc:Ignorable="d"
+    d:DesignWidth="660"
+    d:DesignHeight="594"
+    d:Background="#1F1F1F"
+    utils:SettingsKeyboardNavigation.IsContentSection="True">
+    <StackPanel>
+        <TextBlock Style="{StaticResource SectionHeaderStyle}" Text="Environmental"/>
+
+        <TextBlock Style="{StaticResource SettingDescriptionStyle}"
+                   Margin="0,0,0,4"
+                   Text="Drive brightness and night-light from the local sun position. Curves are stored per profile; geo coordinates are global."/>
+
+        <!-- Curve editor:
+             24h cycle on the X axis (midnight to midnight), normalised value on the Y.
+             Visibility per series is driven by the toggles below. -->
+        <environmentalPageAddons:CurveEditor x:Name="CurveEditor"
+                           Height="270"
+                           Margin="0,0,0,8"/>
+
+        <!-- Two-column layout:
+             curve-visibility toggles + profile selector on the left
+             (sized to the inline Profile label + 140px combo),
+             geo-location card on the right (greedy width). -->
+        <Grid>
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="*"/>
+            </Grid.ColumnDefinitions>
+
+            <StackPanel Grid.Column="0"
+                        Margin="0,0,0,0"
+                        VerticalAlignment="Top">
+                <!-- Curve legend: lives at the top of the toggle column
+                     so it sits directly under the graph,
+                     sharing horizontal space with the show-curve toggles beneath it.
+                     Item visibility tracks each curve's show toggle,
+                     and the whole strip collapses when neither curve is on. -->
+                <StackPanel x:Name="LegendPanel"
+                            Orientation="Horizontal"
+                            Margin="0,0,0,8">
+                    <StackPanel x:Name="BrightnessLegendItem"
+                                Orientation="Horizontal"
+                                Margin="0,0,6,0">
+                        <Border Width="14" Height="3"
+                                Background="{DynamicResource EnvironmentalBrightnessCurveBrush}"
+                                CornerRadius="1.5"
+                                VerticalAlignment="Center"
+                                Margin="0,0,2,0"/>
+                        <TextBlock Text="Brightness"
+                                   FontSize="11"
+                                   VerticalAlignment="Center"
+                                   Foreground="{DynamicResource ThemeForeground}"/>
+                    </StackPanel>
+                    <StackPanel x:Name="NightLightLegendItem"
+                                Orientation="Horizontal"
+                                Margin="{StaticResource RightSpacerSmall}">
+                        <Border Width="14" Height="3"
+                                Background="{DynamicResource EnvironmentalNightLightCurveBrush}"
+                                CornerRadius="1.5"
+                                VerticalAlignment="Center"
+                                Margin="0,0,2,0"/>
+                        <TextBlock Text="Night Light"
+                                   FontSize="11"
+                                   VerticalAlignment="Center"
+                                   Foreground="{DynamicResource ThemeForeground}"/>
+                    </StackPanel>
+                    <StackPanel x:Name="CurrentTimeLegendItem"
+                                Orientation="Horizontal">
+                        <!-- Vertical bar swatch matches the dashed vertical line drawn on the plot.
+                             Stays visible regardless of the curve toggles
+                             since the line itself is unconditional. -->
+                        <Border Width="2" Height="14"
+                                Background="{DynamicResource EnvironmentalCurrentTimeBrush}"
+                                CornerRadius="1"
+                                VerticalAlignment="Center"
+                                Margin="0,0,2,0"/>
+                        <TextBlock Text="Time Now"
+                                   FontSize="11"
+                                   VerticalAlignment="Center"
+                                   Foreground="{DynamicResource ThemeForeground}"/>
+                    </StackPanel>
+                </StackPanel>
+
+
+                <!-- Title sits inline to the left of the combo
+                     so the row claims less vertical space.
+                     Combo shrinks by the title's footprint (label + 8px gutter)
+                     so the overall row width stays ~200px. -->
+                <StackPanel Orientation="Horizontal"
+                            Margin="0,0,0,0">
+                    <TextBlock Text="Profile"
+                               Style="{StaticResource SettingTitleStyle}"
+                               FontWeight="SemiBold"
+                               VerticalAlignment="Center"
+                               Margin="{StaticResource RightSpacerSmall}"/>
+                    <ComboBox x:Name="ProfileCombo"
+                              Style="{StaticResource SettingsComboBoxStyle}"
+                              HorizontalAlignment="Left"
+                              Width="140"
+                              SelectionChanged="EnvironmentalProfile_Changed"/>
+                </StackPanel>
+
+                <!-- Offset mode flips the editor's Y axis to -100..+100 with a "+0" midline
+                     and exposes draggable min/max clamp lines.
+                     Curves stored separately from the absolute set
+                     so toggling between modes is non-destructive. -->
+                <StackPanel Orientation="Horizontal" Margin="{StaticResource ListItemSpacing}">
+                    <CheckBox x:Name="OffsetModeToggle"
+                              Style="{StaticResource ToggleSwitchStyle}"
+                              HorizontalAlignment="Left"
+                              Margin="{StaticResource RightSpacerSmall}"
+                              Checked="EnvironmentalOffsetMode_Changed"
+                              Unchecked="EnvironmentalOffsetMode_Changed"/>
+                    <TextBlock Text="Offset mode"
+                               Style="{StaticResource SettingTitleStyle}"
+                               VerticalAlignment="Center"
+                               ToolTip="When on, curves apply additively/subtractively to the live brightness / night-light value. Drag the dashed lines to clamp how far the offset can swing."/>
+                </StackPanel>
+
+                <!-- Follow the sun reanchors curve points to sun events
+                     (twilight bands, sunrise, solar noon, sunset)
+                     and shifts them in clock-time as the day/night cycle changes across the year.
+                     The shift is destructive - points are rewritten in place
+                     - and the last shift date is recorded on the profile
+                     so missed days catch up the next time the curve loads. -->
+                <StackPanel Orientation="Horizontal" Margin="{StaticResource ListItemSpacing}">
+                    <CheckBox x:Name="FollowTheSunToggle"
+                              Style="{StaticResource ToggleSwitchStyle}"
+                              HorizontalAlignment="Left"
+                              Margin="{StaticResource RightSpacerSmall}"
+                              Checked="EnvironmentalFollowTheSun_Changed"
+                              Unchecked="EnvironmentalFollowTheSun_Changed"/>
+                    <TextBlock Text="Follow the sun"
+                               Style="{StaticResource SettingTitleStyle}"
+                               VerticalAlignment="Center"
+                               ToolTip="Reanchor curve points to twilight, sunrise, solar noon, and sunset for the current profile. Each point keeps its proportional position within its sun-segment, so the curve drifts in clock-time as days lengthen and shorten across the year. Per-profile, applied destructively to the stored points - missed days catch up automatically."/>
+                </StackPanel>
+
+                <!-- Use daylight savings:
+                     when on (default), sun-position calculations use the wall-clock UTC offset
+                     that's currently in effect,
+                     so events line up with the user's clock across DST transitions.
+                     When off, the timezone's BaseUtcOffset is used year-round
+                     so sun events don't jump an hour twice a year.
+                     Per-profile state. -->
+                <StackPanel Orientation="Horizontal" Margin="{StaticResource ListItemSpacing}">
+                    <CheckBox x:Name="UseDaylightSavingsToggle"
+                              Style="{StaticResource ToggleSwitchStyle}"
+                              HorizontalAlignment="Left"
+                              Margin="{StaticResource RightSpacerSmall}"
+                              Checked="EnvironmentalUseDaylightSavings_Changed"
+                              Unchecked="EnvironmentalUseDaylightSavings_Changed"/>
+                    <TextBlock Text="Use daylight savings"
+                               Style="{StaticResource SettingTitleStyle}"
+                               VerticalAlignment="Center"
+                               ToolTip="When on, sun-position calculations follow daylight savings - sun events line up with wall-clock time across the year. When off, the timezone's standard offset is used year-round, so sun events stay anchored to standard time and the curve doesn't shift by an hour at DST boundaries. Per-profile."/>
+                </StackPanel>
+
+                <!-- Disabled period: a window inside the day where curves apply nothing.
+                     The pins above the chart and the Start / End boxes
+                     drive the same normalised values;
+                     Start > End is allowed and means the disabled period wraps midnight.
+                     Off by default. -->
+                <StackPanel Orientation="Horizontal" Margin="{StaticResource ListItemSpacing}">
+                    <CheckBox x:Name="DisabledPeriodToggle"
+                              Style="{StaticResource ToggleSwitchStyle}"
+                              HorizontalAlignment="Left"
+                              Margin="{StaticResource RightSpacerSmall}"
+                              Checked="EnvironmentalDisabledPeriod_Changed"
+                              Unchecked="EnvironmentalDisabledPeriod_Changed"/>
+                    <TextBlock Text="Disabled period"
+                               Style="{StaticResource SettingTitleStyle}"
+                               VerticalAlignment="Center"
+                               ToolTip="Carve out a window inside the 24h cycle where the curves do not apply. Drag the white pins above the chart, or edit the Start / End boxes below, to set the boundaries. Start past End wraps midnight. Per-profile."/>
+                </StackPanel>
+
+
+                <!-- Disabled-period follow-the-sun:
+                     when on, the Start / End boundaries reanchor to sun events
+                     the same way curve points do.
+                     The sun calculation already incorporates the profile's UseDaylightSavings flag,
+                     so this does NOT compound with the broader DST shift.
+                     Off by default; visible only when Disabled period is enabled. -->
+                <StackPanel x:Name="DisabledPeriodFollowTheSunPanel"
+                            Orientation="Horizontal"
+                            Margin="8,0,0,6"
+                            Visibility="Collapsed">
+                    <CheckBox x:Name="DisabledPeriodFollowTheSunToggle"
+                              Style="{StaticResource ToggleSwitchStyle}"
+                              HorizontalAlignment="Left"
+                              Margin="{StaticResource RightSpacerSmall}"
+                              Checked="EnvironmentalDisabledPeriodFollowTheSun_Changed"
+                              Unchecked="EnvironmentalDisabledPeriodFollowTheSun_Changed"/>
+                    <TextBlock Text="Follow sun"
+                               Style="{StaticResource SettingTitleStyle}"
+                               VerticalAlignment="Center"
+                               ToolTip="Reanchor the Start / End boundaries to twilight, sunrise, solar noon, and sunset so the disabled period drifts with the day/night cycle across the year. Sun events already honour the profile's Use daylight savings flag, so this does not compound with that shift."/>
+                </StackPanel>
+
+
+                <!-- Start / End time boxes for the disabled period. Visible only when the toggle above is on.
+                     Direct edits commit on Enter / focus loss;
+                     the pins above the chart drive the same fields. -->
+                <StackPanel x:Name="DisabledPeriodBoxes"
+                            Orientation="Horizontal"
+                            Margin="0,0,8,6"
+                            Visibility="Collapsed">
+                    <TextBlock Text="Start"
+                               Style="{StaticResource SettingTitleStyle}"
+                               VerticalAlignment="Center"
+                               Margin="0,0,4,0"/>
+                    <TextBox x:Name="DisabledPeriodStartBox"
+                             Style="{StaticResource SettingsTextBoxStyle}"
+                             Width="64"
+                             VerticalAlignment="Center"
+                             TextAlignment="Center"
+                             LostFocus="EnvironmentalDisabledPeriodStart_LostFocus"
+                             PreviewKeyDown="EnvironmentalDisabledPeriodTime_PreviewKeyDown"/>
+                    <TextBlock Text="End"
+                               Style="{StaticResource SettingTitleStyle}"
+                               VerticalAlignment="Center"
+                               Margin="10,0,4,0"/>
+                    <TextBox x:Name="DisabledPeriodEndBox"
+                             Style="{StaticResource SettingsTextBoxStyle}"
+                             Width="64"
+                             VerticalAlignment="Center"
+                             TextAlignment="Center"
+                             LostFocus="EnvironmentalDisabledPeriodEnd_LostFocus"
+                             PreviewKeyDown="EnvironmentalDisabledPeriodTime_PreviewKeyDown"/>
+                </StackPanel>
+
+
+                <!-- Reset curves:
+                     restores the selected profile's brightness, night-light,
+                     and offset-mode curves (and their clamp limits) to the flat defaults.
+                     Leaves FollowTheSun / DST flags alone since those are not curve shape. -->
+                <Button x:Name="ResetCurvesButton"
+                        Style="{StaticResource SettingsButtonStyle}"
+                        Content="Reset curves"
+                        HorizontalAlignment="Left"
+                        Margin="{StaticResource ListItemSpacing}"
+                        ToolTip="Reset the selected profile's brightness, night-light, and offset curves back to their flat defaults. Per-profile, applied immediately."
+                        Click="EnvironmentalResetCurves_Click"/>
+            </StackPanel>
+
+            <StackPanel Grid.Column="1" VerticalAlignment="Top">
+                <!-- Smoothness card sits in a bisected row:
+                     the three curve/overlay visibility toggles live in the left half,
+                     the smoothness card (sized to its content) sits in the right half
+                     above the geo card. -->
+                <Grid Margin="0,0,0,2">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="*"/>
+                    </Grid.ColumnDefinitions>
+
+                    <!-- Curve / overlay visibility toggles.
+                         The brightness/night-light handler enforces
+                         that at least one curve stays checked.
+                         Top-aligned so the first toggle's baseline
+                         matches the date box's top in the right column. -->
+                    <StackPanel Grid.Column="0"
+                                Margin="24,12,0,0"
+                                VerticalAlignment="Top">
+
+                        <StackPanel Orientation="Horizontal" Margin="{StaticResource ListItemSpacing}">
+                            <CheckBox x:Name="ShowBrightnessCurveToggle"
+                                      Style="{StaticResource ToggleSwitchStyle}"
+                                      HorizontalAlignment="Left"
+                                      Margin="{StaticResource RightSpacerSmall}"
+                                      Tag="Brightness"
+                                      Checked="EnvironmentalCurveVisibility_Changed"
+                                      Unchecked="EnvironmentalCurveVisibility_Changed"/>
+                            <TextBlock Text="Show brightness curve"
+                                       Style="{StaticResource SettingTitleStyle}"
+                                       VerticalAlignment="Center"/>
+                        </StackPanel>
+                        <StackPanel Orientation="Horizontal" Margin="{StaticResource ListItemSpacing}">
+                            <CheckBox x:Name="ShowNightLightCurveToggle"
+                                      Style="{StaticResource ToggleSwitchStyle}"
+                                      HorizontalAlignment="Left"
+                                      Margin="{StaticResource RightSpacerSmall}"
+                                      Tag="NightLight"
+                                      Checked="EnvironmentalCurveVisibility_Changed"
+                                      Unchecked="EnvironmentalCurveVisibility_Changed"/>
+                            <TextBlock Text="Show night light curve"
+                                       Style="{StaticResource SettingTitleStyle}"
+                                       VerticalAlignment="Center"/>
+                        </StackPanel>
+                        <StackPanel Orientation="Horizontal" Margin="{StaticResource ListItemSpacing}">
+                            <CheckBox x:Name="ShowSunOverlayToggle"
+                                      Style="{StaticResource ToggleSwitchStyle}"
+                                      HorizontalAlignment="Left"
+                                      Margin="{StaticResource RightSpacerSmall}"
+                                      Checked="EnvironmentalShowSunOverlay_Changed"
+                                      Unchecked="EnvironmentalShowSunOverlay_Changed"/>
+                            <TextBlock Text="Show sun overlay"
+                                       Style="{StaticResource SettingTitleStyle}"
+                                       VerticalAlignment="Center"
+                                       ToolTip="Shade twilight (orange) and night (greyish blue) bands behind the curves using the geo coordinates below."/>
+                        </StackPanel>
+                        <StackPanel Orientation="Horizontal">
+                            <CheckBox x:Name="ShowCursorReadoutToggle"
+                                      Style="{StaticResource ToggleSwitchStyle}"
+                                      HorizontalAlignment="Left"
+                                      Margin="{StaticResource RightSpacerSmall}"
+                                      Checked="EnvironmentalShowCursorReadout_Changed"
+                                      Unchecked="EnvironmentalShowCursorReadout_Changed"/>
+                            <TextBlock Text="Show cursor readout"
+                                       Style="{StaticResource SettingTitleStyle}"
+                                       VerticalAlignment="Center"
+                                       ToolTip="Show a vertical scrubber and per-curve value markers while the cursor is over the editor."/>
+                        </StackPanel>
+                    </StackPanel>
+
+                    <!-- Right column of the bisected row:
+                         a date-override card stacked on top of the smoothness card.
+                         Both share the column so they sit tightly above the geo card below. -->
+                    <StackPanel Grid.Column="1" VerticalAlignment="Top">
+
+                        <!-- Sun overlay date override.
+                             Title sits in the leftover space of the right column
+                             with right-aligned text + ellipsis,
+                             so it stays paired with the box no matter how the column is sized.
+                             Resets to today every time the Environmental tab is re-entered
+                             (no settings persistence).
+                             Mouse wheel and arrow keys nudge by a day;
+                             the trailing button opens a calendar popup. -->
+                        <Grid Margin="{StaticResource ListItemSpacing}">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Grid.Column="0"
+                                       Text="Preview Date:"
+                                       Style="{StaticResource SettingTitleStyle}"
+                                       VerticalAlignment="Center"
+                                       HorizontalAlignment="Right"
+                                       Margin="{StaticResource RightSpacerSmall}"
+                                       TextTrimming="CharacterEllipsis"/>
+                            <!-- Width sized to the yyyy-MM-dd text + the calendar button
+                                 so the box hugs its contents and lets the title claim the rest. -->
+                            <Border Grid.Column="1"
+                                    Style="{StaticResource DwellBoxBorderStyle}"
+                                    Width="122">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                    </Grid.ColumnDefinitions>
+                                    <TextBox x:Name="SunOverlayDateBox"
+                                             Grid.Column="0"
+                                             Style="{StaticResource DwellNumberBoxTextBoxStyle}"
+                                             TextAlignment="Left"
+                                             Padding="8,0,0,0"
+                                             PreviewMouseWheel="EnvironmentalSunOverlayDateBox_PreviewMouseWheel"
+                                             PreviewKeyDown="EnvironmentalSunOverlayDateBox_PreviewKeyDown"
+                                             LostFocus="EnvironmentalSunOverlayDateBox_LostFocus"/>
+                                    <Button x:Name="SunOverlayCalendarButton"
+                                            Grid.Column="1"
+                                            Style="{StaticResource SpinnerButtonStyle}"
+                                            Width="28"
+                                            FontSize="13"
+                                            Content="&#xE787;"
+                                            ToolTip="Pick a date"
+                                            Click="EnvironmentalSunOverlayCalendarButton_Click"/>
+                                </Grid>
+                            </Border>
+                        </Grid>
+                        <!-- Calendar popup: anchored to the trailing button,
+                             closed on loss-of-focus so a click outside dismisses it. -->
+                        <Popup x:Name="SunOverlayDatePopup"
+                               PlacementTarget="{Binding ElementName=SunOverlayCalendarButton}"
+                               Placement="Bottom"
+                               StaysOpen="False"
+                               AllowsTransparency="True"
+                               PopupAnimation="Fade">
+                            <Border Background="{DynamicResource ThemeBackground}"
+                                    BorderBrush="{DynamicResource ThemeBorder}"
+                                    BorderThickness="1"
+                                    CornerRadius="{DynamicResource CornerRadiusLarge}"
+                                    Padding="4"
+                                    Margin="8">
+                                <Border.Effect>
+                                    <DropShadowEffect BlurRadius="16" ShadowDepth="4" Opacity="0.35" Direction="270"/>
+                                </Border.Effect>
+                                <Calendar x:Name="SunOverlayCalendar"
+                                          SelectedDatesChanged="EnvironmentalSunOverlayCalendar_SelectedDatesChanged"/>
+                            </Border>
+                        </Popup>
+
+                        <!-- 24h preview sweep:
+                             animates the active profile's curve over 10 seconds of wall clock,
+                             actually applying values to monitors and the night-light backend.
+                             Disabled when neither curve is engaged (nothing to apply)
+                             and hidden while the Preview Date is set to a non-today value
+                             (date-scrub mode shows a hypothetical curve,
+                             while the sweep would still apply today's).
+                             Click while running cancels the sweep
+                             and snaps monitors back to real-now. -->
+                        <Button x:Name="PreviewSweepButton"
+                                Style="{StaticResource SettingsButtonStyle}"
+                                Width="217"
+                                HorizontalAlignment="Right"
+                                Margin="0,-2,0,4"
+                                Content="Live preview next 24 hours"
+                                ToolTip="Animate the full day's curve over 10 seconds, applying values to monitors and night light as it sweeps.&#x0a;Requires at least one slider in the flyout to be set to curve mode."
+                                ToolTipService.ShowOnDisabled="True"
+                                Click="EnvironmentalPreviewSweepButton_Click"/>
+
+                        <!-- Smoothness slider for the curve editor:
+                             0 = pure piecewise-linear (polyline through the control points),
+                             100 = full monotonic cubic Hermite.
+                             Sits above the geo card
+                             so it's adjacent to the curve editor it actually affects. -->
+                        <Border Style="{StaticResource SettingsCardStyle}"
+                                Padding="14,8"
+                                Margin="16,0,0,0"
+                                VerticalAlignment="Top">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
+                                </Grid.RowDefinitions>
+                                <TextBlock Grid.Row="0" Grid.Column="0"
+                                           Margin="0,-12,0,0"
+                                           Style="{StaticResource SettingTitleStyle}"
+                                           FontWeight="SemiBold"
+                                           VerticalAlignment="Center"
+                                           Text="Smoothness"/>
+                                <Grid Grid.Row="0" Grid.Column="1"
+                                      Width="80"
+                                      Margin="0,4,4,0"
+                                      Height="{StaticResource DwellBoxHeight}"
+                                      VerticalAlignment="Center">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="{StaticResource SpinnerColumnWidth}"/>
+                                    </Grid.ColumnDefinitions>
+                                    <Border Grid.Column="0" Style="{StaticResource DwellBoxBorderStyle}">
+                                        <TextBox x:Name="CurveSmoothnessBox"
+                                                 Style="{StaticResource DwellNumberBoxTextBoxStyle}"
+                                                 PreviewTextInput="DigitsOnly_PreviewTextInput"
+                                                 PreviewMouseWheel="EnvironmentalCurveSmoothnessBox_PreviewMouseWheel"
+                                                 PreviewKeyDown="EnvironmentalCurveSmoothnessBox_PreviewKeyDown"
+                                                 LostFocus="EnvironmentalCurveSmoothness_LostFocus"/>
+                                    </Border>
+                                    <Grid Grid.Column="1">
+                                        <Grid.RowDefinitions>
+                                            <RowDefinition Height="*"/>
+                                            <RowDefinition Height="*"/>
+                                        </Grid.RowDefinitions>
+                                        <Button Grid.Row="0"
+                                                Style="{StaticResource SpinnerButtonStyle}"
+                                                Tag="{Binding ElementName=CurveSmoothnessBox}"
+                                                Click="EnvironmentalCurveSmoothnessBoxSpinUp_Click"
+                                                Content="&#xE70E;"/>
+                                        <Button Grid.Row="1"
+                                                Style="{StaticResource SpinnerButtonStyle}"
+                                                Tag="{Binding ElementName=CurveSmoothnessBox}"
+                                                Click="EnvironmentalCurveSmoothnessBoxSpinDown_Click"
+                                                Content="&#xE70D;"/>
+                                    </Grid>
+                                </Grid>
+                                <TextBlock Grid.Row="1" Grid.Column="0" Grid.ColumnSpan="2"
+                                           Style="{StaticResource SettingDescriptionStyle}"
+                                           Margin="0,-12,0,0"
+                                           Text="Blend between"/>
+                                <TextBlock Grid.Row="1" Grid.Column="0" Grid.ColumnSpan="2"
+                                           Margin="0,2,0,0"
+                                           Style="{StaticResource SettingDescriptionStyle}"
+                                           Text="linear(0) and interpolated(100) "/>
+              </Grid>
+                        </Border>
+                    </StackPanel>
+                </Grid>
+
+                <Border Style="{StaticResource SettingsCardStyle}"
+                        Margin="0,2,0,0">
+                    <Grid>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                        </Grid.RowDefinitions>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="12"/>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="12"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+
+                        <!-- Title + description sit on one line;
+                             each TextBlock keeps its own Style so weights and dim treatment stay distinct. -->
+                        <TextBlock Grid.Row="0" Grid.Column="0"
+                                   Style="{StaticResource SettingTitleStyle}"
+                                   FontWeight="SemiBold"
+                                   VerticalAlignment="Center"
+                                   Margin="0,0,0,10"
+                                   Text="Geo location"/>
+                        <TextBlock Grid.Row="0" Grid.Column="2" Grid.ColumnSpan="3"
+                                   Style="{StaticResource SettingDescriptionStyle}"
+                                   VerticalAlignment="Center"
+                                   HorizontalAlignment="Right"
+                                   Margin="0,0,0,8"
+                                   Text="Decimal degrees. Positive values are north / east."/>
+
+                        <!-- Action buttons stacked on the left, Lat / Lon inputs to their right.
+                             The IP-approximation button calls https://am.i.mullvad.net/json
+                             and writes the returned lat/lon back into the textboxes. -->
+                        <StackPanel Grid.Row="1" Grid.Column="0"
+                                    VerticalAlignment="Bottom">
+                            <Button x:Name="ApproximateFromIpButton"
+                                    Style="{StaticResource SettingsButtonStyle}"
+                                    Content="Approx. from IP"
+                                    MinWidth="130"
+                                    Margin="0,0,0,4"
+                                    HorizontalAlignment="Stretch"
+                                    Click="ApproximateFromIp_Click"/>
+                            <Button x:Name="OpenMapPickerButton"
+                                    Style="{StaticResource SettingsButtonStyle}"
+                                    Content="Pick on map"
+                                    MinWidth="130"
+                                    HorizontalAlignment="Stretch"
+                                    Click="OpenMapPicker_Click"/>
+                        </StackPanel>
+
+                        <StackPanel Grid.Row="1" Grid.Column="2">
+                            <TextBlock Text="Latitude"
+                                       Style="{StaticResource SettingTitleStyle}"
+                                       Margin="0,6,0,4"/>
+                            <TextBox x:Name="LatitudeBox"
+                                     Style="{StaticResource SettingsTextBoxStyle}"
+                                     LostFocus="EnvironmentalCoordinate_LostFocus"
+                                     KeyDown="EnvironmentalCoordinate_KeyDown"/>
+                        </StackPanel>
+
+                        <StackPanel Grid.Row="1" Grid.Column="4">
+                            <TextBlock Text="Longitude"
+                                       Style="{StaticResource SettingTitleStyle}"
+                                       Margin="0,6,0,4"/>
+                            <TextBox x:Name="LongitudeBox"
+                                     Style="{StaticResource SettingsTextBoxStyle}"
+                                     LostFocus="EnvironmentalCoordinate_LostFocus"
+                                     KeyDown="EnvironmentalCoordinate_KeyDown"/>
+                        </StackPanel>
+                    </Grid>
+                </Border>
+            </StackPanel>
+        </Grid>
+    </StackPanel>
+</UserControl>

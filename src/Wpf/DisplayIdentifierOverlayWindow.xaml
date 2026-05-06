@@ -1,0 +1,41 @@
+<Window x:Class="BrightnessTrayAppWpf.Wpf.DisplayIdentifierOverlayWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        WindowStyle="None"
+        AllowsTransparency="True"
+        Background="Transparent"
+        ShowInTaskbar="False"
+        Topmost="True"
+        ShowActivated="False"
+        ResizeMode="NoResize"
+        IsHitTestVisible="False"
+        Focusable="False"
+        WindowStartupLocation="Manual"
+        UseLayoutRounding="True"
+        TextOptions.TextFormattingMode="Ideal"
+        TextOptions.TextRenderingMode="ClearType">
+    <Grid>
+        <Border Background="{DynamicResource DisplayIdentifierBackgroundBrush}"
+                CornerRadius="{DynamicResource CornerRadiusHuge}"
+                Padding="56,28"
+                HorizontalAlignment="Center"
+                VerticalAlignment="Center"
+                BorderBrush="{DynamicResource DisplayIdentifierBorderBrush}"
+                BorderThickness="1">
+            <Border.Effect>
+                <DropShadowEffect BlurRadius="24"
+                                  ShadowDepth="0"
+                                  Color="{DynamicResource DisplayIdentifierShadowColor}"
+                                  Opacity="0.5"/>
+            </Border.Effect>
+            <TextBlock x:Name="NumberText"
+                       FontFamily="Segoe UI Variable, Segoe UI"
+                       FontSize="220"
+                       FontWeight="SemiBold"
+                       Foreground="{DynamicResource DisplayIdentifierForegroundBrush}"
+                       TextAlignment="Center"
+                       LineHeight="230"
+                       LineStackingStrategy="BlockLineHeight"/>
+        </Border>
+    </Grid>
+</Window>

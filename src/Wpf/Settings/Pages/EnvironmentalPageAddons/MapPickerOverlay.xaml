@@ -1,0 +1,216 @@
+<UserControl
+    x:Class="BrightnessTrayAppWpf.Wpf.Settings.Pages.EnvironmentalPageAddons.MapPickerOverlay"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    Background="#80000000"
+    Focusable="True"
+    KeyboardNavigation.TabNavigation="Cycle">
+
+    <Grid>
+        <Border Background="{DynamicResource ThemeCardBackground}"
+                BorderBrush="{DynamicResource ThemeBorder}"
+                BorderThickness="1"
+                CornerRadius="{DynamicResource CornerRadiusLarge}"
+                Margin="24"
+                Padding="0">
+            <Grid>
+                <!-- Viewport: crops the panned/zoomed map content to the rounded card.
+                     All mouse-driven interactions are handled on this element so events
+                     don't leak past its borders into the page underneath. -->
+                <Border x:Name="MapClipBorder"
+                        ClipToBounds="True"
+                        CornerRadius="{DynamicResource CornerRadiusLarge}"
+                        Background="{DynamicResource ThemeBackground}"
+                        MouseLeftButtonDown="MapArea_MouseLeftButtonDown"
+                        MouseLeftButtonUp="MapArea_MouseLeftButtonUp"
+                        MouseRightButtonDown="MapArea_MouseRightButtonDown"
+                        MouseRightButtonUp="MapArea_MouseRightButtonUp"
+                        MouseMove="MapArea_MouseMove"
+                        MouseWheel="MapArea_MouseWheel"
+                        SizeChanged="MapClipBorder_SizeChanged">
+
+                    <!-- Pan/zoom layer. The Path geometry is built in code from the bundled SVG;
+                         the Pin and Crosshair sit in the same coordinate space
+                         so they track the map perfectly under transform changes. -->
+                    <Canvas x:Name="MapCanvas"
+                            Background="Transparent"
+                            HorizontalAlignment="Left"
+                            VerticalAlignment="Top">
+                        <Canvas.RenderTransform>
+                            <TransformGroup>
+                                <ScaleTransform x:Name="MapScale" ScaleX="1" ScaleY="1"/>
+                                <TranslateTransform x:Name="MapTranslate" X="0" Y="0"/>
+                            </TransformGroup>
+                        </Canvas.RenderTransform>
+
+                        <Path x:Name="MapPath"
+                              Stroke="{DynamicResource ThemeForeground}"
+                              StrokeThickness="0.6"
+                              Fill="{DynamicResource ThemeHover}"
+                              IsHitTestVisible="False"/>
+
+                        <!-- Pin glyph anchored at its bottom-center pixel (the geographic point).
+                             Adjustments live in code so we can re-anchor when the glyph is swapped. -->
+                        <TextBlock x:Name="PinGlyph"
+                                   Text="&#xECAF;"
+                                   FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets"
+                                   FontSize="28"
+                                   Foreground="#E03A3A"
+                                   IsHitTestVisible="True"
+                                   Cursor="Hand"
+                                   MouseLeftButtonDown="Pin_MouseLeftButtonDown"/>
+                    </Canvas>
+                </Border>
+
+                <!-- Crosshair marking the geographic centre of the current viewport.
+                     Stays put while the user pans / zooms underneath. -->
+                <TextBlock Text="+"
+                           HorizontalAlignment="Center"
+                           VerticalAlignment="Center"
+                           FontSize="14"
+                           FontWeight="SemiBold"
+                           Foreground="{DynamicResource ThemeForeground}"
+                           Opacity="0.55"
+                           IsHitTestVisible="False"/>
+
+                <!-- HUD overlay (kept outside the pan/zoom transform so the controls stay put).
+                     Both HUD chunks share a horizontal StackPanel anchored bottom-right
+                     so the coords/Apply/Exit cluster sits flush against the pan/zoom HUD with bottoms aligned,
+                     regardless of either chunk's intrinsic height. -->
+                <Grid IsHitTestVisible="True">
+                    <StackPanel Orientation="Horizontal"
+                                HorizontalAlignment="Right"
+                                VerticalAlignment="Bottom"
+                                Margin="12">
+                        <!-- Coordinates + Apply/Exit. -->
+                        <Border VerticalAlignment="Bottom"
+                                Margin="0,0,8,0"
+                                Padding="10,8"
+                                Background="{DynamicResource ThemeBackground}"
+                                BorderBrush="{DynamicResource ThemeBorder}"
+                                BorderThickness="1"
+                                CornerRadius="{DynamicResource CornerRadiusMedium}">
+                            <StackPanel>
+                                <TextBlock x:Name="CoordsText"
+                                           Text="0.0000, 0.0000"
+                                           FontFamily="Consolas, Cascadia Mono, Segoe UI"
+                                           FontSize="13"
+                                           Foreground="{DynamicResource ThemeForeground}"/>
+                                <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
+                                    <Button Content="Apply"
+                                            Style="{StaticResource SettingsButtonStyle}"
+                                            MinWidth="64"
+                                            Margin="0,0,6,0"
+                                            Click="Apply_Click"/>
+                                    <Button Content="Abort"
+                                            Style="{StaticResource SettingsButtonStyle}"
+                                            MinWidth="64"
+                                            Click="Exit_Click"/>
+                                </StackPanel>
+                            </StackPanel>
+                        </Border>
+
+                        <!-- Pan + zoom HUD.
+                             Each directional button shifts the viewport by a fixed fraction;
+                             zoom buttons multiply / divide the scale. -->
+                        <Border VerticalAlignment="Bottom"
+                                Padding="6"
+                                Background="{DynamicResource ThemeBackground}"
+                                BorderBrush="{DynamicResource ThemeBorder}"
+                                BorderThickness="1"
+                                CornerRadius="{DynamicResource CornerRadiusMedium}">
+                        <Grid>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/>
+                            </Grid.RowDefinitions>
+                            <Grid.ColumnDefinitions>
+                                <!-- D-pad columns (0..2), a dedicated 6px spacer column to separate the d-pad cluster
+                                     from the zoom stack, then the zoom column.
+                                     Margin="1" on each button still drives the 2px adjacent-neighbour gap
+                                     inside each cluster;
+                                     the zoom-column buttons get extra top/bottom margin
+                                     so their vertical rhythm matches the d-pad's perceived spacing. -->
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="6"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+
+                            <!-- Up / Down / Left / Right -->
+                            <Button Grid.Row="0" Grid.Column="1"
+                                    Style="{StaticResource SettingsButtonStyle}"
+                                    Content="&#xE70E;"
+                                    FontFamily="Segoe Fluent Icons"
+                                    Width="28" Height="28"
+                                    Padding="0"
+                                    Margin="1"
+                                    Tag="Up"
+                                    Click="HudPan_Click"/>
+                            <Button Grid.Row="1" Grid.Column="0"
+                                    Style="{StaticResource SettingsButtonStyle}"
+                                    Content="&#xE76B;"
+                                    FontFamily="Segoe Fluent Icons"
+                                    Width="28" Height="28"
+                                    Padding="0"
+                                    Margin="1"
+                                    Tag="Left"
+                                    Click="HudPan_Click"/>
+                            <Button Grid.Row="1" Grid.Column="2"
+                                    Style="{StaticResource SettingsButtonStyle}"
+                                    Content="&#xE76C;"
+                                    FontFamily="Segoe Fluent Icons"
+                                    Width="28" Height="28"
+                                    Padding="0"
+                                    Margin="1"
+                                    Tag="Right"
+                                    Click="HudPan_Click"/>
+                            <Button Grid.Row="2" Grid.Column="1"
+                                    Style="{StaticResource SettingsButtonStyle}"
+                                    Content="&#xE70D;"
+                                    FontFamily="Segoe Fluent Icons"
+                                    Width="28" Height="28"
+                                    Padding="0"
+                                    Margin="1"
+                                    Tag="Down"
+                                    Click="HudPan_Click"/>
+
+                            <!-- Zoom in / out, plus a checkmark that snaps the pin to the viewport-centre crosshair.
+                                 Stack of three: + / − / ✓. -->
+                            <Button Grid.Row="0" Grid.Column="4"
+                                    Style="{StaticResource SettingsButtonStyle}"
+                                    Content="+"
+                                    FontSize="16"
+                                    Width="28" Height="28"
+                                    Padding="0"
+                                    Margin="1,1,1,3"
+                                    Tag="ZoomIn"
+                                    Click="HudPan_Click"/>
+                            <Button Grid.Row="1" Grid.Column="4"
+                                    Style="{StaticResource SettingsButtonStyle}"
+                                    Content="−"
+                                    FontSize="16"
+                                    Width="28" Height="28"
+                                    Padding="0"
+                                    Margin="1,3,1,3"
+                                    Tag="ZoomOut"
+                                    Click="HudPan_Click"/>
+                            <Button Grid.Row="2" Grid.Column="4"
+                                    Style="{StaticResource SettingsButtonStyle}"
+                                    Content="&#xE73E;"
+                                    FontFamily="Segoe Fluent Icons"
+                                    FontSize="12"
+                                    Width="28" Height="28"
+                                    Padding="0"
+                                    Margin="1,3,1,1"
+                                    Click="SetPinToCrosshair_Click"/>
+                        </Grid>
+                    </Border>
+                    </StackPanel>
+                </Grid>
+            </Grid>
+        </Border>
+    </Grid>
+</UserControl>

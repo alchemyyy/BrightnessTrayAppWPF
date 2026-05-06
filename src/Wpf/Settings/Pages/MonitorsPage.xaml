@@ -1,0 +1,356 @@
+<UserControl
+    x:Class="BrightnessTrayAppWpf.Wpf.Settings.Pages.MonitorsPage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:local="clr-namespace:BrightnessTrayAppWpf.Wpf"
+    xmlns:utils="clr-namespace:BrightnessTrayAppWpf.Wpf.Settings.Utils"
+    xmlns:pages="clr-namespace:BrightnessTrayAppWpf.Wpf.Settings.Pages"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    xmlns:utils1="clr-namespace:BrightnessTrayAppWpf.Wpf.Utils"
+    mc:Ignorable="d"
+    d:DesignWidth="660"
+    d:DesignHeight="594"
+    d:Background="#1F1F1F"
+    utils1:SettingsKeyboardNavigation.IsContentSection="True">
+    <UserControl.Resources>
+        <!-- Per-monitor override row primitives.
+             The MonitorListEntry DataTemplate stamps two three-column override rows per card;
+             these styles centralize the row top margin, the inner-column gutter, and the
+             label / spinner presets that the card duplicates across all 4 numeric overrides. -->
+
+        <Style x:Key="MonitorOverrideRowStyle" TargetType="Grid">
+            <Setter Property="Margin" Value="0,8,0,0"/>
+        </Style>
+
+        <Style x:Key="MonitorOverrideFieldColumnStyle" TargetType="StackPanel">
+            <Setter Property="Margin" Value="0,0,12,0"/>
+        </Style>
+
+        <Style x:Key="MonitorOverrideLabelStyle"
+               TargetType="TextBlock"
+               BasedOn="{StaticResource SettingDescriptionStyle}">
+            <Setter Property="Margin" Value="0,0,0,4"/>
+        </Style>
+
+        <Style x:Key="MonitorOverrideDwellSpinnerStyle" TargetType="local:NumericSpinner">
+            <Setter Property="Suffix" Value="ms"/>
+            <Setter Property="Minimum" Value="0"/>
+            <Setter Property="Maximum" Value="10000"/>
+            <Setter Property="WheelStep" Value="10"/>
+            <Setter Property="AllowInherit" Value="True"/>
+        </Style>
+
+        <Style x:Key="MonitorOverrideBrightnessSpinnerStyle" TargetType="local:NumericSpinner">
+            <Setter Property="Suffix" Value="%"/>
+            <Setter Property="Minimum" Value="0"/>
+            <Setter Property="Maximum" Value="100"/>
+            <Setter Property="WheelStep" Value="5"/>
+            <Setter Property="AllowInherit" Value="True"/>
+        </Style>
+    </UserControl.Resources>
+    <StackPanel>
+        <TextBlock Style="{StaticResource SectionHeaderStyle}" Text="Monitor options"/>
+
+        <utils:SettingsCard Title="Brightness update dwell"
+                               Description="How long a brightness value must be set before the app will try to apply it.">
+            <utils:SettingsCard.Control>
+                <local:NumericSpinner Style="{StaticResource DwellTimeSpinnerStyle}"
+                                      x:Name="BrightnessRateBox"/>
+            </utils:SettingsCard.Control>
+        </utils:SettingsCard>
+
+        <utils:SettingsCard Title="Validation dwell"
+                               Description="How long to wait after a settled brightness write before reading it back to confirm it applied. Increase on slow-responding monitors.">
+            <utils:SettingsCard.Control>
+                <local:NumericSpinner Style="{StaticResource DwellTimeSpinnerStyle}"
+                                      x:Name="ValidationDwellBox"/>
+            </utils:SettingsCard.Control>
+        </utils:SettingsCard>
+
+        <utils:SettingsCard Title="Validation attempts"
+                               Description="Number of times to retry a brightness read before giving up. Each retry waits one validation dwell, and the final attempt also refreshes the cached HMONITOR. Higher = more tolerant of transient I2C noise; lower = faster failure for genuinely stuck monitors.">
+            <utils:SettingsCard.Control>
+                <local:NumericSpinner Width="100" VerticalAlignment="Center"
+                                      x:Name="ValidationAttemptsBox"
+                                      Minimum="1" Maximum="10"
+                                      WheelStep="10"/>
+            </utils:SettingsCard.Control>
+        </utils:SettingsCard>
+
+        <utils:SettingsCard Title="DDC operation timeout"
+                               Description="Maximum time any single DDC call is allowed to block before the app moves on. Defends against driver-layer hangs piling up threads or stalling shutdown. Lower = faster failure for stuck monitors; higher = more tolerant of slow-responding panels.">
+            <utils:SettingsCard.Control>
+                <local:NumericSpinner Style="{StaticResource DwellTimeSpinnerStyle}"
+                                      x:Name="DDCOperationTimeoutBox"
+                                      Maximum="15000"/>
+            </utils:SettingsCard.Control>
+        </utils:SettingsCard>
+
+        <utils:SettingsCard Title="Power off mode"
+                               Description="How the 'power off' action actually powers a monitor off. Sleep = standby (VCP 0x02), Soft = DPM off (0x04), Hard = write-only off (0x05). Some monitors ignore Soft; Hard will most likely require physical input to wake.">
+            <utils:SettingsCard.Control>
+                <ComboBox x:Name="PowerOffModeCombo"
+                          Style="{StaticResource SettingsComboBoxStyle}"
+                          VerticalAlignment="Center"
+                          Tag="PowerOffMode" SelectionChanged="EnumCombo_Changed">
+                    <ComboBoxItem Tag="Sleep">Sleep</ComboBoxItem>
+                    <ComboBoxItem Tag="Soft">Power off (soft)</ComboBoxItem>
+                    <ComboBoxItem Tag="Hard">Power off (hard)</ComboBoxItem>
+                </ComboBox>
+            </utils:SettingsCard.Control>
+        </utils:SettingsCard>
+
+        <utils:SettingsCard Title="Identify displays by"
+                               Description="Which attribute keys profiles, names, and ordering to each physical monitor. Changing this re-enumerates and may orphan saved profile entries.">
+            <utils:SettingsCard.Control>
+                <ComboBox x:Name="IdentityStrategyCombo"
+                          Style="{StaticResource SettingsComboBoxStyle}"
+                          VerticalAlignment="Center"
+                          Tag="MonitorIdentityStrategy" SelectionChanged="EnumCombo_Changed">
+                    <ComboBoxItem Tag="DisplayNumber">Display number</ComboBoxItem>
+                    <ComboBoxItem Tag="HardwarePort">Hardware port</ComboBoxItem>
+                    <ComboBoxItem Tag="EDIDSerial">EDID serial</ComboBoxItem>
+                </ComboBox>
+            </utils:SettingsCard.Control>
+        </utils:SettingsCard>
+
+        <utils:SettingsCard Title="Default display sort order"
+                               Description="Ordering used for displays that haven't been manually reordered. Applies on hot-plug.">
+            <utils:SettingsCard.Control>
+                <ComboBox x:Name="DefaultSortCombo"
+                          Style="{StaticResource SettingsComboBoxStyle}"
+                          VerticalAlignment="Center"
+                          SelectionChanged="DefaultSort_Changed">
+                    <ComboBoxItem Tag="Arrangement">Arrangement</ComboBoxItem>
+                    <ComboBoxItem Tag="ArrangementRev">Arrangement (rev)</ComboBoxItem>
+                    <ComboBoxItem Tag="DisplayNumber">Display num</ComboBoxItem>
+                    <ComboBoxItem Tag="DisplayNumberRev">Display num (rev)</ComboBoxItem>
+                </ComboBox>
+            </utils:SettingsCard.Control>
+        </utils:SettingsCard>
+
+        <Grid Margin="0,16,0,8">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="Auto"/>
+            </Grid.ColumnDefinitions>
+            <StackPanel Style="{StaticResource SettingsCardTitlePanel}">
+                <TextBlock Text="Display order &amp; overrides"
+                           Style="{StaticResource SettingTitleStyle}"
+                           FontWeight="SemiBold"/>
+                <TextBlock Style="{StaticResource SettingDescriptionStyle}"
+                           Text="Rename, reorder, and set per-monitor DDC/CI overrides."
+                           Margin="0,4,0,0"/>
+            </StackPanel>
+            <Button Grid.Column="1"
+                    x:Name="ClearDisplaysButton"
+                    Style="{StaticResource SettingsButtonStyle}"
+                    Content="Clear Displays"
+                    VerticalAlignment="Center"
+                    Margin="{StaticResource RightSpacerSmall}"
+                    Click="ClearDisplays_Click"/>
+            <Button Grid.Column="2"
+                    x:Name="IdentifyDisplaysButton"
+                    Style="{StaticResource SettingsButtonStyle}"
+                    Content="Identify Displays"
+                    VerticalAlignment="Center"
+                    Click="IdentifyDisplays_Click"/>
+        </Grid>
+
+        <ItemsControl x:Name="MonitorListPanel">
+            <ItemsControl.ItemTemplate>
+                <DataTemplate DataType="{x:Type pages:MonitorListEntry}">
+                    <Grid d:DataContext="{d:DesignInstance Type=pages:MonitorListEntry}">
+                        <Border x:Name="DragCardContent"
+                                Style="{StaticResource SettingsCardStyle}"
+                                Padding="10,12"
+                                IsEnabled="{Binding IsActive}"
+                                Tag="{Binding EDIDKey}"
+                                PreviewKeyDown="MonitorCard_PreviewKeyDown">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <!-- Badge column.
+                                     Active rows show the OS display number;
+                                     inactive rows leave the badge blank but widen the slot
+                                     so the row's title clears the delete button
+                                     (which overlays the card top-left). -->
+                                <Border Grid.Column="0"
+                                        Background="Transparent"
+                                        Margin="0,0,10,0"
+                                        VerticalAlignment="Center">
+                                    <Border.Style>
+                                        <Style TargetType="Border">
+                                            <Setter Property="Width" Value="20"/>
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding IsInactive}" Value="True">
+                                                    <Setter Property="Width" Value="32"/>
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </Border.Style>
+                                    <TextBlock Text="{Binding DisplayNumberLabel}"
+                                               Foreground="{DynamicResource ThemeForeground}"
+                                               FontSize="14"
+                                               FontWeight="SemiBold"
+                                               HorizontalAlignment="Center"
+                                               VerticalAlignment="Center"/>
+                                </Border>
+                                <StackPanel Grid.Column="1">
+                                    <!-- Original name (plain text) + Name override box.
+                                         Mirrors the column layout of the override rows below
+                                         so the TextBox lines up with their third column. -->
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="*"/>
+                                        </Grid.ColumnDefinitions>
+                                        <DockPanel Grid.Column="0" Grid.ColumnSpan="2" LastChildFill="True">
+                                            <TextBlock DockPanel.Dock="Right"
+                                                       Text="Name:"
+                                                       Style="{StaticResource SettingDescriptionStyle}"
+                                                       VerticalAlignment="Center"
+                                                       Margin="0,0,6,0"/>
+                                            <TextBlock Foreground="{DynamicResource ThemeForeground}"
+                                                       FontSize="14"
+                                                       VerticalAlignment="Center"
+                                                       TextTrimming="CharacterEllipsis"
+                                                       Margin="0,0,12,0">
+                                                <Run Text="{Binding OriginalNameDisplay, Mode=OneWay}"/><Run Text="{Binding EDIDSuffix, Mode=OneWay}"
+                                                                                                            Foreground="{DynamicResource ThemeSecondaryForeground}"/>
+                                            </TextBlock>
+                                        </DockPanel>
+                                        <TextBox Grid.Column="2"
+                                                 Style="{StaticResource SettingsTextBoxStyle}"
+                                                 Text="{Binding NameOverride, UpdateSourceTrigger=LostFocus}"
+                                                 VerticalAlignment="Center"
+                                                 LostFocus="MonitorName_LostFocus"
+                                                 Tag="{Binding EDIDKey}"
+                                                 Margin="6,0,0,0"/>
+                                    </Grid>
+
+                                    <!-- Override row 1:
+                                         Power off, Validation dwell, Brightness dwell.
+                                         Inner-only right margin on cols 0 / 1 keeps a 12px gutter without
+                                         stacking adjacent margins (which previously summed to 12). -->
+                                    <Grid Style="{StaticResource MonitorOverrideRowStyle}">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="*"/>
+                                        </Grid.ColumnDefinitions>
+
+                                        <StackPanel Grid.Column="0" Style="{StaticResource MonitorOverrideFieldColumnStyle}">
+                                            <TextBlock Text="Power off" Style="{StaticResource MonitorOverrideLabelStyle}"/>
+                                            <ComboBox Style="{StaticResource SettingsComboBoxStyle}"
+                                                      MinWidth="0"
+                                                      HorizontalAlignment="Stretch"
+                                                      Tag="{Binding EDIDKey}"
+                                                      Loaded="MonitorPowerOffOverrideCombo_Loaded"
+                                                      SelectionChanged="MonitorPowerOffOverride_Changed">
+                                                <ComboBoxItem Tag="">Default</ComboBoxItem>
+                                                <ComboBoxItem Tag="Sleep">Sleep</ComboBoxItem>
+                                                <ComboBoxItem Tag="Soft">Power off (soft)</ComboBoxItem>
+                                                <ComboBoxItem Tag="Hard">Power off (hard)</ComboBoxItem>
+                                            </ComboBox>
+                                        </StackPanel>
+
+                                        <StackPanel Grid.Column="1" Style="{StaticResource MonitorOverrideFieldColumnStyle}">
+                                            <TextBlock Text="Validation dwell" Style="{StaticResource MonitorOverrideLabelStyle}"/>
+                                            <local:NumericSpinner Style="{StaticResource MonitorOverrideDwellSpinnerStyle}"
+                                                                  Value="{Binding ValidationDwellOverride, UpdateSourceTrigger=PropertyChanged}"
+                                                                  Tag="ValidationDwell"
+                                                                  Loaded="MonitorOverrideSpinner_Loaded"/>
+                                        </StackPanel>
+
+                                        <StackPanel Grid.Column="2">
+                                            <TextBlock Text="Brightness dwell" Style="{StaticResource MonitorOverrideLabelStyle}"/>
+                                            <local:NumericSpinner Style="{StaticResource MonitorOverrideDwellSpinnerStyle}"
+                                                                  Value="{Binding BrightnessDwellOverride, UpdateSourceTrigger=PropertyChanged}"
+                                                                  Tag="BrightnessDwell"
+                                                                  Loaded="MonitorOverrideSpinner_Loaded"/>
+                                        </StackPanel>
+                                    </Grid>
+
+                                    <!-- Override row 2: Min brightness, Max brightness -->
+                                    <Grid Style="{StaticResource MonitorOverrideRowStyle}">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="*"/>
+                                        </Grid.ColumnDefinitions>
+
+                                        <StackPanel Grid.Column="0" Style="{StaticResource MonitorOverrideFieldColumnStyle}">
+                                            <TextBlock Text="Min brightness" Style="{StaticResource MonitorOverrideLabelStyle}"/>
+                                            <local:NumericSpinner Style="{StaticResource MonitorOverrideBrightnessSpinnerStyle}"
+                                                                  Value="{Binding MinBrightnessOverride, UpdateSourceTrigger=PropertyChanged}"
+                                                                  Tag="MinBrightness"
+                                                                  Loaded="MonitorOverrideSpinner_Loaded"/>
+                                        </StackPanel>
+
+                                        <StackPanel Grid.Column="1" Style="{StaticResource MonitorOverrideFieldColumnStyle}">
+                                            <TextBlock Text="Max brightness" Style="{StaticResource MonitorOverrideLabelStyle}"/>
+                                            <local:NumericSpinner Style="{StaticResource MonitorOverrideBrightnessSpinnerStyle}"
+                                                                  Value="{Binding MaxBrightnessOverride, UpdateSourceTrigger=PropertyChanged}"
+                                                                  Tag="MaxBrightness"
+                                                                  Loaded="MonitorOverrideSpinner_Loaded"/>
+                                        </StackPanel>
+
+                                        <!-- spacer to keep the row balanced -->
+                                        <Grid Grid.Column="2"/>
+                                    </Grid>
+                                </StackPanel>
+                                <Border Grid.Column="2"
+                                        Background="Transparent"
+                                        Cursor="Hand"
+                                        Margin="8,0,0,0"
+                                        Width="28"
+                                        VerticalAlignment="Center"
+                                        PreviewMouseLeftButtonDown="Gripper_PreviewMouseLeftButtonDown"
+                                        PreviewMouseMove="Gripper_PreviewMouseMove"
+                                        Tag="{Binding EDIDKey}"
+                                        ToolTip="Drag to reorder">
+                                    <TextBlock Text="&#xE784;"
+                                               FontFamily="Segoe Fluent Icons"
+                                               FontSize="16"
+                                               Foreground="{DynamicResource ThemeForeground}"
+                                               Opacity="0.7"
+                                               HorizontalAlignment="Center"
+                                               VerticalAlignment="Center"
+                                               IsHitTestVisible="False"/>
+                                </Border>
+                            </Grid>
+                        </Border>
+                        <Rectangle x:Name="DragSlotCover"
+                                   Fill="{DynamicResource ThemeBackground}"
+                                   Visibility="Collapsed"
+                                   IsHitTestVisible="False"/>
+                        <!-- Delete button - visible only on disconnected (inactive) cards.
+                             Lives outside DragCardContent so its IsEnabled isn't suppressed
+                             by the inactive-card dim cascade. -->
+                        <Button Width="30"
+                                Height="30"
+                                HorizontalAlignment="Left"
+                                VerticalAlignment="Top"
+                                Margin="6,6,0,0"
+                                Style="{StaticResource SettingsButtonStyle}"
+                                Padding="0"
+                                Content="&#xE894;"
+                                FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets"
+                                FontSize="11"
+                                Tag="{Binding EDIDKey}"
+                                ToolTip="Delete this saved display"
+                                Visibility="{Binding IsInactive, Converter={StaticResource BoolToVisibility}}"
+                                Click="DeleteInactiveDisplay_Click"/>
+                    </Grid>
+                </DataTemplate>
+            </ItemsControl.ItemTemplate>
+        </ItemsControl>
+    </StackPanel>
+</UserControl>
