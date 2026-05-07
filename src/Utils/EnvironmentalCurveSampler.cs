@@ -46,7 +46,7 @@ public static class EnvironmentalCurveSampler
     {
         if (series == null || series.Count == 0) return 0.0;
 
-        List<EnvironmentalCurvePoint> ordered = series.OrderBy(p => p.Time).ToList();
+        List<EnvironmentalCurvePoint> ordered = [.. series.OrderBy(p => p.Time)];
         int n = ordered.Count;
         if (n == 1) return ordered[0].Value;
 

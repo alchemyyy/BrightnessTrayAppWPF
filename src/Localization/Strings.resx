@@ -284,6 +284,9 @@ Ctrl+click: sync all displays to the brightest individual</value>
   <data name="Settings_Environmental_ApproximateFromIp_Fallback" xml:space="preserve">
     <value>Approximate from IP</value>
   </data>
+  <data name="Settings_Environmental_Cancel_Button" xml:space="preserve">
+    <value>Cancel</value>
+  </data>
   <data name="Settings_Environmental_DisabledPeriodFollowTheSun_Title" xml:space="preserve">
     <value>Follow sun</value>
   </data>
@@ -368,6 +371,15 @@ Requires at least one slider in the flyout to be set to curve mode.</value>
   </data>
   <data name="Settings_Environmental_ResetCurves_Button" xml:space="preserve">
     <value>Reset curves</value>
+  </data>
+  <data name="Settings_Environmental_ResetCurves_ConfirmButton" xml:space="preserve">
+    <value>Reset</value>
+  </data>
+  <data name="Settings_Environmental_ResetCurves_ConfirmMessage" xml:space="preserve">
+    <value>This resets the brightness and night-light curves for the current mode (offset or absolute) on the selected profile back to their flat defaults. This cannot be undone.</value>
+  </data>
+  <data name="Settings_Environmental_ResetCurves_ConfirmTitle" xml:space="preserve">
+    <value>Reset curves?</value>
   </data>
   <data name="Settings_Environmental_ResetCurves_ToolTip" xml:space="preserve">
     <value>Reset the selected profile's brightness, night-light, and offset curves back to their flat defaults. Per-profile, applied immediately.</value>
@@ -880,6 +892,9 @@ Target: {1}</value>
   <data name="Settings_Monitors_BrightnessDwellOverride_Label" xml:space="preserve">
     <value>Brightness dwell</value>
   </data>
+  <data name="Settings_Monitors_BrightnessVcpOverride_Label" xml:space="preserve">
+    <value>Brightness VCP</value>
+  </data>
   <data name="Settings_Monitors_BrightnessRate_Description" xml:space="preserve">
     <value>How long a brightness value must be set before the app will try to apply it.</value>
   </data>
@@ -928,6 +943,9 @@ Target: {1}</value>
   <data name="Settings_Monitors_DragToReorder_Tooltip" xml:space="preserve">
     <value>Drag to reorder</value>
   </data>
+  <data name="Settings_Monitors_EditNormCurve_Button" xml:space="preserve">
+    <value>Edit norm curve</value>
+  </data>
   <data name="Settings_Monitors_IdentifyDisplays_Button" xml:space="preserve">
     <value>Identify Displays</value>
   </data>
@@ -967,11 +985,8 @@ Target: {1}</value>
   <data name="Settings_Monitors_PowerOffMode_Title" xml:space="preserve">
     <value>Power off mode</value>
   </data>
-  <data name="Settings_Monitors_PowerOffOverride_Label" xml:space="preserve">
-    <value>Power off</value>
-  </data>
-  <data name="Settings_Monitors_PowerOff_Default" xml:space="preserve">
-    <value>Default</value>
+  <data name="Settings_Monitors_PowerOffVcpOverride_Label" xml:space="preserve">
+    <value>Power off VCP</value>
   </data>
   <data name="Settings_Monitors_PowerOff_Hard" xml:space="preserve">
     <value>Power off (hard)</value>

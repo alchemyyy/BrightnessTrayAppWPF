@@ -311,10 +311,6 @@ public class MonitorOverrideEntry
     [XmlAttribute]
     public string Name { get; set; } = string.Empty;
 
-    // Empty = inherit global PowerOffMode. Otherwise "Sleep" | "Soft" | "Hard".
-    [XmlAttribute]
-    public string PowerOffMode { get; set; } = string.Empty;
-
     // -1 = inherit global. Otherwise 0..10000 ms.
     [XmlAttribute]
     public int ValidationDwellMs { get; set; } = -1;
@@ -322,13 +318,30 @@ public class MonitorOverrideEntry
     [XmlAttribute]
     public int BrightnessDwellMs { get; set; } = -1;
 
-    // -1 = no per-monitor floor (defaults to 0). Otherwise 0..100 percent.
+    // 0 = no per-monitor floor (the natural slider minimum). 1..100 = active floor.
     [XmlAttribute]
-    public int MinBrightness { get; set; } = -1;
+    public int MinBrightness { get; set; } = 0;
 
-    // -1 = no per-monitor ceiling (defaults to 100). Otherwise 0..100 percent.
+    // 100 = no per-monitor ceiling (the natural slider maximum). 0..99 = active ceiling.
     [XmlAttribute]
-    public int MaxBrightness { get; set; } = -1;
+    public int MaxBrightness { get; set; } = 100;
+
+    // Raw VCP command override for the power-off action.
+    // Empty = use the resolved profile command. Otherwise either:
+    //   "0xD6 0x05" - byte + value pair sent verbatim, or
+    //   "0xD6"      - byte only; the value falls back to the profile-default mapping.
+    [XmlAttribute]
+    public string PowerOffVcpOverride { get; set; } = string.Empty;
+
+    // Raw VCP command override sent for brightness adjustments, same format as PowerOffVcpOverride.
+    [XmlAttribute]
+    public string BrightnessVcpOverride { get; set; } = string.Empty;
+
+    // Per-monitor brightness norm curve. Empty = no curve (inherit / passthrough);
+    // otherwise the editor's control points keyed by X (0..100) and Y (signed offset).
+    [XmlArray("NormCurve")]
+    [XmlArrayItem("P")]
+    public List<NormCurvePoint> NormCurvePoints { get; set; } = [];
 }
 
 /// <summary>
@@ -514,21 +527,13 @@ public class AppSettings
     [XmlArrayItem("Display")]
     public List<KnownDisplayEntry> KnownDisplays { get; set; } = [];
 
-    // Seeded for fresh installs only: a settings.xml with an existing <Hotkeys> element (even empty)
-    // will replace this list during deserialization, so users who have explicitly cleared their bindings
-    // are not re-seeded on the next launch.
+    // Empty by default; defaults are seeded by EnsureDefaultHotkeys() after construction or load.
+    // The previous in-place initializer collided with XmlSerializer's "append to existing list" behavior:
+    // the deserializer adds <Binding> elements to the list returned by the getter, so any default
+    // listed here would duplicate every time the saved settings.xml was reloaded.
     [XmlArray("Hotkeys")]
     [XmlArrayItem("Binding")]
-    public List<HotkeyBinding> Hotkeys { get; set; } =
-    [
-        new HotkeyBinding
-        {
-            Action = HotkeyAction.FullBright,
-            Modifiers = User32.MOD_CONTROL | User32.MOD_WIN | User32.MOD_ALT,
-            VirtualKey = 0x46, // VK_F
-            Enabled = true,
-        },
-    ];
+    public List<HotkeyBinding> Hotkeys { get; set; } = [];
 
     // Theme
     public int ContextMenuFontSize { get; set; } = 15;
@@ -733,6 +738,15 @@ public class AppSettings
                     // the same way fresh defaults do.
                     loaded.WireColorCallbacks();
                     loaded.InitializeSliderThumbCatalog();
+
+                    // One-time cleanup of duplicate hotkey rows that may have accumulated from a prior
+                    // build that re-seeded the default hotkey on every launch. Top up any defaults
+                    // missing from the persisted list (e.g. when a new build ships a new default action).
+                    // Skips entries the user has tombstoned via the UI (RemovedByUser=true) so an explicit
+                    // removal isn't undone on the next launch.
+                    bool changed = loaded.DedupeHotkeysByIdentity();
+                    changed |= loaded.EnsureDefaultHotkeys();
+                    if (changed) loaded.Save(path);
                     return loaded;
                 }
             }
@@ -743,8 +757,102 @@ public class AppSettings
         }
         AppSettings defaults = new();
         defaults.InitializeSliderThumbCatalog();
+        defaults.EnsureDefaultHotkeys();
         defaults.Save(path);
         return defaults;
+    }
+
+    /// <summary>
+    /// The set of built-in hotkey bindings seeded for fresh installs and topped up on every launch.
+    /// Identity is (Action, Parameter, BindingID): defaults always live on BindingID 0 (the primary
+    /// row), so a user-added secondary binding (BindingID >= 1) for the same action does not block
+    /// re-seeding the primary row.
+    /// </summary>
+    private static IReadOnlyList<HotkeyBinding> CreateDefaultHotkeys() =>
+    [
+        new HotkeyBinding
+        {
+            Action = HotkeyAction.FullBright,
+            Parameter = string.Empty,
+            Modifiers = User32.MOD_CONTROL | User32.MOD_WIN | User32.MOD_ALT,
+            VirtualKey = 0x46, // VK_F
+            Enabled = true,
+            BindingID = 0,
+        },
+    ];
+
+    /// <summary>
+    /// True if the binding occupies the same identity slot as one of the built-in defaults
+    /// (same Action, Parameter, and BindingID). Used by the settings UI to decide whether
+    /// removing a binding should hard-delete it or keep it as a tombstone (RemovedByUser=true)
+    /// so the default doesn't reappear on the next launch.
+    /// </summary>
+    public static bool IsDefaultHotkeyIdentity(HotkeyAction action, string parameter, int bindingID)
+    {
+        foreach (HotkeyBinding d in CreateDefaultHotkeys())
+            if (d.Matches(action, parameter, bindingID)) return true;
+        return false;
+    }
+
+    /// <summary>
+    /// Removes redundant hotkey rows that share the same identity tuple (Action, Parameter, BindingID),
+    /// keeping the first occurrence. Cleans up the duplicate rows that older builds accumulated
+    /// when the default list was re-seeded on every load.
+    /// Returns true when at least one row was dropped (caller should persist).
+    /// </summary>
+    public bool DedupeHotkeysByIdentity()
+    {
+        HashSet<(HotkeyAction, string, int)> seen = [];
+        int writeIndex = 0;
+        for (int readIndex = 0; readIndex < Hotkeys.Count; readIndex++)
+        {
+            HotkeyBinding b = Hotkeys[readIndex];
+            (HotkeyAction, string, int) key = (b.Action, b.Parameter ?? string.Empty, b.BindingID);
+            if (!seen.Add(key)) continue;
+
+            if (writeIndex != readIndex) Hotkeys[writeIndex] = b;
+            writeIndex++;
+        }
+        if (writeIndex == Hotkeys.Count) return false;
+
+        Hotkeys.RemoveRange(writeIndex, Hotkeys.Count - writeIndex);
+        return true;
+    }
+
+    /// <summary>
+    /// Adds any built-in default hotkey bindings that aren't already represented in <see cref="Hotkeys"/>.
+    /// "Represented" means: an existing entry with the same (Action, Parameter, BindingID) - including
+    /// tombstoned entries with RemovedByUser=true - so a user who has explicitly removed a default
+    /// is not re-seeded.
+    /// Returns true when at least one default was newly added (caller should persist).
+    /// </summary>
+    public bool EnsureDefaultHotkeys()
+    {
+        bool added = false;
+        foreach (HotkeyBinding d in CreateDefaultHotkeys())
+        {
+            bool present = false;
+            foreach (HotkeyBinding existing in Hotkeys)
+            {
+                if (!existing.Matches(d.Action, d.Parameter, d.BindingID)) continue;
+
+                present = true;
+                break;
+            }
+            if (present) continue;
+
+            Hotkeys.Add(new HotkeyBinding
+            {
+                Action = d.Action,
+                Parameter = d.Parameter,
+                Modifiers = d.Modifiers,
+                VirtualKey = d.VirtualKey,
+                Enabled = d.Enabled,
+                BindingID = d.BindingID,
+            });
+            added = true;
+        }
+        return added;
     }
 
     /// <summary>

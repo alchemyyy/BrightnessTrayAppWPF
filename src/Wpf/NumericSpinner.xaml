@@ -22,6 +22,8 @@
                          PreviewTextInput="OnPreviewTextInput"
                          PreviewMouseWheel="OnPreviewMouseWheel"
                          PreviewKeyDown="OnPreviewKeyDown"
+                         GotKeyboardFocus="OnTextBoxFocusChanged"
+                         LostKeyboardFocus="OnTextBoxFocusChanged"
                          LostFocus="OnTextBoxLostFocus"/>
                 <TextBlock Grid.Column="1"
                            x:Name="PART_Suffix"

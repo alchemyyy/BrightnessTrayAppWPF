@@ -645,7 +645,16 @@ namespace BrightnessTrayAppWPF.Localization {
                 return ResourceManager.GetString("Settings_Environmental_ApproximateFromIp_Fallback", resourceCulture);
             }
         }
-        
+
+        /// <summary>
+        ///   Looks up a localized string similar to Cancel.
+        /// </summary>
+        public static string Settings_Environmental_Cancel_Button {
+            get {
+                return ResourceManager.GetString("Settings_Environmental_Cancel_Button", resourceCulture);
+            }
+        }
+
         /// <summary>
         ///   Looks up a localized string similar to End.
         /// </summary>
@@ -898,7 +907,34 @@ namespace BrightnessTrayAppWPF.Localization {
                 return ResourceManager.GetString("Settings_Environmental_ResetCurves_Button", resourceCulture);
             }
         }
-        
+
+        /// <summary>
+        ///   Looks up a localized string similar to Reset.
+        /// </summary>
+        public static string Settings_Environmental_ResetCurves_ConfirmButton {
+            get {
+                return ResourceManager.GetString("Settings_Environmental_ResetCurves_ConfirmButton", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to This resets the brightness and night-light curves for the current mode (offset or absolute) on the selected profile back to their flat defaults. This cannot be undone..
+        /// </summary>
+        public static string Settings_Environmental_ResetCurves_ConfirmMessage {
+            get {
+                return ResourceManager.GetString("Settings_Environmental_ResetCurves_ConfirmMessage", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Reset curves?.
+        /// </summary>
+        public static string Settings_Environmental_ResetCurves_ConfirmTitle {
+            get {
+                return ResourceManager.GetString("Settings_Environmental_ResetCurves_ConfirmTitle", resourceCulture);
+            }
+        }
+
         /// <summary>
         ///   Looks up a localized string similar to Reset the selected profile&apos;s brightness, night-light, and offset curves back to their flat defaults. Per-profile, applied immediately..
         /// </summary>
@@ -2429,7 +2465,16 @@ namespace BrightnessTrayAppWPF.Localization {
                 return ResourceManager.GetString("Settings_Monitors_BrightnessDwellOverride_Label", resourceCulture);
             }
         }
-        
+
+        /// <summary>
+        ///   Looks up a localized string similar to Brightness VCP.
+        /// </summary>
+        public static string Settings_Monitors_BrightnessVcpOverride_Label {
+            get {
+                return ResourceManager.GetString("Settings_Monitors_BrightnessVcpOverride_Label", resourceCulture);
+            }
+        }
+
         /// <summary>
         ///   Looks up a localized string similar to How long a brightness value must be set before the app will try to apply it..
         /// </summary>
@@ -2573,7 +2618,16 @@ namespace BrightnessTrayAppWPF.Localization {
                 return ResourceManager.GetString("Settings_Monitors_DragToReorder_Tooltip", resourceCulture);
             }
         }
-        
+
+        /// <summary>
+        ///   Looks up a localized string similar to Edit norm curve.
+        /// </summary>
+        public static string Settings_Monitors_EditNormCurve_Button {
+            get {
+                return ResourceManager.GetString("Settings_Monitors_EditNormCurve_Button", resourceCulture);
+            }
+        }
+
         /// <summary>
         ///   Looks up a localized string similar to Identify Displays.
         /// </summary>
@@ -2674,15 +2728,6 @@ namespace BrightnessTrayAppWPF.Localization {
         }
         
         /// <summary>
-        ///   Looks up a localized string similar to Default.
-        /// </summary>
-        public static string Settings_Monitors_PowerOff_Default {
-            get {
-                return ResourceManager.GetString("Settings_Monitors_PowerOff_Default", resourceCulture);
-            }
-        }
-        
-        /// <summary>
         ///   Looks up a localized string similar to Power off (hard).
         /// </summary>
         public static string Settings_Monitors_PowerOff_Hard {
@@ -2728,14 +2773,14 @@ namespace BrightnessTrayAppWPF.Localization {
         }
         
         /// <summary>
-        ///   Looks up a localized string similar to Power off.
+        ///   Looks up a localized string similar to Power off VCP.
         /// </summary>
-        public static string Settings_Monitors_PowerOffOverride_Label {
+        public static string Settings_Monitors_PowerOffVcpOverride_Label {
             get {
-                return ResourceManager.GetString("Settings_Monitors_PowerOffOverride_Label", resourceCulture);
+                return ResourceManager.GetString("Settings_Monitors_PowerOffVcpOverride_Label", resourceCulture);
             }
         }
-        
+
         /// <summary>
         ///   Looks up a localized string similar to Monitor options.
         /// </summary>

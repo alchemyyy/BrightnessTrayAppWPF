@@ -104,6 +104,15 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- Per-monitor VCP-command profile database (309 monitors + family templates).
+         Loaded once at first lookup by DDCMonitorDatabase via GetManifestResourceStream.
+         Source data lives in claudeit/ddc-research/; rebuild with the build-consolidated-db.py script. -->
+    <EmbeddedResource Include="DDCCI\monitor-database.json">
+      <LogicalName>BrightnessTrayAppWPF.DDCCI.monitor-database.json</LogicalName>
+    </EmbeddedResource>
+  </ItemGroup>
+
+  <ItemGroup>
     <ApplicationDefinition Include="WPF\App.xaml" />
     <!-- The default Page glob (**\*.xaml) would otherwise pick up App.xaml as a Page. -->
     <Page Remove="WPF\App.xaml" />

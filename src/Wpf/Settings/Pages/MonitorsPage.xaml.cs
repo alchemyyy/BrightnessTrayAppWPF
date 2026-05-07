@@ -1,12 +1,15 @@
 using System.Collections.ObjectModel;
 using System.ComponentModel;
+using System.Globalization;
 using System.Runtime.CompilerServices;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
+using BrightnessTrayAppWPF.DDCCI;
 using BrightnessTrayAppWPF.Localization;
 using BrightnessTrayAppWPF.Models;
 using BrightnessTrayAppWPF.Services;
+using BrightnessTrayAppWPF.WPF.Settings.Pages.MonitorsPageAddons;
 using BrightnessTrayAppWPF.WPF.Settings.Utils;
 using Button = System.Windows.Controls.Button;
 using ComboBox = System.Windows.Controls.ComboBox;
@@ -28,11 +31,18 @@ public class MonitorListEntry : INotifyPropertyChanged
     private string _nameOverride = string.Empty;
     private int _displayNumber;
     private bool _isActive;
-    private string _powerOffOverride = string.Empty;
     private int _validationDwellOverride = -1;
     private int _brightnessDwellOverride = -1;
-    private int _minBrightnessOverride = -1;
-    private int _maxBrightnessOverride = -1;
+    private int _minBrightnessOverride = 0;
+    private int _maxBrightnessOverride = 100;
+    private string _powerOffVcpOverride = string.Empty;
+    private string _brightnessVcpOverride = string.Empty;
+    private bool _isNormCurveEditorOpen;
+    private string _validationDwellPlaceholder = string.Empty;
+    private string _brightnessDwellPlaceholder = string.Empty;
+    private string _powerOffVcpPlaceholder = string.Empty;
+    private string _brightnessVcpPlaceholder = string.Empty;
+    private string _namePlaceholder = string.Empty;
 
     /// <summary>EDID-first identifier. Stable across identity-strategy changes.</summary>
     public string EDIDKey { get; init; } = string.Empty;
@@ -107,29 +117,18 @@ public class MonitorListEntry : INotifyPropertyChanged
     public string DisplayNumberLabel =>
         IsActive && DisplayNumber > 0 ? DisplayNumber.ToString() : string.Empty;
 
-    // Empty string = inherit global. Otherwise combo Tag: "Sleep"|"Soft"|"Hard".
-    public string PowerOffOverride
-    {
-        get => _powerOffOverride;
-        set
-        {
-            if (_powerOffOverride != value)
-            {
-                _powerOffOverride = value;
-                OnPropertyChanged();
-            }
-        }
-    }
-
     // -1 = inherit global. Otherwise a numeric ms value.
+    // 0 round-trips through -1 so both render as the placeholder; storage stays on the inherit
+    // sentinel either way.
     public int ValidationDwellOverride
     {
         get => _validationDwellOverride;
         set
         {
-            if (_validationDwellOverride != value)
+            int normalized = value == 0 ? -1 : value;
+            if (_validationDwellOverride != normalized)
             {
-                _validationDwellOverride = value;
+                _validationDwellOverride = normalized;
                 OnPropertyChanged();
             }
         }
@@ -140,15 +139,16 @@ public class MonitorListEntry : INotifyPropertyChanged
         get => _brightnessDwellOverride;
         set
         {
-            if (_brightnessDwellOverride != value)
+            int normalized = value == 0 ? -1 : value;
+            if (_brightnessDwellOverride != normalized)
             {
-                _brightnessDwellOverride = value;
+                _brightnessDwellOverride = normalized;
                 OnPropertyChanged();
             }
         }
     }
 
-    // -1 = no per-monitor floor (defaults to 0). Otherwise 0..100.
+    // 0 = no per-monitor floor (the natural slider minimum). 1..100 = active floor.
     public int MinBrightnessOverride
     {
         get => _minBrightnessOverride;
@@ -162,7 +162,7 @@ public class MonitorListEntry : INotifyPropertyChanged
         }
     }
 
-    // -1 = no per-monitor ceiling (defaults to 100). Otherwise 0..100.
+    // 100 = no per-monitor ceiling (the natural slider maximum). 0..99 = active ceiling.
     public int MaxBrightnessOverride
     {
         get => _maxBrightnessOverride;
@@ -171,6 +171,127 @@ public class MonitorListEntry : INotifyPropertyChanged
             if (_maxBrightnessOverride != value)
             {
                 _maxBrightnessOverride = value;
+                OnPropertyChanged();
+            }
+        }
+    }
+
+    // Raw VCP override strings. Empty = inherit profile default.
+    // Format: "0xD6 0x05" (byte + value) or "0xD6" (byte only, default value applies).
+    public string PowerOffVcpOverride
+    {
+        get => _powerOffVcpOverride;
+        set
+        {
+            if (_powerOffVcpOverride != value)
+            {
+                _powerOffVcpOverride = value;
+                OnPropertyChanged();
+            }
+        }
+    }
+
+    public string BrightnessVcpOverride
+    {
+        get => _brightnessVcpOverride;
+        set
+        {
+            if (_brightnessVcpOverride != value)
+            {
+                _brightnessVcpOverride = value;
+                OnPropertyChanged();
+            }
+        }
+    }
+
+    // Live placeholder strings shown dimmed inside the override controls when the field carries no
+    // override. Pushed in by MonitorsPage on settings load and on every relevant settings change so a
+    // global dwell or PowerOff-mode change reflects across all rows in real time.
+
+    public string ValidationDwellPlaceholder
+    {
+        get => _validationDwellPlaceholder;
+        set
+        {
+            if (_validationDwellPlaceholder != value)
+            {
+                _validationDwellPlaceholder = value;
+                OnPropertyChanged();
+            }
+        }
+    }
+
+    public string BrightnessDwellPlaceholder
+    {
+        get => _brightnessDwellPlaceholder;
+        set
+        {
+            if (_brightnessDwellPlaceholder != value)
+            {
+                _brightnessDwellPlaceholder = value;
+                OnPropertyChanged();
+            }
+        }
+    }
+
+    public string PowerOffVcpPlaceholder
+    {
+        get => _powerOffVcpPlaceholder;
+        set
+        {
+            if (_powerOffVcpPlaceholder != value)
+            {
+                _powerOffVcpPlaceholder = value;
+                OnPropertyChanged();
+            }
+        }
+    }
+
+    public string BrightnessVcpPlaceholder
+    {
+        get => _brightnessVcpPlaceholder;
+        set
+        {
+            if (_brightnessVcpPlaceholder != value)
+            {
+                _brightnessVcpPlaceholder = value;
+                OnPropertyChanged();
+            }
+        }
+    }
+
+    public string NamePlaceholder
+    {
+        get => _namePlaceholder;
+        set
+        {
+            if (_namePlaceholder != value)
+            {
+                _namePlaceholder = value;
+                OnPropertyChanged();
+            }
+        }
+    }
+
+    /// <summary>
+    /// Live point list for this row's per-monitor norm curve.
+    /// Held by reference so the row's <see cref="NormCurveEditor"/> mutates the same list the
+    /// settings layer persists - no copy-on-edit, no manual sync between editor and storage.
+    /// </summary>
+    public List<NormCurvePoint> NormCurvePoints { get; init; } = [];
+
+    /// <summary>
+    /// Toggled by the row's "Edit norm curve" button. The DataTemplate's editor host
+    /// binds Visibility through this so pressing the button again collapses it.
+    /// </summary>
+    public bool IsNormCurveEditorOpen
+    {
+        get => _isNormCurveEditorOpen;
+        set
+        {
+            if (_isNormCurveEditorOpen != value)
+            {
+                _isNormCurveEditorOpen = value;
                 OnPropertyChanged();
             }
         }
@@ -221,8 +342,13 @@ public partial class MonitorsPage : UserControl
     public void LoadFromSettings(
         AppSettings settings, MonitorService? monitorService, IConfirmDialogService confirmDialogService)
     {
+        // Detach any prior settings-change subscription before re-pointing _settings,
+        // so a re-call against a fresh AppSettings instance doesn't leak the old hook.
+        if (_settings != null) _settings.Changed -= OnSettingsChanged;
+
         _settings = settings;
         _confirmDialogService = confirmDialogService;
+        _settings.Changed += OnSettingsChanged;
 
         // Re-target the MonitorsRefreshed subscription if the service instance changed across reloads.
         if (!ReferenceEquals(_monitorService, monitorService))
@@ -274,7 +400,11 @@ public partial class MonitorsPage : UserControl
         PopulateMonitorList();
     }
 
-    private void OnUnloaded(object sender, RoutedEventArgs e) => DetachMonitorServiceEvents();
+    private void OnUnloaded(object sender, RoutedEventArgs e)
+    {
+        DetachMonitorServiceEvents();
+        if (_settings != null) _settings.Changed -= OnSettingsChanged;
+    }
 
     private void DetachMonitorServiceEvents()
     {
@@ -282,6 +412,10 @@ public partial class MonitorsPage : UserControl
 
         _monitorService.MonitorsRefreshed -= OnMonitorsRefreshed;
     }
+
+    // Fires whenever AppSettings.Save+RaiseChanged is invoked from anywhere - own page, other pages,
+    // backend changes. We re-derive the placeholder strings on each call; refresh is cheap.
+    private void OnSettingsChanged() => Dispatcher.BeginInvoke(RefreshPlaceholders);
 
     private void OnMonitorsRefreshed() => Dispatcher.BeginInvoke(PopulateMonitorList);
 
@@ -321,7 +455,44 @@ public partial class MonitorsPage : UserControl
             _monitors.Add(BuildInactiveEntry(k, ddcOverrides));
 
         MonitorListPanel.ItemsSource = _monitors;
+
+        RefreshPlaceholders();
     }
+
+    // Pushes the dimmed default-value strings shown inside per-monitor override controls.
+    // Called once after each PopulateMonitorList rebuild and again from OnSettingsChanged so a global
+    // dwell tweak or a PowerOff-mode flip lights up across every row instantly.
+    private void RefreshPlaceholders()
+    {
+        if (_settings == null) return;
+
+        string validationDwell = _settings.ValidationDwellMs.ToString(CultureInfo.InvariantCulture);
+        string brightnessDwell = _settings.BrightnessUpdateRateMs.ToString(CultureInfo.InvariantCulture);
+        string powerOffVcp = ResolvePowerOffVcpDefault(_settings.PowerOffMode);
+        // Brightness VCP default is the universal MCCS Luminance code (0x10) - no monitor in the
+        // surveyed corpus uses anything else, so the resolved default is constant per VCPConstants.
+        string brightnessVcp = $"0x{VCPConstants.Brightness:X2}";
+
+        foreach (MonitorListEntry e in _monitors)
+        {
+            e.ValidationDwellPlaceholder = validationDwell;
+            e.BrightnessDwellPlaceholder = brightnessDwell;
+            e.PowerOffVcpPlaceholder = powerOffVcp;
+            e.BrightnessVcpPlaceholder = brightnessVcp;
+            e.NamePlaceholder = e.OriginalNameDisplay;
+        }
+    }
+
+    // VESA-default DPMS values for the three PowerOff modes (0xD6 with Standby/Soft/Hard).
+    // Kept as a static lookup so flipping the PowerOffMode combo can update all visible rows in one
+    // O(N) sweep without touching the per-monitor profile (which would require plumbing DDCMonitor
+    // out of MonitorService for what is, in the end, just placeholder hint text).
+    private static string ResolvePowerOffVcpDefault(PowerOffMode mode) => mode switch
+    {
+        PowerOffMode.Sleep => "0xD6 0x02",
+        PowerOffMode.Soft => "0xD6 0x04",
+        _ => "0xD6 0x05",
+    };
 
     private static MonitorListEntry BuildLiveEntry(
         MonitorInfo m,
@@ -336,11 +507,13 @@ public partial class MonitorsPage : UserControl
             NameOverride = ov?.Name ?? string.Empty,
             DisplayNumber = m.DisplayNumber,
             IsActive = m.DisplayNumber > 0,
-            PowerOffOverride = ov?.PowerOffMode ?? string.Empty,
             ValidationDwellOverride = ov?.ValidationDwellMs ?? -1,
             BrightnessDwellOverride = ov?.BrightnessDwellMs ?? -1,
-            MinBrightnessOverride = ov?.MinBrightness ?? -1,
-            MaxBrightnessOverride = ov?.MaxBrightness ?? -1,
+            MinBrightnessOverride = ov?.MinBrightness ?? 0,
+            MaxBrightnessOverride = ov?.MaxBrightness ?? 100,
+            PowerOffVcpOverride = ov?.PowerOffVcpOverride ?? string.Empty,
+            BrightnessVcpOverride = ov?.BrightnessVcpOverride ?? string.Empty,
+            NormCurvePoints = ClonePoints(ov?.NormCurvePoints),
         };
     }
 
@@ -357,13 +530,21 @@ public partial class MonitorsPage : UserControl
             NameOverride = ov?.Name ?? string.Empty,
             DisplayNumber = 0,
             IsActive = false,
-            PowerOffOverride = ov?.PowerOffMode ?? string.Empty,
             ValidationDwellOverride = ov?.ValidationDwellMs ?? -1,
             BrightnessDwellOverride = ov?.BrightnessDwellMs ?? -1,
-            MinBrightnessOverride = ov?.MinBrightness ?? -1,
-            MaxBrightnessOverride = ov?.MaxBrightness ?? -1,
+            MinBrightnessOverride = ov?.MinBrightness ?? 0,
+            MaxBrightnessOverride = ov?.MaxBrightness ?? 100,
+            PowerOffVcpOverride = ov?.PowerOffVcpOverride ?? string.Empty,
+            BrightnessVcpOverride = ov?.BrightnessVcpOverride ?? string.Empty,
+            NormCurvePoints = ClonePoints(ov?.NormCurvePoints),
         };
     }
+
+    // MonitorOverrideEntry's NormCurvePoints list lives in the settings model; the row's editor
+    // mutates the row's own list. Clone-on-load keeps the two lists distinct so a transient row edit
+    // can't reach into settings until the editor pushes back through SaveAndNotify.
+    private static List<NormCurvePoint> ClonePoints(List<NormCurvePoint>? source) =>
+        source is null ? [] : [.. source.Select(p => new NormCurvePoint { X = p.X, Y = p.Y })];
 
     private void EnumCombo_Changed(object sender, SelectionChangedEventArgs e)
     {
@@ -498,29 +679,73 @@ public partial class MonitorsPage : UserControl
 
     // --- Per-monitor DDC/CI overrides ---
 
-    private void MonitorPowerOffOverrideCombo_Loaded(object sender, RoutedEventArgs e)
+    // Toggles the per-row NormCurveEditor visibility. Each row carries its own editor
+    // (stamped by the DataTemplate), so flipping IsNormCurveEditorOpen expands the editor
+    // inside the override card and collapses it on the next press.
+    private void EditNormCurve_Click(object sender, RoutedEventArgs e)
     {
-        if (sender is not ComboBox { DataContext: MonitorListEntry entry } cb) return;
+        if (sender is not Button { DataContext: MonitorListEntry entry }) return;
 
-        ComboBoxItem? match = cb.Items.OfType<ComboBoxItem>()
-            .FirstOrDefault(i => (i.Tag?.ToString() ?? string.Empty) == entry.PowerOffOverride);
-
-        bool wasSuppressed = _suppressChangeEvents;
-        _suppressChangeEvents = true;
-        try { cb.SelectedItem = match ?? cb.Items[0]; }
-        finally { _suppressChangeEvents = wasSuppressed; }
+        entry.IsNormCurveEditorOpen = !entry.IsNormCurveEditorOpen;
     }
 
-    private void MonitorPowerOffOverride_Changed(object sender, SelectionChangedEventArgs e)
+    // Hooks the per-row editor when its DataTemplate stamps it: hands the row's live point list
+    // over by reference so edits land back on the entry, and subscribes a row-scoped handler
+    // for persistence. Loaded can fire more than once per element (template recycling), so the
+    // editor's Tag stores the previous handler to detach before re-subscribing.
+    private void NormCurveEditor_Loaded(object sender, RoutedEventArgs e)
+    {
+        if (sender is not NormCurveEditor editor) return;
+
+        if (editor.DataContext is not MonitorListEntry entry) return;
+
+        editor.SetPoints(entry.NormCurvePoints);
+
+        if (editor.Tag is Action previous) editor.CurveChanged -= previous;
+
+        Action handler = () => PersistRowNormCurve(entry);
+        editor.Tag = handler;
+        editor.CurveChanged += handler;
+    }
+
+    private void PersistRowNormCurve(MonitorListEntry entry)
+    {
+        if (_settings == null) return;
+
+        if (string.IsNullOrEmpty(entry.EDIDKey)) return;
+
+        UpdateMonitorOverride(entry.EDIDKey, o => o.NormCurvePoints =
+            [.. entry.NormCurvePoints.Select(p => new NormCurvePoint { X = p.X, Y = p.Y })]);
+        SaveAndNotify();
+    }
+
+    // Raw VCP override textbox commit handler.
+    // TextBox.Tag identifies which override field this row controls;
+    // the entered string is stored verbatim (trimmed) so it round-trips through settings.xml exactly as typed.
+    private void MonitorVcpOverride_LostFocus(object sender, RoutedEventArgs e)
     {
         if (_suppressChangeEvents) return;
 
-        if (sender is not ComboBox { Tag: string id } cb) return;
+        if (sender is not TextBox { DataContext: MonitorListEntry entry } tb) return;
 
-        if (cb.SelectedItem is not ComboBoxItem item) return;
+        if (string.IsNullOrEmpty(entry.EDIDKey)) return;
 
-        string value = item.Tag?.ToString() ?? string.Empty;
-        UpdateMonitorOverride(id, o => o.PowerOffMode = value);
+        string value = tb.Text.Trim();
+        if (tb.Text != value) tb.Text = value;
+
+        switch (tb.Tag as string)
+        {
+            case "PowerOffVcp":
+                entry.PowerOffVcpOverride = value;
+                UpdateMonitorOverride(entry.EDIDKey, o => o.PowerOffVcpOverride = value);
+                break;
+            case "BrightnessVcp":
+                entry.BrightnessVcpOverride = value;
+                UpdateMonitorOverride(entry.EDIDKey, o => o.BrightnessVcpOverride = value);
+                break;
+            default:
+                return;
+        }
         SaveAndNotify();
     }
 
@@ -582,14 +807,18 @@ public partial class MonitorsPage : UserControl
         mutate(entry);
 
         // If every field is back to "inherit", drop the row so the settings file stays tidy.
-        if (string.IsNullOrEmpty(entry.PowerOffMode)
-            && string.IsNullOrEmpty(entry.Name)
+        // MinBrightness <= 0 and MaxBrightness >= 100 are the no-op bounds (clamping to those
+        // is identical to no clamp); covers the 0/100 defaults plus any legacy -1 / >100 leftovers.
+        if (string.IsNullOrEmpty(entry.Name)
+            && string.IsNullOrEmpty(entry.PowerOffVcpOverride)
+            && string.IsNullOrEmpty(entry.BrightnessVcpOverride)
+            && entry.NormCurvePoints.Count == 0
             && entry is
             {
-                ValidationDwellMs: < 0,
-                BrightnessDwellMs: < 0,
-                MinBrightness: < 0,
-                MaxBrightness: < 0,
+                ValidationDwellMs: <= 0,
+                BrightnessDwellMs: <= 0,
+                MinBrightness: <= 0,
+                MaxBrightness: >= 100,
             })
             _settings.MonitorOverrides.Remove(entry);
     }

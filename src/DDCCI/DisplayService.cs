@@ -57,6 +57,14 @@ public class DisplayService : IDisplayService
                 {
                     monitor.EDIDSerial = EDIDParser.ExtractSerial(edid);
                     monitor.FriendlyName = EDIDParser.ExtractMonitorName(edid);
+                    monitor.EDIDManufacturerId = EDIDParser.ExtractManufacturerId(edid);
+                    ushort productCode = EDIDParser.ExtractProductCode(edid);
+                    monitor.EDIDProductCode = productCode == 0
+                        ? string.Empty
+                        : productCode.ToString("X4", CultureInfo.InvariantCulture);
+                    // Populate per-monitor VCP profile fields (BrightnessCode, PowerOffCommands, ProfileQuirks)
+                    // by EDID identity. Misses leave the VESA-standard defaults in place.
+                    DDCMonitorDatabase.ApplyProfile(monitor);
                 }
             }
         }

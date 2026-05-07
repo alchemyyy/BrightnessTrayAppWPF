@@ -73,6 +73,7 @@ public sealed class GlobalHotkeyService : IDisposable
         HotkeyApplyResult result = new();
         foreach (HotkeyBinding b in bindings)
         {
+            if (b.RemovedByUser) continue;
             if (!b.Enabled || !b.IsBound) continue;
 
             if (TryRegisterInternal(b, out string? error))

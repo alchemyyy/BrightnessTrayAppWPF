@@ -905,11 +905,31 @@ public partial class EnvironmentalPage : UserControl
         return true;
     }
 
-    private void EnvironmentalResetCurves_Click(object sender, RoutedEventArgs e)
+    private async void EnvironmentalResetCurves_Click(object sender, RoutedEventArgs e)
     {
         if (_profileManager == null) return;
         if (_settings == null) return;
 
+        if (_environmentalProfileIndex < 0 || _environmentalProfileIndex >= _profileManager.Profiles.Profiles.Count)
+            return;
+
+        // Gate the destructive reset behind the shell's confirm overlay.
+        // The reset replaces the active mode's curve lists with fresh defaults and is not undoable
+        // once Save has run, so a confirm step is worth the extra click.
+        if (Window.GetWindow(this) is IConfirmDialogService confirm)
+        {
+            bool ok = await confirm.ConfirmAsync(
+                title: LocalizationManager.Instance["Settings_Environmental_ResetCurves_ConfirmTitle"],
+                message: LocalizationManager.Instance["Settings_Environmental_ResetCurves_ConfirmMessage"],
+                confirmText: LocalizationManager.Instance["Settings_Environmental_ResetCurves_ConfirmButton"],
+                cancelText: LocalizationManager.Instance["Settings_Environmental_Cancel_Button"]);
+            if (!ok) return;
+        }
+
+        // Re-validate after the await: the dialog is modal but state-bearing fields can still go
+        // stale if the page was disposed/reloaded while the prompt was up.
+        if (_profileManager == null) return;
+        if (_settings == null) return;
         if (_environmentalProfileIndex < 0 || _environmentalProfileIndex >= _profileManager.Profiles.Profiles.Count)
             return;
 

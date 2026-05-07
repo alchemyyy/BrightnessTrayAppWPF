@@ -64,6 +64,16 @@ public sealed class HotkeyBinding
     [XmlAttribute]
     public int BindingID { get; set; }
 
+    /// <summary>
+    /// Tombstone flag: true means the user explicitly removed this binding through the UI.
+    /// Tombstones are kept in the persisted list (instead of being deleted) so the default-seeder
+    /// in <see cref="AppSettings.EnsureDefaultHotkeys"/> can tell that a default was removed
+    /// on purpose and must not be re-added on the next launch.
+    /// Filtered out of UI display and hotkey registration.
+    /// </summary>
+    [XmlAttribute]
+    public bool RemovedByUser { get; set; }
+
     public bool IsBound => VirtualKey != 0 && Modifiers != 0;
 
     /// <summary>

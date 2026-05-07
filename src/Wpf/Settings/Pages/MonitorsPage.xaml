@@ -8,6 +8,7 @@
     xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
     xmlns:utils1="clr-namespace:BrightnessTrayAppWPF.WPF.Utils"
+    xmlns:addons="clr-namespace:BrightnessTrayAppWPF.WPF.Settings.Pages.MonitorsPageAddons"
     xmlns:loc="clr-namespace:BrightnessTrayAppWPF.Localization"
     mc:Ignorable="d"
     d:DesignWidth="660"
@@ -16,9 +17,9 @@
     utils1:SettingsKeyboardNavigation.IsContentSection="True">
     <UserControl.Resources>
         <!-- Per-monitor override row primitives.
-             The MonitorListEntry DataTemplate stamps two three-column override rows per card;
+             The MonitorListEntry DataTemplate stamps two four-column override rows per card;
              these styles centralize the row top margin, the inner-column gutter, and the
-             label / spinner presets that the card duplicates across all 4 numeric overrides. -->
+             label / spinner / textbox presets that the card duplicates across all overrides. -->
 
         <Style x:Key="MonitorOverrideRowStyle" TargetType="Grid">
             <Setter Property="Margin" Value="0,8,0,0"/>
@@ -47,7 +48,6 @@
             <Setter Property="Minimum" Value="0"/>
             <Setter Property="Maximum" Value="100"/>
             <Setter Property="WheelStep" Value="5"/>
-            <Setter Property="AllowInherit" Value="True"/>
         </Style>
     </UserControl.Resources>
     <StackPanel>
@@ -205,14 +205,15 @@
                                 <StackPanel Grid.Column="1">
                                     <!-- Original name (plain text) + Name override box.
                                          Mirrors the column layout of the override rows below
-                                         so the TextBox lines up with their third column. -->
+                                         so the TextBox lines up with their fourth column. -->
                                     <Grid>
                                         <Grid.ColumnDefinitions>
                                             <ColumnDefinition Width="*"/>
                                             <ColumnDefinition Width="*"/>
                                             <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="*"/>
                                         </Grid.ColumnDefinitions>
-                                        <DockPanel Grid.Column="0" Grid.ColumnSpan="2" LastChildFill="True">
+                                        <DockPanel Grid.Column="0" Grid.ColumnSpan="3" LastChildFill="True">
                                             <TextBlock DockPanel.Dock="Right"
                                                        Text="{loc:Loc Settings_Monitors_Name_Label}"
                                                        Style="{StaticResource SettingDescriptionStyle}"
@@ -227,61 +228,23 @@
                                                                                                             Foreground="{DynamicResource ThemeSecondaryForeground}"/>
                                             </TextBlock>
                                         </DockPanel>
-                                        <TextBox Grid.Column="2"
+                                        <TextBox Grid.Column="3"
                                                  Style="{StaticResource SettingsTextBoxStyle}"
                                                  Text="{Binding NameOverride, UpdateSourceTrigger=LostFocus}"
                                                  VerticalAlignment="Center"
                                                  LostFocus="MonitorName_LostFocus"
                                                  Tag="{Binding EDIDKey}"
+                                                 utils1:WatermarkBehavior.Text="{Binding NamePlaceholder}"
                                                  Margin="6,0,0,0"/>
                                     </Grid>
 
                                     <!-- Override row 1:
-                                         Power off, Validation dwell, Brightness dwell.
-                                         Inner-only right margin on cols 0 / 1 keeps a 12px gutter without
+                                         Min brightness, Max brightness, Validation dwell, Brightness dwell.
+                                         Inner-only right margin on cols 0 / 1 / 2 keeps a 12px gutter without
                                          stacking adjacent margins (which previously summed to 12). -->
                                     <Grid Style="{StaticResource MonitorOverrideRowStyle}">
                                         <Grid.ColumnDefinitions>
                                             <ColumnDefinition Width="*"/>
-                                            <ColumnDefinition Width="*"/>
-                                            <ColumnDefinition Width="*"/>
-                                        </Grid.ColumnDefinitions>
-
-                                        <StackPanel Grid.Column="0" Style="{StaticResource MonitorOverrideFieldColumnStyle}">
-                                            <TextBlock Text="{loc:Loc Settings_Monitors_PowerOffOverride_Label}" Style="{StaticResource MonitorOverrideLabelStyle}"/>
-                                            <ComboBox Style="{StaticResource SettingsComboBoxStyle}"
-                                                      MinWidth="0"
-                                                      HorizontalAlignment="Stretch"
-                                                      Tag="{Binding EDIDKey}"
-                                                      Loaded="MonitorPowerOffOverrideCombo_Loaded"
-                                                      SelectionChanged="MonitorPowerOffOverride_Changed">
-                                                <ComboBoxItem Tag="" Content="{loc:Loc Settings_Monitors_PowerOff_Default}"/>
-                                                <ComboBoxItem Tag="Sleep" Content="{loc:Loc Settings_Monitors_PowerOff_Sleep}"/>
-                                                <ComboBoxItem Tag="Soft" Content="{loc:Loc Settings_Monitors_PowerOff_Soft}"/>
-                                                <ComboBoxItem Tag="Hard" Content="{loc:Loc Settings_Monitors_PowerOff_Hard}"/>
-                                            </ComboBox>
-                                        </StackPanel>
-
-                                        <StackPanel Grid.Column="1" Style="{StaticResource MonitorOverrideFieldColumnStyle}">
-                                            <TextBlock Text="{loc:Loc Settings_Monitors_ValidationDwellOverride_Label}" Style="{StaticResource MonitorOverrideLabelStyle}"/>
-                                            <local:NumericSpinner Style="{StaticResource MonitorOverrideDwellSpinnerStyle}"
-                                                                  Value="{Binding ValidationDwellOverride, UpdateSourceTrigger=PropertyChanged}"
-                                                                  Tag="ValidationDwell"
-                                                                  Loaded="MonitorOverrideSpinner_Loaded"/>
-                                        </StackPanel>
-
-                                        <StackPanel Grid.Column="2">
-                                            <TextBlock Text="{loc:Loc Settings_Monitors_BrightnessDwellOverride_Label}" Style="{StaticResource MonitorOverrideLabelStyle}"/>
-                                            <local:NumericSpinner Style="{StaticResource MonitorOverrideDwellSpinnerStyle}"
-                                                                  Value="{Binding BrightnessDwellOverride, UpdateSourceTrigger=PropertyChanged}"
-                                                                  Tag="BrightnessDwell"
-                                                                  Loaded="MonitorOverrideSpinner_Loaded"/>
-                                        </StackPanel>
-                                    </Grid>
-
-                                    <!-- Override row 2: Min brightness, Max brightness -->
-                                    <Grid Style="{StaticResource MonitorOverrideRowStyle}">
-                                        <Grid.ColumnDefinitions>
                                             <ColumnDefinition Width="*"/>
                                             <ColumnDefinition Width="*"/>
                                             <ColumnDefinition Width="*"/>
@@ -292,6 +255,9 @@
                                             <local:NumericSpinner Style="{StaticResource MonitorOverrideBrightnessSpinnerStyle}"
                                                                   Value="{Binding MinBrightnessOverride, UpdateSourceTrigger=PropertyChanged}"
                                                                   Tag="MinBrightness"
+                                                                  AllowInherit="True"
+                                                                  InheritValue="0"
+                                                                  PlaceholderText="0"
                                                                   Loaded="MonitorOverrideSpinner_Loaded"/>
                                         </StackPanel>
 
@@ -300,12 +266,84 @@
                                             <local:NumericSpinner Style="{StaticResource MonitorOverrideBrightnessSpinnerStyle}"
                                                                   Value="{Binding MaxBrightnessOverride, UpdateSourceTrigger=PropertyChanged}"
                                                                   Tag="MaxBrightness"
+                                                                  AllowInherit="True"
+                                                                  InheritValue="100"
+                                                                  PlaceholderText="100"
                                                                   Loaded="MonitorOverrideSpinner_Loaded"/>
                                         </StackPanel>
 
-                                        <!-- spacer to keep the row balanced -->
-                                        <Grid Grid.Column="2"/>
+                                        <StackPanel Grid.Column="2" Style="{StaticResource MonitorOverrideFieldColumnStyle}">
+                                            <TextBlock Text="{loc:Loc Settings_Monitors_ValidationDwellOverride_Label}" Style="{StaticResource MonitorOverrideLabelStyle}"/>
+                                            <local:NumericSpinner Style="{StaticResource MonitorOverrideDwellSpinnerStyle}"
+                                                                  Value="{Binding ValidationDwellOverride, UpdateSourceTrigger=PropertyChanged}"
+                                                                  Tag="ValidationDwell"
+                                                                  PlaceholderText="{Binding ValidationDwellPlaceholder}"
+                                                                  Loaded="MonitorOverrideSpinner_Loaded"/>
+                                        </StackPanel>
+
+                                        <StackPanel Grid.Column="3">
+                                            <TextBlock Text="{loc:Loc Settings_Monitors_BrightnessDwellOverride_Label}" Style="{StaticResource MonitorOverrideLabelStyle}"/>
+                                            <local:NumericSpinner Style="{StaticResource MonitorOverrideDwellSpinnerStyle}"
+                                                                  Value="{Binding BrightnessDwellOverride, UpdateSourceTrigger=PropertyChanged}"
+                                                                  Tag="BrightnessDwell"
+                                                                  PlaceholderText="{Binding BrightnessDwellPlaceholder}"
+                                                                  Loaded="MonitorOverrideSpinner_Loaded"/>
+                                        </StackPanel>
                                     </Grid>
+
+                                    <!-- Override row 2:
+                                         Edit norm curve button, then Power off / Brightness inc / dec VCP textboxes.
+                                         Each textbox accepts "0xD6 0x05" (byte + value) or "0xD6" (byte only,
+                                         backend uses default values). Empty = inherit profile default.
+                                         Button is vertically centered to balance against the label+textbox columns. -->
+                                    <Grid Style="{StaticResource MonitorOverrideRowStyle}">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="*"/>
+                                        </Grid.ColumnDefinitions>
+
+                                        <Grid Grid.Column="0" Margin="0,0,12,0">
+                                            <Button Style="{StaticResource SettingsButtonStyle}"
+                                                    Content="{loc:Loc Settings_Monitors_EditNormCurve_Button}"
+                                                    HorizontalAlignment="Stretch"
+                                                    VerticalAlignment="Bottom"
+                                                    Height="32"
+                                                    Tag="{Binding EDIDKey}"
+                                                    Click="EditNormCurve_Click"/>
+                                        </Grid>
+
+                                        <StackPanel Grid.Column="1" Style="{StaticResource MonitorOverrideFieldColumnStyle}">
+                                            <TextBlock Text="{loc:Loc Settings_Monitors_PowerOffVcpOverride_Label}" Style="{StaticResource MonitorOverrideLabelStyle}"/>
+                                            <TextBox Style="{StaticResource SettingsTextBoxStyle}"
+                                                     Text="{Binding PowerOffVcpOverride, UpdateSourceTrigger=LostFocus}"
+                                                     Tag="PowerOffVcp"
+                                                     LostFocus="MonitorVcpOverride_LostFocus"
+                                                     utils1:WatermarkBehavior.Text="{Binding PowerOffVcpPlaceholder}"/>
+                                        </StackPanel>
+
+                                        <StackPanel Grid.Column="2" Style="{StaticResource MonitorOverrideFieldColumnStyle}">
+                                            <TextBlock Text="{loc:Loc Settings_Monitors_BrightnessVcpOverride_Label}" Style="{StaticResource MonitorOverrideLabelStyle}"/>
+                                            <TextBox Style="{StaticResource SettingsTextBoxStyle}"
+                                                     Text="{Binding BrightnessVcpOverride, UpdateSourceTrigger=LostFocus}"
+                                                     Tag="BrightnessVcp"
+                                                     LostFocus="MonitorVcpOverride_LostFocus"
+                                                     utils1:WatermarkBehavior.Text="{Binding BrightnessVcpPlaceholder}"/>
+                                        </StackPanel>
+                                    </Grid>
+
+                                    <!-- Per-row norm curve editor.
+                                         Toggled by the "Edit norm curve" button via IsNormCurveEditorOpen on the
+                                         MonitorListEntry; collapsed by default so the card stays compact until the
+                                         user opts in. Each row stamps its own editor instance (DataTemplate),
+                                         so handing the row's live point list to SetPoints in Loaded keeps storage
+                                         and editor pointing at the same list. -->
+                                    <addons:NormCurveEditor Height="220"
+                                                            Margin="0,12,0,0"
+                                                            Loaded="NormCurveEditor_Loaded"
+                                                            Visibility="{Binding IsNormCurveEditorOpen,
+                                                                Converter={StaticResource BoolToVisibility}}"/>
                                 </StackPanel>
                                 <Border Grid.Column="2"
                                         Background="Transparent"

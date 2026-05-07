@@ -133,6 +133,7 @@ public sealed class MonitorService : IDisposable
 
         ApplyNameOverridesToExisting();
         ApplyBrightnessBoundOverridesToExisting();
+        ApplyNormCurveOverridesToExisting();
         ResortMonitors();
     }
 
@@ -172,14 +173,97 @@ public sealed class MonitorService : IDisposable
 
     /// <summary>
     /// Builds a lookup of MonitorOverrideEntry rows that carry an active min or max brightness override,
-    /// keyed by EDIDKey. Rows where both fields are -1 (inherit) are excluded so the apply path doesn't
-    /// have to re-check.
+    /// keyed by EDIDKey. Rows whose bounds are at the no-op defaults (min &lt;= 0 and max &gt;= 100) are
+    /// excluded so the apply path doesn't have to re-check.
     /// </summary>
     private Dictionary<string, MonitorOverrideEntry> BuildBrightnessBoundOverrideMap() =>
         _settings.MonitorOverrides
-            .Where(m => m.MinBrightness >= 0 || m.MaxBrightness >= 0)
+            .Where(m => m.MinBrightness > 0 || m.MaxBrightness < 100)
             .GroupBy(m => m.ID, StringComparer.Ordinal)
             .ToDictionary(g => g.Key, g => g.Last(), StringComparer.Ordinal);
+
+    /// <summary>
+    /// Builds a lookup of MonitorOverrideEntry rows that carry a per-monitor brightness norm curve,
+    /// keyed by EDIDKey. Rows with fewer than two points are excluded - the sampler needs at least
+    /// two endpoints to define a line, and a single-point list collapses to a constant function.
+    /// </summary>
+    private Dictionary<string, MonitorOverrideEntry> BuildNormCurveOverrideMap() =>
+        _settings.MonitorOverrides
+            .Where(m => m.NormCurvePoints.Count >= 2)
+            .GroupBy(m => m.ID, StringComparer.Ordinal)
+            .ToDictionary(g => g.Key, g => g.Last(), StringComparer.Ordinal);
+
+    /// <summary>
+    /// Pushes the per-monitor norm curve (<see cref="MonitorOverrideEntry.NormCurvePoints"/>)
+    /// onto every DDC-supported <see cref="MonitorEntry"/> as pre-sorted xs/ys arrays
+    /// ready for <see cref="EnvironmentalCurveSampler.InterpolateLinear"/>.
+    /// Lookup is keyed by EDIDKey so the curve survives identity-strategy changes.
+    /// When the resolved curve actually changes for a monitor, the entry's last-enqueued sentinel
+    /// is reset and a fresh write of the current slider position is queued -
+    /// so a freshly-edited curve takes effect on hardware now,
+    /// not when the user happens to touch the slider next.
+    /// </summary>
+    private void ApplyNormCurveOverridesToExisting()
+    {
+        Dictionary<string, MonitorOverrideEntry> map = BuildNormCurveOverrideMap();
+        foreach (MonitorInfo info in Monitors) ApplyNormCurveTo(info, map);
+    }
+
+    /// <summary>
+    /// Resolves the curve for one monitor from the override map (null when no curve applies)
+    /// and writes the pre-sorted xs/ys arrays onto the matching <see cref="MonitorEntry"/>.
+    /// Skips monitors that don't have a live entry (currently DDC-unsupported / Failed) -
+    /// their curve will be re-applied the next time they promote.
+    /// On a real curve change, drops the dedupe sentinel and re-pushes the current slider position
+    /// so the new shape takes effect on the bus immediately.
+    /// </summary>
+    private void ApplyNormCurveTo(
+        MonitorInfo info,
+        Dictionary<string, MonitorOverrideEntry> map)
+    {
+        if (!_entries.TryGetValue(info.ID, out MonitorEntry? entry)) return;
+
+        double[]? xs = null;
+        double[]? ys = null;
+        if (!string.IsNullOrEmpty(info.EDIDKey)
+            && map.TryGetValue(info.EDIDKey, out MonitorOverrideEntry? ov))
+        {
+            // Sort by X so the sampler's binary search is well-defined.
+            // The editor stores points in click-order, not X-order, so this is the projection step.
+            List<NormCurvePoint> ordered = [.. ov.NormCurvePoints.OrderBy(p => p.X)];
+            int n = ordered.Count;
+            xs = new double[n];
+            ys = new double[n];
+            for (int i = 0; i < n; i++)
+            {
+                xs[i] = ordered[i].X;
+                ys[i] = ordered[i].Y;
+            }
+        }
+
+        if (CurveArraysEqual(entry.NormCurveXs, xs) && CurveArraysEqual(entry.NormCurveYs, ys)) return;
+
+        entry.NormCurveXs = xs;
+        entry.NormCurveYs = ys;
+
+        // Drop the dedupe sentinel: a previously-curved enqueue may have left LastEnqueuedPercentage
+        // sitting at the old shaped value, which would short-circuit the upcoming re-push.
+        entry.LastEnqueuedPercentage = -1;
+
+        // Re-enqueue the current slider position so the new curve takes effect on hardware now.
+        // EnqueueDirectBrightness applies the just-updated curve (and floor/ceiling) internally.
+        EnqueueDirectBrightness(info, info.RoundedBrightness);
+    }
+
+    private static bool CurveArraysEqual(double[]? a, double[]? b)
+    {
+        if (ReferenceEquals(a, b)) return true;
+        if (a is null || b is null) return false;
+        if (a.Length != b.Length) return false;
+        for (int i = 0; i < a.Length; i++)
+            if (a[i] != b[i]) return false;
+        return true;
+    }
 
     /// <summary>
     /// Resolves floor/ceiling for one monitor from the override map (defaults 0/100 when no override
@@ -200,8 +284,10 @@ public sealed class MonitorService : IDisposable
         if (!string.IsNullOrEmpty(info.EDIDKey)
             && map.TryGetValue(info.EDIDKey, out MonitorOverrideEntry? ov))
         {
-            if (ov.MinBrightness >= 0) floor = Math.Clamp(ov.MinBrightness, 0, 100);
-            if (ov.MaxBrightness >= 0) ceiling = Math.Clamp(ov.MaxBrightness, 0, 100);
+            // Min 0 / max 100 are the no-op defaults; only values that actually narrow the range apply.
+            if (ov.MinBrightness > 0) floor = Math.Clamp(ov.MinBrightness, 0, 100);
+            if (ov.MaxBrightness >= 0 && ov.MaxBrightness < 100)
+                ceiling = Math.Clamp(ov.MaxBrightness, 0, 100);
             // User-input sanity: if min > max, treat min as inactive so the user still has a usable
             // range rather than collapsing the cap to a single point at the (smaller) max.
             if (floor > ceiling) floor = 0;
@@ -431,6 +517,7 @@ public sealed class MonitorService : IDisposable
                     if (TryReadBrightnessWithRetry(ddc, out uint current, out uint max, out string? promoteError))
                     {
                         int percent = max == 0 ? 0 : (int)Math.Round(current * 100.0 / max);
+                        LogProfileIfMatched(ddc);
                         _entries[existingInfo.ID] = new MonitorEntry
                         {
                             ID = existingInfo.ID,
@@ -486,7 +573,10 @@ public sealed class MonitorService : IDisposable
             };
 
             if (supported)
+            {
+                LogProfileIfMatched(ddc);
                 _entries[id] = new MonitorEntry { ID = id, DDC = ddc, Max = newMax > 0 ? newMax : 100 };
+            }
             else
                 WPFLog.Log($"MonitorService: '{ddc.Name}' added as disabled (no DDC/CI response)");
 
@@ -506,6 +596,11 @@ public sealed class MonitorService : IDisposable
         // and pushes to hardware - so a hot-plugged panel sitting outside the override window
         // is squeezed back in without an explicit replay call here.
         ApplyBrightnessBoundOverridesToExisting();
+
+        // Same idea for the per-monitor norm curve: project the persisted points into pre-sorted
+        // xs/ys arrays on each MonitorEntry so EnqueueDirectBrightness can sample without re-sorting
+        // per write. Hot-plugged panels with a saved curve get re-shaped on their first write.
+        ApplyNormCurveOverridesToExisting();
 
         // Record "DDC was observed" facts onto KnownDisplays before notifying listeners.
         // The flag is sticky (never cleared) and drives DDCRecoveryService's candidate selection -
@@ -621,6 +716,21 @@ public sealed class MonitorService : IDisposable
             _writeThrottler.Drop(info.ID);
             _entries.Remove(info.ID);
         }
+    }
+
+    /// <summary>
+    /// Logs the per-monitor VCP profile match (if any) when a monitor is added to <see cref="_entries"/>.
+    /// The profile fields themselves are populated upstream in <c>DisplayService.TryGetMonitors</c> via
+    /// <see cref="DDCMonitorDatabase.ApplyProfile"/>; this method just surfaces the match in the log
+    /// once at registration. Silent for the common "no DB entry, falls back to VESA default" path.
+    /// </summary>
+    private static void LogProfileIfMatched(DDCMonitor ddc)
+    {
+        if (!ddc.HasKnownProfile) return;
+        WPFLog.Log(
+            $"MonitorService: matched '{ddc.Name}' to monitor profile {ddc.EDIDIdentifier} "
+            + $"'{ddc.ProfileModelName}'"
+            + (ddc.ProfileQuirks.Count > 0 ? $" (quirks: {string.Join("; ", ddc.ProfileQuirks)})" : ""));
     }
 
     private bool TryReadBrightness(DDCMonitor ddc, out uint current, out uint max, out string? error)
@@ -1022,12 +1132,14 @@ public sealed class MonitorService : IDisposable
     }
 
     /// <summary>
-    /// Sends VCP 0xD6 (PowerMode) with value 0x05 (hard power off) to a stuck monitor identified by EDID serial.
+    /// Sends the per-monitor "hard power off" VCP write to a stuck monitor identified by EDID serial.
     /// Used by the warning-glyph click in the flyout:
     /// when DDC/CI is wedged, this is the least invasive thing the app can do for the user -
     /// if writes still get through (often they do even when reads fail with checksum errors,
     /// because writes have no reply to corrupt),
     /// the monitor turns itself off and the user can power-cycle it physically.
+    /// The (code, value) pair is resolved via <see cref="DDCMonitorDatabase.Resolve(DDCMonitor)"/>:
+    /// VESA default is 0xD6=0x05; Dell P/U-series monitors override to 0xE1=0x01 (inverted).
     /// Returns false when no live monitor matches the EDID serial or the VCP write itself throws.
     /// </summary>
     public bool TryHardPowerOffByEdidSerial(string edidSerial, out string? error)
@@ -1063,14 +1175,16 @@ public sealed class MonitorService : IDisposable
             return false;
         }
 
-        // 0x05 = "Power off (hard)" per the VESA MCCS spec -
-        // write-only opcode the monitor honors without sending a reply,
-        // so it works even on links where DDC reads come back garbled.
+        // Resolve the per-monitor hard-off command. VESA default is 0xD6=0x05 (write-only opcode that
+        // turns the monitor off without sending a reply, so it works even on links where DDC reads come back
+        // garbled). Dell P/U-series monitors with inverted 0xE1 override this to 0xE1=0x01 - sending the
+        // VESA default to those would not turn them off (in fact 0xE1=0 turns them on).
         // Goes through the per-monitor mutex
         // so it can't interleave with a brightness write or recovery probe in flight at the same instant.
+        (byte powerCode, byte powerValue) = target.ResolvePowerOff(PowerOffLevel.Hard);
         (bool ok, string? writeErr) = WithDDCLock(target, () =>
         {
-            bool wrote = _display.TrySetVCPFeature(target, VCPConstants.PowerMode, 0x05u, out string? e);
+            bool wrote = _display.TrySetVCPFeature(target, powerCode, powerValue, out string? e);
             return (wrote, e);
         });
         if (!ok)
@@ -1098,6 +1212,7 @@ public sealed class MonitorService : IDisposable
         if (info.IsHardwareFunctional) return;
 
         int pct = max == 0 ? 0 : (int)Math.Round(current * 100.0 / max);
+        LogProfileIfMatched(ddc);
         _entries[info.ID] = new MonitorEntry { ID = info.ID, DDC = ddc, Max = max > 0 ? max : 100 };
         // Sync Brightness from hardware only when the row wasn't curve-driven at the moment of failure.
         // A curve-driven row's hardware sits at the curve target
@@ -1125,8 +1240,12 @@ public sealed class MonitorService : IDisposable
     }
 
     /// <summary>
-    /// Sends VCP PowerMode (0xD6) to the monitor.
-    /// ON always writes 0x01; OFF writes the value chosen by <see cref="AppSettings.PowerOffMode"/>.
+    /// Sends a power VCP write to the monitor, resolved through the per-monitor profile.
+    /// ON uses the profile's primary power-on command; OFF uses the level chosen by
+    /// <see cref="AppSettings.PowerOffMode"/>. The default profile lands at VESA DPMS (0xD6) with
+    /// {2=Sleep, 4=Soft, 5=Hard}; Dell P/U-series monitors with inverted 0xE1 override to 0xE1
+    /// with {0=On, 1=Off} - so e.g. asking for "Hard" on those still resolves to a single
+    /// monitor-correct write.
     /// Updates <see cref="MonitorInfo.IsPoweredOn"/> on success.
     /// </summary>
     public async Task SetPowerStateAsync(MonitorInfo monitor, bool on)
@@ -1135,17 +1254,17 @@ public sealed class MonitorService : IDisposable
 
         if (!_entries.TryGetValue(monitor.ID, out MonitorEntry? entry)) return;
 
-        uint value = on
-            ? 0x01u
-            : _settings.PowerOffMode switch
+        (byte code, byte value) = on
+            ? entry.DDC.ResolvePowerOn()
+            : entry.DDC.ResolvePowerOff(_settings.PowerOffMode switch
             {
-                PowerOffMode.Soft => 0x04u,
-                PowerOffMode.Hard => 0x05u,
-                _ => 0x02u, // Sleep
-            };
+                PowerOffMode.Soft => PowerOffLevel.Soft,
+                PowerOffMode.Hard => PowerOffLevel.Hard,
+                _ => PowerOffLevel.Sleep,
+            });
         (bool ok, string? errorMessage) = await WithDDCLockAsync(entry.DDC, () =>
         {
-            bool wrote = _display.TrySetVCPFeature(entry.DDC, VCPConstants.PowerMode, value, out string? e);
+            bool wrote = _display.TrySetVCPFeature(entry.DDC, code, (uint)value, out string? e);
             return (wrote, e);
         }).ConfigureAwait(false);
         if (!ok)
@@ -1222,6 +1341,12 @@ public sealed class MonitorService : IDisposable
         if (monitor == null) return;
         if (!_entries.TryGetValue(monitor.ID, out MonitorEntry? entry)) return;
 
+        // Apply the per-monitor norm curve first: the slider stays on the linear 0..100 range
+        // and the curve reshapes which hardware brightness each slider position maps to.
+        // No-op when no curve is set (xs/ys are null). Lives ahead of the floor/ceiling clamp so
+        // a curve that targets values outside the cap window still respects the user's cap below.
+        int shaped = ApplyNormCurve(entry, percent);
+
         // Clamp first to the absolute 0..100 envelope, then to the per-monitor override window.
         // The slider itself stays on the normalised 0-100 range; this is the single boundary where
         // the per-monitor floor/ceiling actually constrain hardware. Every write path flows through
@@ -1230,7 +1355,7 @@ public sealed class MonitorService : IDisposable
         int floor = entry.FloorPercent;
         int ceiling = entry.CeilingPercent;
         if (floor > ceiling) floor = ceiling;
-        int pct = Math.Clamp(Math.Clamp(percent, 0, 100), floor, ceiling);
+        int pct = Math.Clamp(Math.Clamp(shaped, 0, 100), floor, ceiling);
 
         // Skip duplicate enqueues.
         // The throttler already collapses bursts queued during a write,
@@ -1319,7 +1444,7 @@ public sealed class MonitorService : IDisposable
 
             (bool ok, string? writeErr) = await WithDDCLockAsync(entry.DDC, () =>
             {
-                bool w = _display.TrySetVCPFeature(entry.DDC, VCPConstants.Brightness, raw, out string? e);
+                bool w = _display.TrySetVCPFeature(entry.DDC, entry.DDC.BrightnessCode, raw, out string? e);
                 return (w, e);
             }).ConfigureAwait(false);
 
@@ -1392,7 +1517,7 @@ public sealed class MonitorService : IDisposable
             (bool read, uint actual, string? readErr) = await WithDDCLockAsync(entry.DDC, () =>
             {
                 bool ok = _display.TryGetVCPFeature(
-                    entry.DDC, VCPConstants.Brightness, out uint a, out _, out string? e);
+                    entry.DDC, entry.DDC.BrightnessCode, out uint a, out _, out string? e);
                 return (ok, a, e);
             }).ConfigureAwait(false);
 
@@ -1417,7 +1542,8 @@ public sealed class MonitorService : IDisposable
             // Re-apply, then wait the scaled dwell before the next read attempt.
             (bool reApplied, string? reApplyErr) = await WithDDCLockAsync(entry.DDC, () =>
             {
-                bool w = _display.TrySetVCPFeature(entry.DDC, VCPConstants.Brightness, expectedRaw, out string? e);
+                bool w = _display.TrySetVCPFeature(
+                    entry.DDC, entry.DDC.BrightnessCode, expectedRaw, out string? e);
                 return (w, e);
             }).ConfigureAwait(false);
             if (!reApplied) WPFLog.Log($"MonitorService: re-apply failed for '{entry.DDC.Name}': {reApplyErr}");
@@ -1683,5 +1809,31 @@ public sealed class MonitorService : IDisposable
         // The slider itself stays on the normalised 0-100 range; the cap is purely a bus-boundary concern.
         public int FloorPercent;
         public int CeilingPercent = 100;
+
+        // Per-monitor brightness norm curve, projected from AppSettings.MonitorOverrides
+        // (NormCurvePoints, keyed by EDIDKey) and pre-sorted by X.
+        // Null when no curve is configured - EnqueueDirectBrightness short-circuits the sample
+        // call in that case and the slider acts as a 1:1 passthrough.
+        // Both arrays are always populated together (same length, same point order) by
+        // ApplyNormCurveTo; the sampler reads them as parallel xs/ys.
+        public double[]? NormCurveXs;
+        public double[]? NormCurveYs;
+    }
+
+    /// <summary>
+    /// Maps <paramref name="percent"/> through <paramref name="entry"/>'s per-monitor norm curve.
+    /// Returns the input unchanged when no curve is configured (no allocations on the hot path).
+    /// Uses linear interpolation to match the editor's default render mode (smoothness = 0);
+    /// the cubic Hermite blend stays available on the sampler for a future smoothness setting
+    /// but is not exercised here.
+    /// </summary>
+    private static int ApplyNormCurve(MonitorEntry entry, int percent)
+    {
+        double[]? xs = entry.NormCurveXs;
+        double[]? ys = entry.NormCurveYs;
+        if (xs is null || ys is null || xs.Length < 2) return percent;
+
+        double y = EnvironmentalCurveSampler.InterpolateLinear(xs, ys, percent);
+        return (int)Math.Round(Math.Clamp(y, 0.0, 100.0));
     }
 }

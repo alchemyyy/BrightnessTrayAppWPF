@@ -187,8 +187,10 @@ public partial class HotkeysPage : UserControl
 
         // One row per existing MonitorOff Parameter (user-added). Group by Parameter so a single
         // physical target only contributes one row even if it has multiple bound chords.
+        // Tombstones (RemovedByUser=true) are skipped so a fully-removed monitor-off target
+        // doesn't keep its row alive.
         IEnumerable<string> monitorOffParams = _settings.Hotkeys
-            .Where(b => b.Action == HotkeyAction.MonitorOff)
+            .Where(b => !b.RemovedByUser && b.Action == HotkeyAction.MonitorOff)
             .Select(b => b.Parameter)
             .Distinct(StringComparer.Ordinal)
             .ToList();
@@ -202,7 +204,7 @@ public partial class HotkeysPage : UserControl
         HotkeyRowViewModel row = new(action, parameter, label, description,
             showsTarget: false, showsRemove: false);
         foreach (HotkeyBinding b in _settings.Hotkeys
-            .Where(b => b.Matches(action, parameter))
+            .Where(b => !b.RemovedByUser && b.Matches(action, parameter))
             .OrderBy(b => b.BindingID))
             row.Entries.Add(new HotkeyEntryViewModel(b.BindingID, b.Modifiers, b.VirtualKey));
         AddRow(row);
@@ -217,7 +219,7 @@ public partial class HotkeysPage : UserControl
             LocalizationManager.Instance["Settings_Hotkeys_PowerOffSpecificMonitor_Description"],
             showsTarget: true, showsRemove: true);
         foreach (HotkeyBinding b in _settings.Hotkeys
-            .Where(b => b.Matches(HotkeyAction.MonitorOff, parameter))
+            .Where(b => !b.RemovedByUser && b.Matches(HotkeyAction.MonitorOff, parameter))
             .OrderBy(b => b.BindingID))
             row.Entries.Add(new HotkeyEntryViewModel(b.BindingID, b.Modifiers, b.VirtualKey));
         AddRow(row);
@@ -467,6 +469,9 @@ public partial class HotkeysPage : UserControl
     /// <summary>
     /// "x" click on an entry sub-card: remove that one bound chord. The owning row is found by
     /// scanning <see cref="_hotkeyRows"/> since the entry doesn't carry a back-reference.
+    /// When the entry occupies a built-in default's identity slot, the persisted binding is
+    /// tombstoned (RemovedByUser=true) instead of being deleted, so EnsureDefaultHotkeys doesn't
+    /// re-seed the default on the next launch.
     /// </summary>
     private void HotkeyEntryDelete_Click(object sender, RoutedEventArgs e)
     {
@@ -479,7 +484,21 @@ public partial class HotkeysPage : UserControl
         if (owner == null) return;
 
         owner.Entries.Remove(entry);
-        _settings.Hotkeys.RemoveAll(b => b.Matches(owner.Action, owner.Parameter, entry.BindingID));
+
+        if (AppSettings.IsDefaultHotkeyIdentity(owner.Action, owner.Parameter, entry.BindingID))
+        {
+            foreach (HotkeyBinding b in _settings.Hotkeys)
+            {
+                if (!b.Matches(owner.Action, owner.Parameter, entry.BindingID)) continue;
+
+                b.RemovedByUser = true;
+                b.Enabled = false;
+            }
+        }
+        else
+        {
+            _settings.Hotkeys.RemoveAll(b => b.Matches(owner.Action, owner.Parameter, entry.BindingID));
+        }
         SaveAndNotify();
         ReapplyHotkeysAndUpdateStatuses();
     }

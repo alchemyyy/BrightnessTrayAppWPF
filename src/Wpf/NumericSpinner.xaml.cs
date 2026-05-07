@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Windows;
 using System.Windows.Input;
+using BrightnessTrayAppWPF.WPF.Utils;
 using KeyEventArgs = System.Windows.Input.KeyEventArgs;
 using UserControl = System.Windows.Controls.UserControl;
 
@@ -49,11 +50,15 @@ public partial class NumericSpinner : UserControl
 
     public static readonly DependencyProperty AllowInheritProperty = DependencyProperty.Register(
         nameof(AllowInherit), typeof(bool), typeof(NumericSpinner),
-        new PropertyMetadata(false));
+        new PropertyMetadata(false, OnInheritDescriptorChanged));
 
     public static readonly DependencyProperty InheritValueProperty = DependencyProperty.Register(
         nameof(InheritValue), typeof(int), typeof(NumericSpinner),
-        new PropertyMetadata(-1));
+        new PropertyMetadata(-1, OnInheritDescriptorChanged));
+
+    public static readonly DependencyProperty PlaceholderTextProperty = DependencyProperty.Register(
+        nameof(PlaceholderText), typeof(string), typeof(NumericSpinner),
+        new PropertyMetadata(string.Empty, OnPlaceholderTextChanged));
 
     public int Value
     {
@@ -125,6 +130,17 @@ public partial class NumericSpinner : UserControl
         set => SetValue(InheritValueProperty, value);
     }
 
+    /// <summary>
+    /// Dimmed placeholder text shown inside the value box when it is empty
+    /// (i.e. <see cref="AllowInherit"/> is true and <see cref="Value"/> equals <see cref="InheritValue"/>)
+    /// and the box is not keyboard-focused. Vanishes the instant focus enters or content appears.
+    /// </summary>
+    public string PlaceholderText
+    {
+        get => (string)GetValue(PlaceholderTextProperty);
+        set => SetValue(PlaceholderTextProperty, value);
+    }
+
     private bool _suppressValuePush;
 
     public NumericSpinner() => InitializeComponent();
@@ -145,6 +161,38 @@ public partial class NumericSpinner : UserControl
         if (d is not NumericSpinner s) return;
 
         s.PART_Suffix.Text = (e.NewValue as string) ?? string.Empty;
+    }
+
+    private static void OnPlaceholderTextChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
+    {
+        if (d is not NumericSpinner s) return;
+
+        WatermarkBehavior.SetText(s.PART_TextBox, (e.NewValue as string) ?? string.Empty);
+        s.UpdateSuffixOpacity();
+    }
+
+    // AllowInherit / InheritValue can land after the binding has already pushed Value, so the
+    // initial SyncTextFromValue ran with stale defaults and rendered the literal value instead of
+    // the empty/inherit form. Re-syncing on either change pulls the textbox back to "" so the
+    // watermark wins.
+    private static void OnInheritDescriptorChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
+    {
+        if (d is not NumericSpinner s) return;
+
+        s.SyncTextFromValue();
+    }
+
+    // Matches the suffix label's opacity to the watermark's so a row showing the placeholder
+    // ("100", "300", etc.) reads as a single dimmed unit instead of "dimmed value + bright unit".
+    // Constant kept in sync with WatermarkBehavior's internal Opacity value.
+    private const double PlaceholderOpacity = 0.45;
+
+    private void UpdateSuffixOpacity()
+    {
+        bool placeholderShowing = !string.IsNullOrEmpty(PlaceholderText)
+            && string.IsNullOrEmpty(PART_TextBox.Text)
+            && !PART_TextBox.IsKeyboardFocused;
+        PART_Suffix.Opacity = placeholderShowing ? PlaceholderOpacity : 1.0;
     }
 
     private static void OnRangeChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
@@ -170,6 +218,7 @@ public partial class NumericSpinner : UserControl
             PART_TextBox.Text = text;
             PART_TextBox.CaretIndex = text.Length;
         }
+        UpdateSuffixOpacity();
     }
 
     private void PushValue(int newValue)
@@ -287,6 +336,8 @@ public partial class NumericSpinner : UserControl
     }
 
     private void OnTextBoxLostFocus(object sender, RoutedEventArgs e) => Commit();
+
+    private void OnTextBoxFocusChanged(object sender, RoutedEventArgs e) => UpdateSuffixOpacity();
 
     private void OnSpinUpClick(object sender, RoutedEventArgs e) => Adjust(Step);
 
