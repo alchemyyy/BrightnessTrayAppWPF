@@ -1,6 +1,7 @@
 using System.IO;
 using System.Xml;
 using System.Xml.Serialization;
+using BrightnessTrayAppWPF.Interop;
 using Color = System.Windows.Media.Color;
 
 namespace BrightnessTrayAppWPF.Models;
@@ -513,9 +514,21 @@ public class AppSettings
     [XmlArrayItem("Display")]
     public List<KnownDisplayEntry> KnownDisplays { get; set; } = [];
 
+    // Seeded for fresh installs only: a settings.xml with an existing <Hotkeys> element (even empty)
+    // will replace this list during deserialization, so users who have explicitly cleared their bindings
+    // are not re-seeded on the next launch.
     [XmlArray("Hotkeys")]
     [XmlArrayItem("Binding")]
-    public List<HotkeyBinding> Hotkeys { get; set; } = [];
+    public List<HotkeyBinding> Hotkeys { get; set; } =
+    [
+        new HotkeyBinding
+        {
+            Action = HotkeyAction.FullBright,
+            Modifiers = User32.MOD_CONTROL | User32.MOD_WIN | User32.MOD_ALT,
+            VirtualKey = 0x46, // VK_F
+            Enabled = true,
+        },
+    ];
 
     // Theme
     public int ContextMenuFontSize { get; set; } = 15;

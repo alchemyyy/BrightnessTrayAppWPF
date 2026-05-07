@@ -132,6 +132,7 @@ public sealed class MonitorService : IDisposable
         }
 
         ApplyNameOverridesToExisting();
+        ApplyBrightnessBoundOverridesToExisting();
         ResortMonitors();
     }
 
@@ -147,11 +148,79 @@ public sealed class MonitorService : IDisposable
         foreach (MonitorInfo info in Monitors) info.Name = ResolveDisplayName(info, overrides);
     }
 
+    /// <summary>
+    /// Pushes the per-monitor min/max brightness overrides
+    /// (<see cref="MonitorOverrideEntry.MinBrightness"/> / <see cref="MonitorOverrideEntry.MaxBrightness"/>)
+    /// onto every DDC-supported <see cref="MonitorEntry"/>'s floor/ceiling fields.
+    /// Lookup is keyed by EDIDKey so the override survives identity-strategy changes.
+    /// When a bound actually changes for a monitor, the entry's last-enqueued sentinel is reset
+    /// and a fresh write of the current slider position is queued -
+    /// so a freshly-tightened floor snaps the panel up to the new minimum
+    /// without waiting for the user's next slider drag.
+    /// </summary>
+    private void ApplyBrightnessBoundOverridesToExisting()
+    {
+        Dictionary<string, MonitorOverrideEntry> map = BuildBrightnessBoundOverrideMap();
+        foreach (MonitorInfo info in Monitors) ApplyBrightnessBoundsTo(info, map);
+    }
+
     private Dictionary<string, string> BuildNameOverrideMap() =>
         _settings.MonitorOverrides
             .Where(m => !string.IsNullOrWhiteSpace(m.Name))
             .GroupBy(m => m.ID, StringComparer.Ordinal)
             .ToDictionary(g => g.Key, g => g.Last().Name, StringComparer.Ordinal);
+
+    /// <summary>
+    /// Builds a lookup of MonitorOverrideEntry rows that carry an active min or max brightness override,
+    /// keyed by EDIDKey. Rows where both fields are -1 (inherit) are excluded so the apply path doesn't
+    /// have to re-check.
+    /// </summary>
+    private Dictionary<string, MonitorOverrideEntry> BuildBrightnessBoundOverrideMap() =>
+        _settings.MonitorOverrides
+            .Where(m => m.MinBrightness >= 0 || m.MaxBrightness >= 0)
+            .GroupBy(m => m.ID, StringComparer.Ordinal)
+            .ToDictionary(g => g.Key, g => g.Last(), StringComparer.Ordinal);
+
+    /// <summary>
+    /// Resolves floor/ceiling for one monitor from the override map (defaults 0/100 when no override
+    /// applies) and writes them onto the matching <see cref="MonitorEntry"/>.
+    /// Skips monitors that don't have a live entry (currently DDC-unsupported / Failed) - their cap
+    /// will be re-applied the next time they promote.
+    /// On a real bound change, drops the dedupe sentinel and re-pushes the current slider position
+    /// so a tightened cap takes effect on the bus immediately.
+    /// </summary>
+    private void ApplyBrightnessBoundsTo(
+        MonitorInfo info,
+        Dictionary<string, MonitorOverrideEntry> map)
+    {
+        if (!_entries.TryGetValue(info.ID, out MonitorEntry? entry)) return;
+
+        int floor = 0;
+        int ceiling = 100;
+        if (!string.IsNullOrEmpty(info.EDIDKey)
+            && map.TryGetValue(info.EDIDKey, out MonitorOverrideEntry? ov))
+        {
+            if (ov.MinBrightness >= 0) floor = Math.Clamp(ov.MinBrightness, 0, 100);
+            if (ov.MaxBrightness >= 0) ceiling = Math.Clamp(ov.MaxBrightness, 0, 100);
+            // User-input sanity: if min > max, treat min as inactive so the user still has a usable
+            // range rather than collapsing the cap to a single point at the (smaller) max.
+            if (floor > ceiling) floor = 0;
+        }
+
+        if (entry.FloorPercent == floor && entry.CeilingPercent == ceiling) return;
+
+        entry.FloorPercent = floor;
+        entry.CeilingPercent = ceiling;
+
+        // Drop the dedupe sentinel: a previously-clamped enqueue may have left LastEnqueuedPercentage
+        // sitting at the old floor/ceiling, which would short-circuit the upcoming re-push.
+        entry.LastEnqueuedPercentage = -1;
+
+        // Re-enqueue the current slider position so the new cap takes effect on hardware now,
+        // not when the user happens to touch the slider next.
+        // EnqueueDirectBrightness applies the just-updated floor/ceiling internally.
+        EnqueueDirectBrightness(info, info.RoundedBrightness);
+    }
 
     private static string ResolveDisplayName(MonitorInfo info, Dictionary<string, string> overrides)
     {
@@ -429,6 +498,14 @@ public sealed class MonitorService : IDisposable
         }
 
         ResortMonitors();
+
+        // Project per-monitor min/max overrides onto each MonitorInfo's allowed-range bounds.
+        // Runs after the loop populates Monitors so newly-added entries are covered too.
+        // The MinAllowed/MaxAllowed setters reclamp Brightness through the public Brightness setter,
+        // which the OnMonitorPropertyChanged subscription (attached above) picks up
+        // and pushes to hardware - so a hot-plugged panel sitting outside the override window
+        // is squeezed back in without an explicit replay call here.
+        ApplyBrightnessBoundOverridesToExisting();
 
         // Record "DDC was observed" facts onto KnownDisplays before notifying listeners.
         // The flag is sticky (never cleared) and drives DDCRecoveryService's candidate selection -
@@ -1145,7 +1222,15 @@ public sealed class MonitorService : IDisposable
         if (monitor == null) return;
         if (!_entries.TryGetValue(monitor.ID, out MonitorEntry? entry)) return;
 
-        int pct = Math.Clamp(percent, 0, 100);
+        // Clamp first to the absolute 0..100 envelope, then to the per-monitor override window.
+        // The slider itself stays on the normalised 0-100 range; this is the single boundary where
+        // the per-monitor floor/ceiling actually constrain hardware. Every write path flows through
+        // here (slider drag, master propagation, curve writes, topology replay), so the cap is enforced
+        // uniformly without the slider, profile, or curve code having to know about it.
+        int floor = entry.FloorPercent;
+        int ceiling = entry.CeilingPercent;
+        if (floor > ceiling) floor = ceiling;
+        int pct = Math.Clamp(Math.Clamp(percent, 0, 100), floor, ceiling);
 
         // Skip duplicate enqueues.
         // The throttler already collapses bursts queued during a write,
@@ -1589,5 +1674,14 @@ public sealed class MonitorService : IDisposable
         // value 200 times in 10 seconds. Reset by paths that need to force a fresh write
         // (e.g. ReapplySliderState after a topology change where the bus value is unknown).
         public int LastEnqueuedPercentage = -1;
+
+        // Per-monitor brightness floor/ceiling, projected from AppSettings.MonitorOverrides
+        // (MinBrightness / MaxBrightness, keyed by EDIDKey).
+        // EnqueueDirectBrightness clamps every payload to [FloorPercent, CeilingPercent] so hardware never
+        // sees a value outside the override window - regardless of which path produced it
+        // (slider drag, master propagation, curve write, profile apply, replay).
+        // The slider itself stays on the normalised 0-100 range; the cap is purely a bus-boundary concern.
+        public int FloorPercent;
+        public int CeilingPercent = 100;
     }
 }

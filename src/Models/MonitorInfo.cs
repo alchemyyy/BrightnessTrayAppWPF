@@ -193,6 +193,13 @@ public class MonitorInfo : INotifyPropertyChanged
     /// producing visible snapping).
     /// PropertyChanged is gated to integer transitions
     /// so downstream work (dirty-check, tray icon, dependent sync) only runs on meaningful changes.
+    /// Per-monitor min/max overrides
+    /// (<see cref="Models.MonitorOverrideEntry.MinBrightness"/> / <see cref="Models.MonitorOverrideEntry.MaxBrightness"/>)
+    /// are not enforced here - the slider value stays on the normalised 0-100 range.
+    /// Bounds clamping is applied at the bus boundary inside
+    /// <see cref="Services.MonitorService.EnqueueDirectBrightness"/>
+    /// so hardware never receives an out-of-range value
+    /// without the slider, profile, or curve pipelines having to know about the cap.
     /// </summary>
     public double Brightness
     {
