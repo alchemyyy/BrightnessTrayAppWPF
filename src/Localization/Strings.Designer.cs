@@ -61,24 +61,6 @@ namespace BrightnessTrayAppWPF.Localization {
         }
         
         /// <summary>
-        ///   Looks up a localized string similar to Applied.
-        /// </summary>
-        public static string ColorPicker_Apply_Clean {
-            get {
-                return ResourceManager.GetString("ColorPicker_Apply_Clean", resourceCulture);
-            }
-        }
-        
-        /// <summary>
-        ///   Looks up a localized string similar to Apply.
-        /// </summary>
-        public static string ColorPicker_Apply_Dirty {
-            get {
-                return ResourceManager.GetString("ColorPicker_Apply_Dirty", resourceCulture);
-            }
-        }
-        
-        /// <summary>
         ///   Looks up a localized string similar to argb hex:.
         /// </summary>
         public static string ColorPicker_ArgbHexLabel {
@@ -141,6 +123,15 @@ namespace BrightnessTrayAppWPF.Localization {
             }
         }
         
+        /// <summary>
+        ///   Looks up a localized string similar to Default.
+        /// </summary>
+        public static string ColorPicker_DefaultButton {
+            get {
+                return ResourceManager.GetString("ColorPicker_DefaultButton", resourceCulture);
+            }
+        }
+
         /// <summary>
         ///   Looks up a localized string similar to ColorPicker.
         /// </summary>

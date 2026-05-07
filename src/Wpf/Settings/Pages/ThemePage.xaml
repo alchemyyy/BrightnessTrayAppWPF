@@ -5,6 +5,7 @@
     xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
     xmlns:loc="clr-namespace:BrightnessTrayAppWPF.Localization"
+    xmlns:local="clr-namespace:BrightnessTrayAppWPF.WPF"
     xmlns:models="clr-namespace:BrightnessTrayAppWPF.Models"
     xmlns:utils="clr-namespace:BrightnessTrayAppWPF.WPF.Settings.Utils"
     xmlns:utils1="clr-namespace:BrightnessTrayAppWPF.WPF.Utils"
@@ -24,14 +25,9 @@
         <utils:SettingsCard Title="{loc:Loc Settings_Theme_FontSize_Title}"
                                Description="{loc:Loc Settings_Theme_FontSize_Description}">
             <utils:SettingsCard.Control>
-                <TextBox x:Name="ContextMenuFontSizeBox"
-                         Style="{StaticResource SettingsTextBoxStyle}"
-                         Width="80"
-                         VerticalAlignment="Center"
-                         TextAlignment="Center"
-                         PreviewTextInput="DigitsOnly_PreviewTextInput"
-                         LostFocus="ContextMenuFontSize_LostFocus"
-                         KeyDown="ContextMenuFontSize_KeyDown"/>
+                <local:NumericSpinner Width="100" VerticalAlignment="Center"
+                                      x:Name="ContextMenuFontSizeBox"
+                                      Minimum="8" Maximum="48"/>
             </utils:SettingsCard.Control>
         </utils:SettingsCard>
 

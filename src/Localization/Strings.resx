@@ -58,12 +58,6 @@
   <resheader name="writer">
     <value>System.Resources.ResXResourceWriter, System.Windows.Forms, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b77a5c561934e089</value>
   </resheader>
-  <data name="ColorPicker_Apply_Clean" xml:space="preserve">
-    <value>Applied</value>
-  </data>
-  <data name="ColorPicker_Apply_Dirty" xml:space="preserve">
-    <value>Apply</value>
-  </data>
   <data name="ColorPicker_ArgbHexLabel" xml:space="preserve">
     <value>argb hex:</value>
   </data>
@@ -84,6 +78,9 @@
   </data>
   <data name="ColorPicker_CloseTooltip" xml:space="preserve">
     <value>Close</value>
+  </data>
+  <data name="ColorPicker_DefaultButton" xml:space="preserve">
+    <value>Default</value>
   </data>
   <data name="ColorPicker_DefaultTitle" xml:space="preserve">
     <value>ColorPicker</value>

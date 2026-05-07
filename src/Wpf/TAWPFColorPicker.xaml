@@ -463,7 +463,7 @@
                                  TextChanged="ArgbBox_TextChanged"/>
                     </Grid>
 
-                    <!-- Apply + Reset span the bottom grid's cols 2-10 (the 9 columns mirroring the
+                    <!-- Default + Reset span the bottom grid's cols 2-10 (the 9 columns mirroring the
                          picker's bar / slider band). Inner sub-grid uses two * cols with an 8pt gap, so
                          the buttons split the spanned width evenly and the gap stays exactly 8pt
                          regardless of how the picker columns measure. -->
@@ -474,14 +474,13 @@
                             <ColumnDefinition Width="*"/>
                         </Grid.ColumnDefinitions>
                         <Button Grid.Column="0"
-                                x:Name="ApplyButton"
+                                x:Name="DefaultButton"
                                 Style="{StaticResource SettingsButtonStyle}"
-                                Content="{loc:Loc ColorPicker_Apply_Clean}"
+                                Content="{loc:Loc ColorPicker_DefaultButton}"
                                 Padding="20,8"
-                                IsEnabled="False"
                                 HorizontalAlignment="Stretch"
                                 VerticalAlignment="Center"
-                                Click="Apply_Click"/>
+                                Click="Default_Click"/>
                         <Button Grid.Column="2"
                                 x:Name="ResetButton"
                                 Style="{StaticResource SettingsButtonStyle}"

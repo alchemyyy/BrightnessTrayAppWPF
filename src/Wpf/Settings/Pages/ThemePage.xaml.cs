@@ -1,6 +1,5 @@
 using System.Windows;
 using System.Windows.Controls;
-using System.Windows.Input;
 using System.Windows.Media;
 using BrightnessTrayAppWPF.Localization;
 using BrightnessTrayAppWPF.Models;
@@ -14,7 +13,7 @@ namespace BrightnessTrayAppWPF.WPF.Settings.Pages;
 
 /// <summary>
 /// Theme settings page.
-/// Owns its UI plus the font-size text handlers, the color-swatch / reset click handlers,
+/// Owns its UI plus the color-swatch / reset click handlers,
 /// the slider-thumb glyph combo, and the static-vs-dynamic visibility toggle for the tray icon color cards.
 /// Routes generic Tag-based ToggleSwitch / ComboBox mutations through <see cref="SettingsBindings"/>
 /// and uses an internal post-action map to fire <see cref="UpdateTrayIconColorVisibility"/>
@@ -28,6 +27,7 @@ public partial class ThemePage : UserControl
     private AppSettings? _settings;
     private IThemeHost? _themeHost;
     private bool _suppressChangeEvents;
+    private bool _systemThemeSubscribed;
 
     // Theme palette source for the swatch "unset" fallback colors. Pulled from the App-owned
     // AppTheme via the same service-locator slot SettingsWindow uses, so a fresh fallback hex
@@ -42,11 +42,19 @@ public partial class ThemePage : UserControl
 
     private static readonly Dictionary<string, Action<ThemePage>> EnumComboPostActions = new()
     {
-        ["ThemeMode"] = p => p._themeHost?.ApplyDwmDarkMode(),
+        ["ThemeMode"] = p =>
+        {
+            p._themeHost?.ApplyDwmDarkMode();
+            p.UpdateColorSwatchVisibility();
+        },
         ["TrayIconStyle"] = p => p.UpdateTrayIconColorVisibility(),
     };
 
-    public ThemePage() => InitializeComponent();
+    public ThemePage()
+    {
+        InitializeComponent();
+        Unloaded += OnUnloaded;
+    }
 
     /// <summary>
     /// Injects the AppSettings instance plus the host callback for DWM dark-mode updates and seeds
@@ -60,7 +68,13 @@ public partial class ThemePage : UserControl
         _suppressChangeEvents = true;
         try
         {
-            ContextMenuFontSizeBox.Text = settings.ContextMenuFontSize.ToString();
+            SettingsBindings.BindSpinner(
+                ContextMenuFontSizeBox,
+                () => settings.ContextMenuFontSize,
+                v => settings.ContextMenuFontSize = v,
+                () => _suppressChangeEvents,
+                SaveAndNotify);
+
             SettingsBindings.SelectComboByTag(ThemeModeCombo, settings.ThemeMode.ToString());
             SettingsBindings.SelectComboByTag(TrayIconStyleCombo, settings.TrayIconStyle.ToString());
             SettingsBindings.SelectComboByTag(
@@ -74,12 +88,47 @@ public partial class ThemePage : UserControl
                 ?? settings.SliderThumbOptions.FirstOrDefault();
 
             UpdateColorSwatches();
+            UpdateColorSwatchVisibility();
             UpdateTrayIconColorVisibility();
         }
         finally
         {
             _suppressChangeEvents = false;
         }
+
+        // Track system theme flips so swatch visibility follows Windows when ThemeMode is System.
+        // Idempotent: only attaches once per page lifetime; the Unloaded handler tears it down.
+        if (!_systemThemeSubscribed && Theme is { } liveTheme)
+        {
+            liveTheme.ThemeChanged += OnSystemThemeChanged;
+            _systemThemeSubscribed = true;
+        }
+    }
+
+    private void OnSystemThemeChanged(bool isLightTheme) =>
+        Dispatcher.BeginInvoke(UpdateColorSwatchVisibility);
+
+    private void OnUnloaded(object sender, RoutedEventArgs e)
+    {
+        if (_systemThemeSubscribed && Theme is { } liveTheme)
+        {
+            liveTheme.ThemeChanged -= OnSystemThemeChanged;
+            _systemThemeSubscribed = false;
+        }
+    }
+
+    // Effective light/dark side under the user's ThemeMode override - mirrors the resolution in
+    // SettingsWindow.ResolveEffectiveIsLight / App.ResolveEffectiveIsLightTheme so the visible swatch
+    // pair matches the theme that's actually painted everywhere else in the app.
+    private bool ResolveEffectiveIsLight()
+    {
+        if (_settings == null) return Theme?.IsLightTheme ?? false;
+        return _settings.ThemeMode switch
+        {
+            Models.ThemeMode.Light => true,
+            Models.ThemeMode.Dark => false,
+            _ => Theme?.IsLightTheme ?? false,
+        };
     }
 
     private void BoolToggle_Changed(object sender, RoutedEventArgs e)
@@ -93,40 +142,6 @@ public partial class ThemePage : UserControl
         if (_settings == null) return;
         SettingsBindings.HandleEnumCombo(
             sender, _settings, SaveAndNotify, () => _suppressChangeEvents, this, EnumComboPostActions);
-    }
-
-    private void DigitsOnly_PreviewTextInput(object sender, TextCompositionEventArgs e) =>
-        SettingsBindings.RestrictToDigits(e);
-
-    private void ContextMenuFontSize_LostFocus(object sender, RoutedEventArgs e) => CommitFontSize();
-
-    private void ContextMenuFontSize_KeyDown(object sender, System.Windows.Input.KeyEventArgs e)
-    {
-        if (e.Key == Key.Enter)
-        {
-            CommitFontSize();
-            e.Handled = true;
-        }
-    }
-
-    private void CommitFontSize()
-    {
-        if (_suppressChangeEvents || _settings == null) return;
-
-        if (!int.TryParse(ContextMenuFontSizeBox.Text, out int size))
-        {
-            ContextMenuFontSizeBox.Text = _settings.ContextMenuFontSize.ToString();
-            return;
-        }
-
-        int clamped = Math.Clamp(size, 8, 48);
-        if (clamped != size) ContextMenuFontSizeBox.Text = clamped.ToString();
-
-        if (_settings.ContextMenuFontSize != clamped)
-        {
-            _settings.ContextMenuFontSize = clamped;
-            SaveAndNotify();
-        }
     }
 
     private void SliderThumbGlyph_Changed(object sender, SelectionChangedEventArgs e)
@@ -235,8 +250,8 @@ public partial class ThemePage : UserControl
         // Seed the picker with the same color the swatch is currently showing.
         // For an unset (LightHex/DarkHex == null) override the swatch displays a per-swatch fallback;
         // mirror that here so the picker doesn't open at opaque black for an "unset" pick.
-        Color initial = (isLight ? target.LightColor : target.DarkColor)
-                        ?? GetSwatchFallbackColor(parts[0], isLight);
+        Color fallback = GetSwatchFallbackColor(parts[0], isLight);
+        Color initial = (isLight ? target.LightColor : target.DarkColor) ?? fallback;
         string variantToken = isLight
             ? LocalizationManager.Instance["Settings_Theme_PickerTitle_LightVariant"]
             : LocalizationManager.Instance["Settings_Theme_PickerTitle_DarkVariant"];
@@ -244,16 +259,17 @@ public partial class ThemePage : UserControl
             LocalizationManager.Instance["Settings_Theme_PickerTitle_Format"],
             GetSwatchCardTitle(parts[0]), variantToken);
 
-        TAWPFColorPicker picker = new(title, hasAlpha: true, initial)
+        // Default button loads the per-swatch theme fallback so the user can always get back to
+        // "what the swatch looks like when unset" without remembering the hex.
+        TAWPFColorPicker picker = new(title, hasAlpha: true, initial, defaultColor: fallback)
         {
             Owner = Window.GetWindow(this),
         };
 
-        // Live-apply: route every edit through the Temporary slot so Resolve()-based consumers
+        // Live-preview: every edit flows through the Temporary slot so Resolve()-based consumers
         // (App.OnSettingsChanged -> brush rebuild, swatch refresh, environmental brushes) see the
         // in-flight color through the same code path as a committed value, without touching LightHex/DarkHex.
-        // The Temporary* setter auto-fires AppSettings.Changed via the wired callback,
-        // so the explicit RaiseChanged of older revisions is no longer needed.
+        // The Temporary* setter auto-fires AppSettings.Changed via the wired callback.
         picker.ColorChanged += (_, editedColor) =>
         {
             if (_settings == null) return;
@@ -264,31 +280,27 @@ public partial class ThemePage : UserControl
             UpdateColorSwatches();
         };
 
-        // Apply commits the in-flight color into the persisted hex slot. The picker stays open
-        // and re-baselines internally, so its Apply button drops back to the disabled "Applied" state
-        // until the user edits again. LightHex/DarkHex setter auto-fires Changed; we just need to persist.
-        picker.Applied += (_, appliedColor) =>
-        {
-            if (_settings == null) return;
-
-            if (isLight) target.LightHex = NullableThemeColor.ToHex(appliedColor);
-            else target.DarkHex = NullableThemeColor.ToHex(appliedColor);
-
-            UpdateColorSwatches();
-            _settings.Save();
-        };
-
-        // Picker closed (titlebar X, owner closing, or any other path):
-        // tear down the live-preview override so the swatch reverts to the saved hex.
-        // Setting Temporary* back to null fires Changed automatically when there were uncommitted edits
-        // (and is a no-op otherwise, which is the right amount of work).
-        picker.Closed += (_, _) =>
+        // Auto-save on close: when the user dismisses the picker, persist whatever color the
+        // edit landed on (if it differs from the session baseline) into the hex slot, then clear
+        // the Temporary override so display falls through to the saved hex. A clean close (no
+        // edits, or edits Reset back to baseline) leaves LightHex/DarkHex untouched - so opening
+        // and closing on an "unset" swatch without changing anything keeps it unset.
+        picker.Closed += (s, _) =>
         {
             _openPickers.Remove((target, isLight));
+            if (_settings == null) return;
+
+            TAWPFColorPicker closed = (TAWPFColorPicker)s!;
+            if (closed.IsDirty)
+            {
+                Color finalColor = closed.CurrentColor;
+                if (isLight) target.LightHex = NullableThemeColor.ToHex(finalColor);
+                else target.DarkHex = NullableThemeColor.ToHex(finalColor);
+                _settings.Save();
+            }
+
             if (isLight) target.TemporaryLightColor = null;
             else target.TemporaryDarkColor = null;
-
-            if (_settings == null) return;
 
             UpdateColorSwatches();
         };
@@ -362,6 +374,43 @@ public partial class ThemePage : UserControl
     }
 
     private static string ToFallbackHex(Color c) => $"#{c.R:X2}{c.G:X2}{c.B:X2}";
+
+    // Show only the swatch pair for the currently effective theme side.
+    // The user can only paint the surfaces they're seeing, so collapsing the off-side swatches
+    // removes a redundant click and keeps the page aligned with the live appearance.
+    // Both Light/Dark hex values still persist independently behind the scenes - flipping ThemeMode
+    // (or the system theme, in System mode) reveals the other half without losing data.
+    private void UpdateColorSwatchVisibility()
+    {
+        bool isLight = ResolveEffectiveIsLight();
+        Visibility lightVis = isLight ? Visibility.Visible : Visibility.Collapsed;
+        Visibility darkVis = isLight ? Visibility.Collapsed : Visibility.Visible;
+
+        TextColorLightSwatch.Visibility = lightVis;
+        TextColorDarkSwatch.Visibility = darkVis;
+        BackgroundColorLightSwatch.Visibility = lightVis;
+        BackgroundColorDarkSwatch.Visibility = darkVis;
+
+        TrayIconColorLightSwatch.Visibility = lightVis;
+        TrayIconColorDarkSwatch.Visibility = darkVis;
+        TrayIconBrightColorLightSwatch.Visibility = lightVis;
+        TrayIconBrightColorDarkSwatch.Visibility = darkVis;
+        TrayIconDimColorLightSwatch.Visibility = lightVis;
+        TrayIconDimColorDarkSwatch.Visibility = darkVis;
+
+        EnvBrightnessCurveLightSwatch.Visibility = lightVis;
+        EnvBrightnessCurveDarkSwatch.Visibility = darkVis;
+        EnvNightLightCurveLightSwatch.Visibility = lightVis;
+        EnvNightLightCurveDarkSwatch.Visibility = darkVis;
+        EnvCurrentTimeLightSwatch.Visibility = lightVis;
+        EnvCurrentTimeDarkSwatch.Visibility = darkVis;
+        EnvTwilightBackdropLightSwatch.Visibility = lightVis;
+        EnvTwilightBackdropDarkSwatch.Visibility = darkVis;
+        EnvNightBackdropLightSwatch.Visibility = lightVis;
+        EnvNightBackdropDarkSwatch.Visibility = darkVis;
+        EnvGridLineLightSwatch.Visibility = lightVis;
+        EnvGridLineDarkSwatch.Visibility = darkVis;
+    }
 
     private void UpdateTrayIconColorVisibility()
     {

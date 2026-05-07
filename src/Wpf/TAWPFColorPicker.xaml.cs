@@ -5,7 +5,6 @@ using System.Windows.Input;
 using System.Windows.Interop;
 using System.Windows.Media;
 using BrightnessTrayAppWPF.Interop;
-using BrightnessTrayAppWPF.Localization;
 using BrightnessTrayAppWPF.Models;
 using BrightnessTrayAppWPF.Services;
 using Color = System.Windows.Media.Color;
@@ -18,7 +17,7 @@ namespace BrightnessTrayAppWPF.WPF;
 /// <summary>
 /// Modeless color picker window with paired ARGB / RGBA hex textboxes, an HSV saturation/value
 /// free-pick plane, vertical hue and alpha gradient sliders, vertical R/G/B channel sliders,
-/// and Reset / Apply buttons. All five sliders run on the same Slider chassis (see
+/// and Default / Reset buttons. All five sliders run on the same Slider chassis (see
 /// <see cref="ChannelSliderStyle"/> for R/G/B and <see cref="HueAlphaSliderStyle"/> for hue/alpha)
 /// so a single set of channel-slider mouse / wheel / keyboard handlers covers every input path.
 ///
@@ -26,7 +25,7 @@ namespace BrightnessTrayAppWPF.WPF;
 /// interacting with the owning settings window while picking a color and watch the
 /// edits land where they're applied.
 ///
-/// Live-apply: every successful edit (typed, slider, free-pick, or Reset) feeds an
+/// Live-apply: every successful edit (typed, slider, free-pick, Reset, or Default) feeds an
 /// <see cref="AsyncThrottler{TKey}"/> queue; the throttler collapses a flurry of intermediate
 /// values to the latest one and dispatches <see cref="ColorChanged"/> back on the UI thread,
 /// so callers can mutate their preview state (e.g. <c>NullableThemeColor.TemporaryLightColor</c>)
@@ -34,21 +33,13 @@ namespace BrightnessTrayAppWPF.WPF;
 /// (brush rebuild, swatch refresh, environmental brushes). Mirrors the latest-pending-wins
 /// pattern used by NightLight kelvin, DDC brightness, and the curve service.
 ///
-/// Apply contract: the Apply button is disabled and labeled "Applied" while the current
-/// color matches the saved baseline; it becomes enabled and labeled "Apply" the moment
-/// the user edits to something different. Clicking Apply fires <see cref="Applied"/>
-/// so the caller can persist the value, then re-baselines the picker (button reverts to
-/// disabled "Applied"). Reset reverts the current edit to the saved baseline.
-/// Neither button closes the window - the picker stays open until the user X's it
-/// or the owning window closes.
+/// Commit contract: there is no explicit Apply step. The picker exposes <see cref="CurrentColor"/>
+/// and <see cref="IsDirty"/> so the caller can persist the final edit when its own Closed
+/// handler runs. Default loads the supplied factory color (the theme's fallback for the swatch);
+/// Reset reverts to the baseline (the color the picker opened on). Neither closes the window.
 /// </summary>
 public partial class TAWPFColorPicker : Window
 {
-    // Apply button labels are localized at lookup time so a culture switch refreshes them
-    // alongside the rest of the UI; static readonly would freeze the wrong language at field-init.
-    private static string ApplyButtonLabelDirty => LocalizationManager.Instance["ColorPicker_Apply_Dirty"];
-    private static string ApplyButtonLabelClean => LocalizationManager.Instance["ColorPicker_Apply_Clean"];
-
     // Single throttler slot - one picker only edits one color, so we don't need per-key partitioning.
     // 50ms cooldown caps ColorChanged fanout (AppSettings.Changed -> brush rebuild + swatch refresh +
     // environmental brushes) at ~20Hz. A 0ms cooldown was tried first and felt laggier than synchronous
@@ -74,11 +65,17 @@ public partial class TAWPFColorPicker : Window
     private readonly AppSettings? _settings;
 
     /// <summary>
-    /// The last-saved value the picker is comparing edits against.
-    /// Initialised to the constructor's startingColor; advanced to the current edit
-    /// every time the user clicks Apply.
+    /// The picker's session baseline (the color the picker opened on). Reset reverts to this.
+    /// Fixed for the lifetime of the picker - the new commit-on-close model never advances it.
     /// </summary>
     private Color _baseline;
+
+    /// <summary>
+    /// The factory-default color the Default button reverts to. Supplied by the caller so
+    /// the picker doesn't need to know what "default" means for any particular swatch (theme
+    /// fallback, hardcoded constant, etc).
+    /// </summary>
+    private readonly Color _defaultColor;
 
     // Reentry guards: setting one textbox's Text from code triggers TextChanged,
     // which would otherwise re-parse and overwrite the textbox the user is typing in
@@ -128,24 +125,26 @@ public partial class TAWPFColorPicker : Window
     private readonly SolidColorBrush _alphaThumbBorderBrush = new(Colors.White);
 
     /// <summary>
-    /// Fires on every edit (typed or Reset-driven) that successfully resolves to a color.
-    /// Used by the caller for live-apply preview before the user commits via Apply.
+    /// Fires on every edit (typed, slider, free-pick, Reset, or Default) that successfully
+    /// resolves to a color. Used by the caller for live-preview before the picker closes.
     /// </summary>
     public event EventHandler<Color>? ColorChanged;
 
-    /// <summary>
-    /// Fires when the user clicks Apply. Carries the color to be persisted by the caller.
-    /// The picker advances its internal baseline immediately afterwards
-    /// so further edits re-enable the Apply button.
-    /// </summary>
-    public event EventHandler<Color>? Applied;
+    /// <summary>The latest edited color. Read by the caller's Closed handler to commit.</summary>
+    public Color CurrentColor => _currentColor;
+
+    /// <summary>True when the user has edited away from the session baseline.
+    /// Caller checks this on close to decide whether to persist <see cref="CurrentColor"/>.</summary>
+    public bool IsDirty => _currentColor != _baseline;
 
     /// <param name="title">Title shown in the window's titlebar.</param>
     /// <param name="hasAlpha">When false, the alpha channel is locked at 0xFF
     /// regardless of what the user types into the alpha bytes.</param>
-    /// <param name="startingColor">Initial color and initial Apply baseline.
+    /// <param name="startingColor">Initial color and the Reset baseline.
     /// When null, defaults to opaque black.</param>
-    public TAWPFColorPicker(string title, bool hasAlpha, Color? startingColor = null)
+    /// <param name="defaultColor">The factory color the Default button loads. When null,
+    /// falls back to <paramref name="startingColor"/> so Default behaves like Reset.</param>
+    public TAWPFColorPicker(string title, bool hasAlpha, Color? startingColor = null, Color? defaultColor = null)
     {
         InitializeComponent();
 
@@ -157,6 +156,10 @@ public partial class TAWPFColorPicker : Window
         if (!hasAlpha) seed = Color.FromArgb(0xFF, seed.R, seed.G, seed.B);
         _currentColor = seed;
         _baseline = seed;
+
+        Color factory = defaultColor ?? seed;
+        if (!hasAlpha) factory = Color.FromArgb(0xFF, factory.R, factory.G, factory.B);
+        _defaultColor = factory;
 
         // Build the alpha gradient once and hand it to the slider as its Background. The two stops
         // are reused on every UpdateAlphaGradient call - mutating Color is cheaper than swapping the
@@ -192,7 +195,6 @@ public partial class TAWPFColorPicker : Window
         UpdateAlphaGradient();
         UpdateChannelSliderThumbs();
         UpdatePreview();
-        UpdateApplyButtonState();
 
         // Pick up the EnableRoundedCorners toggle from the global settings so the picker chrome
         // matches the rest of the app's surfaces. Apply now (RootBorder + WindowChrome) - DWM
@@ -271,11 +273,12 @@ public partial class TAWPFColorPicker : Window
         }
     }
 
-    private void Apply_Click(object sender, RoutedEventArgs e)
+    private void Default_Click(object sender, RoutedEventArgs e)
     {
-        Applied?.Invoke(this, _currentColor);
-        _baseline = _currentColor;
-        UpdateApplyButtonState();
+        // Force a full re-sync even when Default is a no-op vs the current value, so the
+        // caller's Temporary slot is guaranteed to track the factory color (and the dirty
+        // flag flips correctly when the user opened on a non-default saved value).
+        ApplyColor(_defaultColor, force: true);
     }
 
     private void Reset_Click(object sender, RoutedEventArgs e)
@@ -337,7 +340,6 @@ public partial class TAWPFColorPicker : Window
         UpdateChannelSliderThumbs();
         SyncValueLabelsFromColor();
         UpdatePreview();
-        UpdateApplyButtonState();
         EnqueueColorChangedNotification();
     }
 
@@ -351,9 +353,9 @@ public partial class TAWPFColorPicker : Window
     /// Pushes the current color into the latest-pending-wins throttler so a flurry of edits
     /// (slider drag, free-pick drag, hex-typing) collapses to a single ColorChanged on the
     /// consumer side. The picker's OWN visuals (textboxes, sliders, free-pick indicator,
-    /// preview swatch, apply-button enable state) already updated synchronously above this
-    /// call - only the outbound notification is decoupled, so AppSettings.Changed fanout
-    /// can't backpressure the picker's input rate.
+    /// preview swatch) already updated synchronously above this call - only the outbound
+    /// notification is decoupled, so AppSettings.Changed fanout can't backpressure the
+    /// picker's input rate.
     /// </summary>
     private void EnqueueColorChangedNotification()
     {
@@ -398,13 +400,6 @@ public partial class TAWPFColorPicker : Window
     // Paint the free-pick area's node indicator with the current color so it reads as the live
     // preview of the edit, mirroring how curve-editor nodes are filled with their series color.
     private void UpdatePreview() => FreePickIndicator.Fill = new SolidColorBrush(_currentColor);
-
-    private void UpdateApplyButtonState()
-    {
-        bool dirty = _currentColor != _baseline;
-        ApplyButton.IsEnabled = dirty;
-        ApplyButton.Content = dirty ? ApplyButtonLabelDirty : ApplyButtonLabelClean;
-    }
 
     private static string FormatArgb(Color color) => $"{color.A:X2}{color.R:X2}{color.G:X2}{color.B:X2}";
     private static string FormatRgba(Color color) => $"{color.R:X2}{color.G:X2}{color.B:X2}{color.A:X2}";
