@@ -670,18 +670,24 @@ public sealed class EnvironmentalCurveService : IDisposable
                 // follow only on curve-driven rows. Released / disabled / failed rows show their
                 // slider's own value via RoundedBrightness (EffectiveRoundedBrightness short-circuits
                 // when IsCurveDriven is false).
-                double masterTarget = Math.Clamp(_masterMonitor.Brightness + offsetPercent, 0.0, 100.0);
+                // Baseline reads LastUserBrightness, not Brightness, so a Brightness drift from a
+                // recovery / hot-plug hardware-sync (which goes through SyncBrightnessFromHardware
+                // and intentionally does NOT touch LastUserBrightness) can't reroute the offset onto
+                // the wrong baseline and skew the master / per-row targets.
+                double masterTarget = Math.Clamp(_masterMonitor.LastUserBrightness + offsetPercent, 0.0, 100.0);
                 _masterMonitor.CurveTargetBrightness = masterTarget;
                 foreach (MonitorInfo monitor in _monitors)
                 {
                     if (monitor.IsCurveDriven)
-                        monitor.CurveTargetBrightness = Math.Clamp(monitor.Brightness + offsetPercent, 0.0, 100.0);
+                        monitor.CurveTargetBrightness =
+                            Math.Clamp(monitor.LastUserBrightness + offsetPercent, 0.0, 100.0);
                 }
 
                 foreach (MonitorInfo monitor in _monitors)
                 {
                     if (monitor.SliderState != SliderState.CurveActive) continue;
-                    int hwTarget = (int)Math.Round(Math.Clamp(monitor.Brightness + offsetPercent, 0.0, 100.0));
+                    int hwTarget = (int)Math.Round(
+                        Math.Clamp(monitor.LastUserBrightness + offsetPercent, 0.0, 100.0));
                     _monitorService.EnqueueDirectBrightness(monitor, hwTarget);
                 }
             });

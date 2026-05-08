@@ -118,6 +118,7 @@ public static class SliderStateMachine
 public class MonitorInfo : INotifyPropertyChanged
 {
     private double _brightness;
+    private double _lastUserBrightness;
     private double _virtualBrightness;
     private bool _isPoweredOn = true;
     private bool _showPreview;
@@ -211,6 +212,15 @@ public class MonitorInfo : INotifyPropertyChanged
             // (see BrightnessFlyout.ApplyMasterToEnabledMonitors),
             // so direct individual changes reset any prior overflow while master drags preserve it.
             _virtualBrightness = value;
+            // Claim user intent: every write through this setter is a user-driven change
+            // (slider drag, master propagation, profile load, hotkey delta, sync ops).
+            // Hardware-sync writes from MonitorService.PromoteRecovered etc. go through
+            // SyncBrightnessFromHardware, which bypasses LastUserBrightness so a drift between
+            // the slider thumb and the user's intent can't be laundered into the curve baseline.
+            // Unconditional even when _brightness == value: LastUserBrightness can legitimately
+            // diverge from Brightness post-recovery, so a user-drag back to the current Brightness
+            // still has to reclaim the baseline.
+            _lastUserBrightness = value;
             // exact-primitive comparison is intentional
             if (_brightness == value) return;
 
@@ -241,6 +251,47 @@ public class MonitorInfo : INotifyPropertyChanged
     {
         get => _virtualBrightness;
         set => _virtualBrightness = value;
+    }
+
+    /// <summary>
+    /// The slider value the user last expressed direct intent at.
+    /// Tracks <see cref="Brightness"/> across every user-driven write
+    /// (slider drag, keyboard, wheel, hotkey, sync ops, master propagation, profile load),
+    /// but stays put when MonitorService syncs Brightness from a hardware reading via
+    /// <see cref="SyncBrightnessFromHardware(double)"/> on recovery / hot-plug.
+    /// Used by the brightness curve as the per-row baseline in offset mode and by
+    /// <c>BrightnessFlyout.CaptureOffsetsFromMaster</c> when computing master-relative offsets,
+    /// so a Brightness drift caused by a hardware-sync race never bakes into the curve's view of
+    /// "what the user wanted."
+    /// </summary>
+    public double LastUserBrightness
+    {
+        get => _lastUserBrightness;
+        set => _lastUserBrightness = value;
+    }
+
+    /// <summary>
+    /// Hardware-sync setter that mutates <see cref="Brightness"/> without claiming user intent
+    /// (i.e. without touching <see cref="LastUserBrightness"/>).
+    /// Mirrors the public Brightness setter's notification gating; the only difference is
+    /// LastUserBrightness is preserved.
+    /// Called by MonitorService when a recovered or freshly-promoted monitor's bus value is
+    /// authoritative for the slider thumb but does not represent a fresh user choice.
+    /// </summary>
+    public void SyncBrightnessFromHardware(double value)
+    {
+        _virtualBrightness = value;
+        if (_brightness == value) return;
+
+        int oldRounded = (int)Math.Round(_brightness);
+        _brightness = value;
+        int newRounded = (int)Math.Round(value);
+        if (oldRounded != newRounded)
+        {
+            OnPropertyChanged(nameof(Brightness));
+            OnPropertyChanged(nameof(RoundedBrightness));
+            if (_sliderState != SliderState.CurveActive) OnPropertyChanged(nameof(EffectiveRoundedBrightness));
+        }
     }
 
     /// <summary>

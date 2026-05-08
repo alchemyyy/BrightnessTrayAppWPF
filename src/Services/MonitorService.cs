@@ -416,12 +416,23 @@ public sealed class MonitorService : IDisposable
         // (decoupled from the user's chosen MonitorIdentityStrategy so they survive strategy changes).
         Dictionary<string, string> nameOverridesByEDID = BuildNameOverrideMap();
 
-        // 1. Remove monitors that are no longer present.
+        // 1. Reconcile monitors that are no longer in the enumeration.
         //    EDIDKey is the primary "is this physical panel still here?" signal because it survives display-number
-        //    shuffles - a power-cycled panel often comes back with a different OS-assigned display number, and the
-        //    old check (latestByID.ContainsKey(existing.ID)) treated that as a removal+addition, destroying the
-        //    existing MonitorInfo and any UI state bound to it.
+        //    shuffles - a power-cycled panel often comes back with a different OS-assigned display number,
+        //    and the old check (latestByID.ContainsKey(existing.ID)) treated that as a removal+addition,
+        //    destroying the existing MonitorInfo and any UI state bound to it.
         //    Falls back to ID match for the rare monitor that doesn't expose an EDID.
+        //
+        //    Two cases for a missing monitor:
+        //    a) Known DDC-capable panel (the user has driven it before). Treat the drop as transient -
+        //       LG / DisplayPort panels with DP power-saving fully drop from Windows enumeration when the
+        //       user hits the power button, and a forced removal + re-add would lose Brightness,
+        //       LastUserBrightness, Offset, and the curve baseline, so the panel returns at whatever
+        //       hardware default the EEPROM happens to report (often 100). Keep the MonitorInfo, mark
+        //       Failed, drop the bus entry; the recovery loop / next Refresh re-promotes the panel in
+        //       place when it returns to enumeration, and the curve-driven gate on Brightness sync
+        //       preserves the slider value through the cycle.
+        //    b) Never DDC-capable (or no EDID at all). Genuinely gone, or never useful - drop normally.
         for (int i = Monitors.Count - 1; i >= 0; i--)
         {
             MonitorInfo existing = Monitors[i];
@@ -429,6 +440,30 @@ public sealed class MonitorService : IDisposable
                 ? latestByEdidKey.ContainsKey(existing.EDIDKey)
                 : latestByID.ContainsKey(existing.ID);
             if (stillPresent) continue;
+
+            bool wasEverCapable = !string.IsNullOrEmpty(existing.EDIDKey)
+                && (_knownDisplays.Find(existing.EDIDKey)?.WasEverDDCCapable ?? false);
+
+            if (wasEverCapable)
+            {
+                // Park the row in Failed without losing it.
+                // SliderState's setter stashes _preFailureSliderState on the first transition into Failed,
+                // so a CurveActive panel power-cycled now still recovers as curve-driven and skips the
+                // hardware-sync of Brightness on the rebound.
+                existing.SliderState = SliderStateMachine.OnHardwareFailed();
+                existing.LastDDCError = "Monitor not currently enumerated.";
+                if (_entries.Remove(existing.ID, out MonitorEntry? droppedEntry))
+                {
+                    // In-flight write payload owns the (now-stale) DDC handle and will release cleanly;
+                    // queued writes can't usefully target a missing panel, drop them.
+                    _writeThrottler.Drop(existing.ID);
+                    _ = droppedEntry;
+                }
+                WPFLog.Log(
+                    $"MonitorService: '{existing.Name}' dropped from enumeration; parking as Failed "
+                    + $"(EDIDKey={existing.EDIDKey})");
+                continue;
+            }
 
             DetachMonitor(existing);
             Monitors.RemoveAt(i);
@@ -529,8 +564,10 @@ public sealed class MonitorService : IDisposable
                         // so syncing here would silently turn the curve's last target into the user's "manual" value.
                         // Non-curve prior states keep the sync to reflect any OSD changes the user made during the
                         // failure window. Mirrors PromoteRecovered.
+                        // Routed through SyncBrightnessFromHardware so the read-back never claims user intent
+                        // - LastUserBrightness stays at the user's last drag value and the curve baseline stays clean.
                         if (!existingInfo.WasCurveDrivenBeforeFailure)
-                            existingInfo.Brightness = Math.Clamp(percent, 0, 100);
+                            existingInfo.SyncBrightnessFromHardware(Math.Clamp(percent, 0, 100));
                         // Recovery transitions Failed -> Enabled;
                         // the curve service's per-tick harmonization picks the row up into CurveActive / CurveSleeping
                         // if curves are engaged.
@@ -1221,7 +1258,9 @@ public sealed class MonitorService : IDisposable
         // - the slider then forgets where the user had it parked.
         // Non-curve states keep the original sync
         // so an OSD brightness change made by the user during the failure window is reflected after recovery.
-        if (!info.WasCurveDrivenBeforeFailure) info.Brightness = Math.Clamp(pct, 0, 100);
+        // SyncBrightnessFromHardware preserves LastUserBrightness so the curve's baseline stays
+        // pinned to the user's last drag value, even if a panel reports back a different number.
+        if (!info.WasCurveDrivenBeforeFailure) info.SyncBrightnessFromHardware(Math.Clamp(pct, 0, 100));
         // Same Failed -> Enabled transition the Refresh-promotion path uses;
         // the curve service's per-tick harmonize will pick the row up into CurveActive / Sleeping if needed.
         info.SliderState = SliderStateMachine.OnHardwareRecovered(

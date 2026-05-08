@@ -1054,14 +1054,18 @@ public partial class BrightnessFlyout : Window, INotifyPropertyChanged
     /// When PreserveMasterSliderOffsets is on,
     /// the source is the monitor's unclamped <see cref="MonitorInfo.VirtualBrightness"/>
     /// so an offset that previously pushed the monitor past 0/100 is retained for the next adjustment.
+    /// Otherwise the source is <see cref="MonitorInfo.LastUserBrightness"/> rather than
+    /// <see cref="MonitorInfo.Brightness"/>, so a Brightness drift from a hardware-sync read
+    /// (e.g. recovery after the user toggled a panel off and back on) can't bake itself into
+    /// the offset and propagate forever as a "permanent" skew between rows.
     /// </summary>
     private void CaptureOffsetsFromMaster()
     {
         bool preserve = _appSettings?.PreserveMasterSliderOffsets == true;
         foreach (MonitorInfo monitor in Monitors)
         {
-            double source = preserve ? monitor.VirtualBrightness : monitor.Brightness;
-            monitor.Offset = source - MasterMonitor.Brightness;
+            double source = preserve ? monitor.VirtualBrightness : monitor.LastUserBrightness;
+            monitor.Offset = source - MasterMonitor.LastUserBrightness;
         }
     }
 
