@@ -34,8 +34,11 @@ internal sealed class ShellNotifyIcon : IDisposable
 
     private const int WM_CALLBACKMOUSEMSG = User32.WM_USER + 1024;
 
-    // Persistent GUID for this icon - reduces flicker on updates
-    private static readonly Guid IconGuid = new("B5A1C7E2-4F3D-4A8B-9C6E-1D2F3A4B5C6D");
+    // Persistent GUID for this icon - reduces flicker on updates.
+    // Derived from AppIdentity.AppGuid so two apps forked from the same skeleton can't
+    // collide on the same icon identity in the shell registry (which would cause NIM_ADD
+    // to fail and cross-app NIM_DELETEs to yank the wrong icon).
+    private static readonly Guid IconGuid = new(AppIdentity.AppGuid);
 
     private readonly Win32Window _window;
     private readonly DispatcherTimer _taskbarRecreateTimer;
