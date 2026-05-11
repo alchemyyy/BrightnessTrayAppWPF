@@ -25,9 +25,15 @@ public static class TimeConstants
     // DDC recovery
     public const int DDCRecoveryTickIntervalMs = 1_000;
     public const int DDCRecoveryFullRefreshIntervalMs = 30_000;
-    // Base ms for the exponential retry backoff (25, 50, 100, 200...).
-    // Tuned so most transient I2C blips clear inside the first retry without burning CPU on tight loops.
-    public const int MonitorRetryBackoffBaseMs = 25;
+    // Settle window before the first VCP read on any monitor after a topology event.
+    // Covers cold hot-plug, monitor power-on, and cascade refreshes triggered when an unrelated
+    // monitor changes power state. Most panels are DDC-ready inside ~500 ms, but some MCUs need
+    // longer for their I2C reply pipeline to come up clean - reading too early can desync the
+    // pipeline and wedge it into a persistent INVALID_MESSAGE_CHECKSUM state.
+    public const int MonitorPostDetectionSettleDelayMs = 1_500;
+    // Explicit per-attempt sleep before retries 2/3/4 (attempt 1 fires immediately after the
+    // settle window above). All well above the DDC/CI spec's Tg floor of 40 ms.
+    public static readonly int[] MonitorReadRetryBackoffSequenceMs = [80, 160, 480];
     public const int MonitorStartupSweep1stDelayMs = 2_000;
     public const int MonitorStartupSweep2ndDelayMs = 5_000;
 

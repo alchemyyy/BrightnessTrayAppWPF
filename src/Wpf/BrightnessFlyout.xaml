@@ -600,9 +600,10 @@
                                             <DataTrigger Binding="{Binding IsNightLight}" Value="True">
                                                 <Setter Property="ToolTip" Value="{loc:Loc Flyout_MonitorIconToggle_NightLightTooltip}"/>
                                             </DataTrigger>
-                                            <!-- Warning state.
-                                                 Monitor was DDC-capable before but currently isn't responding.
-                                                 Click retries DDC. -->
+                                            <!-- Warning state - fully Failed.
+                                                 Both DDC halves are dead. Plain click toggles enable/disable;
+                                                 Ctrl+click sends the hard power-off as a last-resort write that
+                                                 may or may not land depending on whether the write half is alive. -->
                                             <MultiDataTrigger>
                                                 <MultiDataTrigger.Conditions>
                                                     <Condition Binding="{Binding IsFailed}" Value="True"/>
@@ -611,12 +612,21 @@
                                                 <Setter Property="ToolTip">
                                                     <Setter.Value>
                                                         <Binding Path="LastDDCError"
-                                                                 StringFormat="DDC/CI unavailable: {0}&#x0A;Click to retry."
-                                                                 TargetNullValue="DDC/CI unavailable. Click to retry."
-                                                                 FallbackValue="DDC/CI unavailable. Click to retry."/>
+                                                                 StringFormat="DDC/CI unavailable: {0}&#x0A;Ctrl+click to power off the display."
+                                                                 TargetNullValue="DDC/CI unavailable. Ctrl+click to power off the display."
+                                                                 FallbackValue="DDC/CI unavailable. Ctrl+click to power off the display."/>
                                                     </Setter.Value>
                                                 </Setter>
                                             </MultiDataTrigger>
+                                            <!-- Warning state - asymmetric Read-Degraded.
+                                                 Read half failed but the write probe landed - slider stays
+                                                 operable, no row dim, glyph swaps to the alert variant.
+                                                 Plain click toggles enable/disable as on a normal row;
+                                                 Ctrl+click escalates to the hard power-off. -->
+                                            <DataTrigger Binding="{Binding IsReadDegraded}" Value="True">
+                                                <Setter Property="ToolTip"
+                                                        Value="{loc:Loc Flyout_MonitorIconToggle_ReadDegradedTooltip}"/>
+                                            </DataTrigger>
                                         </Style.Triggers>
                                     </Style>
                                 </Button.Style>
@@ -636,9 +646,14 @@
                                                         <Setter Property="FontSize" Value="21"/>
                                                     </DataTrigger>
                                                     <!-- DDC/CI unreachable.
-                                                         Swap to the "alert" glyph so the row reads as broken at a glance,
-                                                         alongside the dim overlay. -->
+                                                         Swap to the "alert" glyph so the row reads as broken at a glance.
+                                                         Fires for both fully-Failed (row dims via opacity trigger) and
+                                                         asymmetric Read-Degraded (row stays undimmed - glyph is the only
+                                                         signal that the monitor isn't fully healthy). -->
                                                     <DataTrigger Binding="{Binding IsFailed}" Value="True">
+                                                        <Setter Property="Text" Value="&#xE7BA;"/>
+                                                    </DataTrigger>
+                                                    <DataTrigger Binding="{Binding IsReadDegraded}" Value="True">
                                                         <Setter Property="Text" Value="&#xE7BA;"/>
                                                     </DataTrigger>
                                                     <!-- NightLight row uses a rendered bitmap mask rather than a glyph.
@@ -693,6 +708,9 @@
                                                         <Setter Property="Visibility" Value="Collapsed"/>
                                                     </DataTrigger>
                                                     <DataTrigger Binding="{Binding IsFailed}" Value="True">
+                                                        <Setter Property="Visibility" Value="Collapsed"/>
+                                                    </DataTrigger>
+                                                    <DataTrigger Binding="{Binding IsReadDegraded}" Value="True">
                                                         <Setter Property="Visibility" Value="Collapsed"/>
                                                     </DataTrigger>
                                                     <DataTrigger Binding="{Binding DisplayNumber}" Value="0">

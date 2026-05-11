@@ -125,6 +125,7 @@ public class MonitorInfo : INotifyPropertyChanged
     private double _previewBrightness;
     private bool _previewEnablementDiffers;
     private bool _wasEverDDCCapable;
+    private bool _isReadDegraded;
     private string? _lastDDCError;
     private string _name = string.Empty;
     private double _curveTargetBrightness;
@@ -523,6 +524,28 @@ public class MonitorInfo : INotifyPropertyChanged
             if (_wasEverDDCCapable != value)
             {
                 _wasEverDDCCapable = value;
+                OnPropertyChanged();
+            }
+        }
+    }
+
+    /// <summary>
+    /// Asymmetric DDC health: most recent read failed but a confirmatory write probe succeeded,
+    /// so the monitor's write half is still alive even though its reply pipeline is wedged.
+    /// Independent of <see cref="IsFailed"/> - the slider stays operable in this state because
+    /// brightness writes will still land; the UI just shows an informational glyph and routes
+    /// power-off to Ctrl+click instead of plain click. Cleared by <see cref="PromoteRecovered"/>
+    /// when reads come back, and only set when the recovery loop's write probe positively
+    /// confirms the write half.
+    /// </summary>
+    public bool IsReadDegraded
+    {
+        get => _isReadDegraded;
+        set
+        {
+            if (_isReadDegraded != value)
+            {
+                _isReadDegraded = value;
                 OnPropertyChanged();
             }
         }

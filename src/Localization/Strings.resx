@@ -140,6 +140,9 @@ Ctrl+click: sync all displays to the brightest individual</value>
   <data name="Flyout_MonitorIconToggle_ToggleControlTooltip" xml:space="preserve">
     <value>Toggle control by All Displays</value>
   </data>
+  <data name="Flyout_MonitorIconToggle_ReadDegradedTooltip" xml:space="preserve">
+    <value>Display is failing to report. Writing brightness may still work. Ctrl+click to power it off.</value>
+  </data>
   <data name="Flyout_NightLightRowName" xml:space="preserve">
     <value>Night Light</value>
   </data>

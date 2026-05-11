@@ -374,6 +374,22 @@ public class KnownDisplayEntry
     /// </summary>
     [XmlAttribute]
     public bool WasEverDDCCapable { get; set; } = false;
+
+    /// <summary>
+    /// Last value successfully written to this display's DDC brightness VCP (0-100, null = never written).
+    /// Stamped from <see cref="Services.MonitorService.DoBrightnessWriteAsync"/> after a successful bus write,
+    /// so it captures whatever the user actually sees on screen regardless of who drove it
+    /// (slider drag, master propagation, profile load, environmental curve, etc.).
+    /// Restored as the seed for <see cref="MonitorInfo.Brightness"/> when the display is re-enumerated
+    /// after being dropped from the OS's monitor list (hard-off, cable disconnect, etc.),
+    /// AND on Failed -> recovered transitions so the visible value survives a DDC blip.
+    /// Note: this is the *bus* value, NOT <see cref="MonitorInfo.LastUserBrightness"/>. Under curve mode the
+    /// two diverge - the curve writes through <c>EnqueueDirectBrightness</c> which bypasses the Brightness
+    /// setter, so LastUserBrightness can stay locked at a stale prior manual drag while the bus moves with
+    /// the curve. Persisting the bus value is what gives the user "monitor comes back where I left it visually".
+    /// JSON-only; the legacy XML migration path doesn't populate this.
+    /// </summary>
+    public int? LastBusBrightness { get; set; }
 }
 
 /// <summary>

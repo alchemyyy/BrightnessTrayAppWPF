@@ -486,6 +486,15 @@ public partial class BrightnessFlyout : Window, INotifyPropertyChanged
             IsNightLightCurveEnabled = _isNightLightCurveEnabled,
         };
 
+        // Let MonitorService's Failed-recovered paths consult the curve's engaged state and the master
+        // row's current brightness. The curve query is the fallback gate when no persisted bus value
+        // is available; the master query is used to recompute Offset when Brightness is restored from
+        // the persisted bus value (mirrors AttachMonitor's "Offset = Brightness - master" formula).
+        // Closures capture _curveService and MasterMonitor; null queries before this point preserve prior behaviour.
+        _monitorService.IsCurveEnabledQuery =
+            () => _curveService.IsBrightnessCurveEnabled || _curveService.IsNightLightCurveEnabled;
+        _monitorService.MasterBrightnessQuery = () => MasterMonitor.Brightness;
+
         BuildProfileButtonItems();
 
         // Restore the undocked state from settings.
@@ -1014,24 +1023,51 @@ public partial class BrightnessFlyout : Window, INotifyPropertyChanged
             }
         }
 
-        // Suspend NightLightMonitor's notifications across the entire SelectProfile call.
-        // ProfileManager handles the Monitors collection internally, but it can't reach NightLightMonitor -
-        // the nightlight write is funnelled through the applyNightLight callback below.
-        // The wrap is load-bearing: SelectProfile fires SelectedProfileChanged inside its own deferral scope,
-        // which routes back here through OnSelectedProfileChanged -> CheckAndUpdateUnsavedChanges -> autosave.
-        // Without the nightlight suspension, the autosave would observe the new strength via NightLightMonitor's
-        // PropertyChanged firing mid-callback and (under autosave) write it into the previous profile.
-        // The suspension keeps NightLightMonitor.PropertyChanged silent until SelectedIndex has advanced,
-        // so the eventual flush - which calls OnNightLightPropertyChanged -> NightLightProvider.SetStrength
-        // and the dirty-check - runs against the now-current profile and matches cleanly.
-        using (NightLightMonitor.SuspendNotifications())
+        // Brightness curve engaged: suspend the slider->DDC path for the entire apply + master recompute.
+        // ProfileManager.ApplyProfile assigns the profile's saved Brightness to every individual under
+        // its PropertyChanged-deferral scope; the flush at scope exit would otherwise route through
+        // MonitorService.OnMonitorPropertyChanged, whose OnUserRelease transition moves every CurveActive row
+        // to CurveReleased and then EnqueueDirectBrightness writes the slider value to hardware,
+        // overwriting the curve target that OnSelectedProfileChanged's inline Evaluate() just enqueued
+        // and leaving the new profile's curve unable to drive any of the released rows on the next tick.
+        // HarmonizeBrightnessCurveStates only promotes Enabled rows; CurveReleased is sticky by design.
+        // SuspendHardwareWrites' early-return at the top of OnMonitorPropertyChanged short-circuits both
+        // the release and the slider->DDC write, leaving the curve's EnqueueDirectBrightness output
+        // (which bypasses the suspension) as the most recent payload on the bus.
+        // Mirrors the startup manual-value recovery path's wrap and SyncAllIndividualsToMaster's guard.
+        // Covers UpdateMasterFromEnabledIndividuals too: offset mode propagates master->individuals via
+        // ApplyMasterToEnabledMonitors, whose individual.Brightness writes would re-trigger the same
+        // release/stomp path without the suspension extending across the recompute.
+        // Night-light's slider->backend write is already gated inside BrightnessSlider_ValueChanged
+        // on the curve-engagement flag, so the night-light side doesn't need its own suspension wrap.
+        IDisposable? hardwareWriteSuspension = IsBrightnessCurveEnabled
+            ? _monitorService.SuspendHardwareWrites()
+            : null;
+        try
         {
-            _profileManager.SelectProfile(
-                index,
-                Monitors,
-                n => NightLightMonitor.Brightness = FlipIfNightLightInverted(n));
+            // Suspend NightLightMonitor's notifications across the entire SelectProfile call.
+            // ProfileManager handles the Monitors collection internally, but it can't reach NightLightMonitor
+            // - the nightlight write is funnelled through the applyNightLight callback below.
+            // The wrap is load-bearing: SelectProfile fires SelectedProfileChanged inside its own deferral scope,
+            // which routes back here through OnSelectedProfileChanged -> CheckAndUpdateUnsavedChanges -> autosave.
+            // Without the nightlight suspension, the autosave would observe the new strength via NightLightMonitor's
+            // PropertyChanged firing mid-callback and (under autosave) write it into the previous profile.
+            // The suspension keeps NightLightMonitor.PropertyChanged silent until SelectedIndex has advanced,
+            // so the eventual flush - which calls OnNightLightPropertyChanged -> NightLightProvider.SetStrength
+            // and the dirty-check - runs against the now-current profile and matches cleanly.
+            using (NightLightMonitor.SuspendNotifications())
+            {
+                _profileManager.SelectProfile(
+                    index,
+                    Monitors,
+                    n => NightLightMonitor.Brightness = FlipIfNightLightInverted(n));
+            }
+            UpdateMasterFromEnabledIndividuals();
         }
-        UpdateMasterFromEnabledIndividuals();
+        finally
+        {
+            hardwareWriteSuspension?.Dispose();
+        }
     }
 
     /// <summary>
@@ -1951,16 +1987,23 @@ public partial class BrightnessFlyout : Window, INotifyPropertyChanged
             return;
         }
 
-        // Warning-state click. The monitor's DDC channel is wedged (no response, persistent checksum
-        // errors, etc.). The click sends a hard power-off (VCP 0xD6 = 0x05): if writes still get
-        // through - they often do even when reads come back garbled, since writes have no reply
-        // payload to corrupt - the panel turns itself off and the user can power-cycle it
+        // Warning-state click. The monitor's DDC read channel is wedged (no response, persistent
+        // checksum errors, etc.) - either both halves are dead (IsFailed) or writes still land
+        // even though reads don't (IsReadDegraded). Ctrl+click sends a hard power-off (VCP 0xD6 = 0x05);
+        // if writes get through - they often do even when reads come back garbled, since writes have
+        // no reply payload to corrupt - the panel turns itself off and the user can power-cycle it
         // physically. The MCU on the panel is the only place a wedged DDC state actually clears.
-        if (monitor is { IsMaster: false, IsFailed: true, WasEverDDCCapable: true })
+        // Plain click on a warning-state row falls through to the normal enable/disable toggle:
+        // for IsReadDegraded the slider still works, and for IsFailed at least the user can toggle
+        // the row's participation without us guessing they wanted the destructive action.
+        bool isWarningState = monitor is { IsMaster: false, WasEverDDCCapable: true }
+            && (monitor.IsFailed || monitor.IsReadDegraded);
+        bool ctrlHeld = (Keyboard.Modifiers & ModifierKeys.Control) == ModifierKeys.Control;
+        if (isWarningState && ctrlHeld)
         {
             // First-time gate: show the one-shot confirmation overlay before issuing 0x05.
             // Once the user confirms, AppSettings.HasAcknowledgedHardPowerOffWarning sticks
-            // and the overlay is skipped on every subsequent warning-glyph click.
+            // and the overlay is skipped on every subsequent Ctrl+click.
             if (_appSettings is { HasAcknowledgedHardPowerOffWarning: false })
             {
                 Button captured = button;

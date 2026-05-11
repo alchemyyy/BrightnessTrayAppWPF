@@ -14,15 +14,35 @@ namespace BrightnessTrayAppWPF.Utils;
 /// Entries themselves are still <see cref="KnownDisplayEntry"/> instances so the type is shared with the legacy
 /// XML element; only the persistence path differs.
 /// </summary>
-public sealed class KnownDisplaysStore(string path)
+public sealed class KnownDisplaysStore : IDisposable
 {
     private static readonly JsonSerializerOptions s_jsonOptions = new()
     {
         WriteIndented = true,
     };
 
+    // Trailing-edge debounce for Stamp* calls. A 60Hz slider drag would otherwise rewrite
+    // displays.json on every integer transition; this coalesces a burst into one save once
+    // the drag settles. Single timer for the whole store - fine because saves serialize the
+    // entire list anyway, so per-key debouncing wouldn't reduce I/O.
+    private const int StampDebounceMs = 500;
+
+    private readonly string _path;
+    private readonly System.Threading.Timer _stampDebounceTimer;
+    private int _disposed;
+
     private readonly Lock _gate = new();
     private List<KnownDisplayEntry> _entries = [];
+
+    public KnownDisplaysStore(string path)
+    {
+        _path = path;
+        _stampDebounceTimer = new System.Threading.Timer(
+            _ => FlushPendingSave(),
+            null,
+            System.Threading.Timeout.Infinite,
+            System.Threading.Timeout.Infinite);
+    }
 
     public KnownDisplaysStore() : this(GetDefaultPath()) { }
 
@@ -171,6 +191,7 @@ public sealed class KnownDisplaysStore(string path)
                 OriginalName = incoming.OriginalName,
                 EDIDSerial = incoming.EDIDSerial,
                 WasEverDDCCapable = incoming.WasEverDDCCapable,
+                LastBusBrightness = incoming.LastBusBrightness,
             });
             return true;
         }
@@ -193,6 +214,9 @@ public sealed class KnownDisplaysStore(string path)
             existing.WasEverDDCCapable = true;
             changed = true;
         }
+        // LastBusBrightness is owned by the Stamp* path. Register-time merging never overwrites
+        // a previously-observed value with null - that would discard intent every time MonitorService
+        // re-registers a known display on Refresh.
         return changed;
     }
 
@@ -201,9 +225,9 @@ public sealed class KnownDisplaysStore(string path)
         loaded = [];
         try
         {
-            if (!File.Exists(path)) return false;
+            if (!File.Exists(_path)) return false;
 
-            string json = File.ReadAllText(path);
+            string json = File.ReadAllText(_path);
             if (string.IsNullOrWhiteSpace(json)) return false;
 
             List<KnownDisplayEntry>? parsed = JsonSerializer.Deserialize<List<KnownDisplayEntry>>(json, s_jsonOptions);
@@ -212,7 +236,7 @@ public sealed class KnownDisplaysStore(string path)
         }
         catch (Exception ex)
         {
-            WPFLog.Log($"KnownDisplaysStore: load failed ({path}): {ex.Message}");
+            WPFLog.Log($"KnownDisplaysStore: load failed ({_path}): {ex.Message}");
             return false;
         }
     }
@@ -221,15 +245,15 @@ public sealed class KnownDisplaysStore(string path)
     {
         try
         {
-            string? dir = Path.GetDirectoryName(path);
+            string? dir = Path.GetDirectoryName(_path);
             if (!string.IsNullOrEmpty(dir)) Directory.CreateDirectory(dir);
 
             string json = JsonSerializer.Serialize(_entries, s_jsonOptions);
-            File.WriteAllText(path, json);
+            File.WriteAllText(_path, json);
         }
         catch (Exception ex)
         {
-            WPFLog.Log($"KnownDisplaysStore: save failed ({path}): {ex.Message}");
+            WPFLog.Log($"KnownDisplaysStore: save failed ({_path}): {ex.Message}");
         }
     }
 
@@ -239,5 +263,63 @@ public sealed class KnownDisplaysStore(string path)
         OriginalName = src.OriginalName,
         EDIDSerial = src.EDIDSerial,
         WasEverDDCCapable = src.WasEverDDCCapable,
+        LastBusBrightness = src.LastBusBrightness,
     };
+
+    /// <summary>
+    /// Records the last value successfully written to <paramref name="edidKey"/>'s DDC brightness
+    /// VCP and schedules a debounced save. Captures the *bus* value (what the user sees on screen),
+    /// regardless of which writer drove it - slider drag, master propagation, profile load, curve.
+    /// No-op when the key is unknown - we only stamp displays we've already Register()-ed.
+    /// </summary>
+    public void StampLastBusBrightness(string edidKey, double value)
+    {
+        if (string.IsNullOrEmpty(edidKey)) return;
+        if (Volatile.Read(ref _disposed) != 0) return;
+
+        int clamped = (int)Math.Round(Math.Clamp(value, 0, 100));
+        bool changed;
+        lock (_gate)
+        {
+            KnownDisplayEntry? entry = _entries.FirstOrDefault(e => e.EDIDKey == edidKey);
+            if (entry == null) return;
+            changed = entry.LastBusBrightness != clamped;
+            if (changed) entry.LastBusBrightness = clamped;
+        }
+        if (changed) ScheduleDebouncedSave();
+    }
+
+    /// <summary>
+    /// Force any pending debounced save to flush now. Call on app shutdown so a stamp that
+    /// arrived in the last <see cref="StampDebounceMs"/> isn't lost when the process exits.
+    /// </summary>
+    public void Flush()
+    {
+        if (Volatile.Read(ref _disposed) != 0) return;
+        _stampDebounceTimer.Change(System.Threading.Timeout.Infinite, System.Threading.Timeout.Infinite);
+        FlushPendingSave();
+    }
+
+    private void ScheduleDebouncedSave()
+    {
+        // Change resets the timer's due time - successive stamps within StampDebounceMs collapse
+        // into one trailing-edge fire.
+        if (Volatile.Read(ref _disposed) != 0) return;
+        try { _stampDebounceTimer.Change(StampDebounceMs, System.Threading.Timeout.Infinite); }
+        catch (ObjectDisposedException) { /* racing dispose; safe to drop */ }
+    }
+
+    private void FlushPendingSave()
+    {
+        lock (_gate) SaveLocked();
+    }
+
+    public void Dispose()
+    {
+        if (System.Threading.Interlocked.Exchange(ref _disposed, 1) != 0) return;
+        try { _stampDebounceTimer.Change(System.Threading.Timeout.Infinite, System.Threading.Timeout.Infinite); }
+        catch (ObjectDisposedException) { /* fine */ }
+        FlushPendingSave();
+        _stampDebounceTimer.Dispose();
+    }
 }
