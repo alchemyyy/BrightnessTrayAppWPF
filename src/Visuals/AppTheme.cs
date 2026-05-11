@@ -441,6 +441,13 @@ public sealed class AppTheme : IDisposable
         return Background.For(isLightTheme);
     }
 
+    /// <summary>Footer background: <see cref="AppSettings.FooterBackgroundColor"/> override -> <see cref="FooterBackground"/>.</summary>
+    public Color ResolveFooterBackground(AppSettings? settings, bool isLightTheme)
+    {
+        if (settings?.FooterBackgroundColor.Resolve(isLightTheme) is { } color) return color;
+        return FooterBackground.For(isLightTheme);
+    }
+
     /// <summary>Brightness curve color: settings override -> <see cref="EnvironmentalBrightnessCurve"/>.</summary>
     public Color ResolveEnvironmentalBrightnessCurve(AppSettings? settings, bool isLightTheme)
     {

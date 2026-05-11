@@ -166,6 +166,7 @@ public partial class ThemePage : UserControl
         "TrayIcon" => _settings?.TrayIconColor,
         "TrayIconBright" => _settings?.TrayIconBrightColor,
         "TrayIconDim" => _settings?.TrayIconDimColor,
+        "FooterBackground" => _settings?.FooterBackgroundColor,
         "EnvBrightnessCurve" => _settings?.EnvironmentalBrightnessCurveColor,
         "EnvNightLightCurve" => _settings?.EnvironmentalNightLightCurveColor,
         "EnvCurrentTime" => _settings?.EnvironmentalCurrentTimeColor,
@@ -189,6 +190,7 @@ public partial class ThemePage : UserControl
         "TrayIcon" => LocalizationManager.Instance["Settings_Theme_StaticIconColor_Title"],
         "TrayIconBright" => LocalizationManager.Instance["Settings_Theme_BrightColor_Title"],
         "TrayIconDim" => LocalizationManager.Instance["Settings_Theme_DimColor_Title"],
+        "FooterBackground" => LocalizationManager.Instance["Settings_Theme_FooterBackgroundColor_Title"],
         "EnvBrightnessCurve" => LocalizationManager.Instance["Settings_Theme_BrightnessCurveColor_Title"],
         "EnvNightLightCurve" => LocalizationManager.Instance["Settings_Theme_NightLightCurveColor_Title"],
         "EnvCurrentTime" => LocalizationManager.Instance["Settings_Theme_CurrentTimeMarkerColor_Title"],
@@ -218,6 +220,7 @@ public partial class ThemePage : UserControl
             "TrayIcon" => theme.Foreground.For(isLight),
             "TrayIconBright" => theme.Foreground.For(isLight),
             "TrayIconDim" => theme.Foreground.For(isLight),
+            "FooterBackground" => theme.FooterBackground.For(isLight),
             "EnvBrightnessCurve" => theme.EnvironmentalBrightnessCurve.For(isLight),
             "EnvNightLightCurve" => theme.EnvironmentalNightLightCurve.For(isLight),
             "EnvCurrentTime" => theme.EnvironmentalCurrentTime.For(isLight),
@@ -347,6 +350,11 @@ public partial class ThemePage : UserControl
         UpdateSwatch(TrayIconDimColorDarkSwatch, _settings.TrayIconDimColor.DarkColor,
             fallbackHex: ToFallbackHex(theme.Foreground.Dark));
 
+        UpdateSwatch(FooterBackgroundColorLightSwatch, _settings.FooterBackgroundColor.LightColor,
+            fallbackHex: ToFallbackHex(theme.FooterBackground.Light));
+        UpdateSwatch(FooterBackgroundColorDarkSwatch, _settings.FooterBackgroundColor.DarkColor,
+            fallbackHex: ToFallbackHex(theme.FooterBackground.Dark));
+
         UpdateSwatch(EnvBrightnessCurveLightSwatch, _settings.EnvironmentalBrightnessCurveColor.LightColor,
             fallbackHex: ToFallbackHex(theme.EnvironmentalBrightnessCurve.Light));
         UpdateSwatch(EnvBrightnessCurveDarkSwatch, _settings.EnvironmentalBrightnessCurveColor.DarkColor,
@@ -397,6 +405,9 @@ public partial class ThemePage : UserControl
         TrayIconBrightColorDarkSwatch.Visibility = darkVis;
         TrayIconDimColorLightSwatch.Visibility = lightVis;
         TrayIconDimColorDarkSwatch.Visibility = darkVis;
+
+        FooterBackgroundColorLightSwatch.Visibility = lightVis;
+        FooterBackgroundColorDarkSwatch.Visibility = darkVis;
 
         EnvBrightnessCurveLightSwatch.Visibility = lightVis;
         EnvBrightnessCurveDarkSwatch.Visibility = darkVis;

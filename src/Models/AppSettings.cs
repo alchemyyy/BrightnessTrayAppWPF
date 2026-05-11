@@ -511,6 +511,18 @@ public class AppSettings
     /// to avoid a fallthrough to the registry/gamma backend.
     /// </summary>
     public int NightLightPDBDownloadTimeoutSeconds { get; set; } = 60;
+
+    // Auto-update.
+    // CheckForUpdatesEnabled gates the background poll loop entirely; flipping it off cancels any in-flight
+    // wait without disposing the service. ShowUpdateButtonInFlyout controls only the floating Update! glyph
+    // on top of the flyout, leaving the in-Settings actions reachable even when the flyout affordance is off.
+    // ShowUpdateNotificationsEnabled drives the tray balloon shown when the flyout is closed and a fresh
+    // version is detected; defaults to off so the first-run experience doesn't ambush new users.
+    public bool CheckForUpdatesEnabled { get; set; } = true;
+    public bool ShowUpdateNotificationsEnabled { get; set; } = false;
+    public bool ShowUpdateButtonInFlyout { get; set; } = true;
+    public int UpdateCheckIntervalMs { get; set; } = TimeConstants.UpdateCheckIntervalDefaultMs;
+
     public DisplaySortMode DefaultDisplaySortMode { get; set; } = DisplaySortMode.Arrangement;
     public DisplaySortDirection DefaultDisplaySortDirection { get; set; } = DisplaySortDirection.Standard;
     public MonitorIdentityStrategy MonitorIdentityStrategy { get; set; } = MonitorIdentityStrategy.DisplayNumber;
@@ -546,6 +558,7 @@ public class AppSettings
     public NullableThemeColor TrayIconColor { get; set; } = new();
     public NullableThemeColor TrayIconBrightColor { get; set; } = new();
     public NullableThemeColor TrayIconDimColor { get; set; } = new();
+    public NullableThemeColor FooterBackgroundColor { get; set; } = new();
     public bool EnableRoundedCorners { get; set; } = true;
 
     // Environmental curve colors: curve strokes, current-time marker, twilight / night backdrop bands, grid line color.
@@ -664,6 +677,7 @@ public class AppSettings
         yield return TrayIconColor;
         yield return TrayIconBrightColor;
         yield return TrayIconDimColor;
+        yield return FooterBackgroundColor;
         yield return EnvironmentalBrightnessCurveColor;
         yield return EnvironmentalNightLightCurveColor;
         yield return EnvironmentalCurrentTimeColor;

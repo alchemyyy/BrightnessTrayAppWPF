@@ -64,6 +64,13 @@ public sealed class EnvironmentalCurveService : IDisposable
         // ReferenceEquals(source) gate naturally, but explicitly nulling here is cheap insurance against a
         // future setter that mutates points in place on the same EnvironmentalCurve instance.
         _profileManager.SelectedProfileChanged += OnSelectedProfileChanged;
+
+        // Topology / recovery / hot-plug fires MonitorsRefreshed synchronously inside MonitorService.Refresh.
+        // We piggyback on it to run an immediate Evaluate so freshly-promoted Enabled rows get harmonized
+        // into CurveActive AND get their curve target written before the caller's next-line ReapplySliderState
+        // runs (which now skips CurveActive rows). Without this, a recovered row would receive a slider-value
+        // resync that the curve would only correct on its next periodic 5s tick, producing visible flicker.
+        _monitorService.MonitorsRefreshed += OnMonitorsRefreshed;
     }
 
     /// <summary>
@@ -747,12 +754,30 @@ public sealed class EnvironmentalCurveService : IDisposable
             });
     }
 
+    /// <summary>
+    /// MonitorService.Refresh just landed (topology event, recovery promotion, etc.).
+    /// Run an immediate evaluation so freshly-promoted Enabled rows get harmonized into CurveActive
+    /// and the curve target is written before the topology-event handler's next-line ReapplySliderState
+    /// runs - ReapplySliderState now skips CurveActive rows, so this ordering is what makes the
+    /// "no flicker on hot-plug / unlock" guarantee hold.
+    /// MonitorsRefreshed fires synchronously inside Refresh on the dispatcher thread,
+    /// so this runs before the caller's next instruction.
+    /// </summary>
+    private void OnMonitorsRefreshed()
+    {
+        if (_disposed) return;
+        if (!IsBrightnessCurveEnabled && !IsNightLightCurveEnabled) return;
+        if (_isSuspended) return;
+        Evaluate();
+    }
+
     public void Dispose()
     {
         if (_disposed) return;
         _disposed = true;
 
         _profileManager.SelectedProfileChanged -= OnSelectedProfileChanged;
+        _monitorService.MonitorsRefreshed -= OnMonitorsRefreshed;
 
         if (_curveTimer != null)
         {

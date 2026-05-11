@@ -22,16 +22,16 @@ public static class TimeConstants
     // Single instance 
     public const int SingleInstanceMutexAcquireTimeoutMs = 5_000;
 
-    // DDC recovery 
+    // DDC recovery
     public const int DDCRecoveryTickIntervalMs = 1_000;
     public const int DDCRecoveryFullRefreshIntervalMs = 30_000;
-    // Base ms for the exponential retry backoff (25, 50, 100, 200...). 
+    // Base ms for the exponential retry backoff (25, 50, 100, 200...).
     // Tuned so most transient I2C blips clear inside the first retry without burning CPU on tight loops.
     public const int MonitorRetryBackoffBaseMs = 25;
     public const int MonitorStartupSweep1stDelayMs = 2_000;
     public const int MonitorStartupSweep2ndDelayMs = 5_000;
 
-    // Display events / hotplug 
+    // Display events / hotplug
     public const int DisplayEventBurstIntervalMs = 1_000;
     public const int DisplayEventDebounceIntervalMs = 250;
 
@@ -80,9 +80,24 @@ public static class TimeConstants
     public const int DDCOperationTimeoutDefaultMs = 3_000;
     public const int EnvironmentalCurveTickIntervalDefaultMs = 5_000;
 
-    // Logging 
+    // Logging
     // 7 days in ms = 7 * 24 * 60 * 60 * 1000 = 604_800_000.
     public const int LogMaxAgeMs = 604_800_000;
     public const int LogFlushIntervalMs = 2_000;
     public const int LogShutdownTimerWaitMs = 1_000;
+
+    // Auto-update
+    // Default cadence the background UpdateCheckService polls GitHub at. 1 hour is a low-traffic compromise:
+    // recent enough to surface a fresh release the same workday, infrequent enough to stay well clear of
+    // GitHub's unauthenticated 60/hr rate limit even across the per-IP shared quota.
+    public const int UpdateCheckIntervalDefaultMs = 3_600_000;
+    public const int UpdateCheckIntervalMinMs = 60_000;
+    public const int UpdateCheckIntervalMaxMs = 86_400_000;
+    // Extra grace beyond the configured interval before the UI flips "Install update" to "Version stale".
+    public const int UpdateStaleGraceMs = 5_000;
+    // Per-request HTTP timeout for both the release-metadata GET and the asset download GET.
+    public const int UpdateNetworkTimeoutMs = 30_000;
+    // Short delay before kicking the very first check on startup so it doesn't compete with monitor enumeration
+    // and the flyout pre-warm for the first few seconds of process life.
+    public const int UpdateCheckStartupDelayMs = 5_000;
 }

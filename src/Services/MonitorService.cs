@@ -250,6 +250,11 @@ public sealed class MonitorService : IDisposable
         // sitting at the old shaped value, which would short-circuit the upcoming re-push.
         entry.LastEnqueuedPercentage = -1;
 
+        // Don't clobber a CurveActive row with the slider value; the curve owns the bus there
+        // and will pick up the new norm-curve shape on its next tick (EnqueueDirectBrightness
+        // inside the curve service applies the same per-monitor curve before sampling).
+        if (info.SliderState == SliderState.CurveActive) return;
+
         // Re-enqueue the current slider position so the new curve takes effect on hardware now.
         // EnqueueDirectBrightness applies the just-updated curve (and floor/ceiling) internally.
         EnqueueDirectBrightness(info, info.RoundedBrightness);
@@ -301,6 +306,10 @@ public sealed class MonitorService : IDisposable
         // Drop the dedupe sentinel: a previously-clamped enqueue may have left LastEnqueuedPercentage
         // sitting at the old floor/ceiling, which would short-circuit the upcoming re-push.
         entry.LastEnqueuedPercentage = -1;
+
+        // Don't clobber a CurveActive row with the slider value; the curve owns the bus there
+        // and the curve service applies the same floor/ceiling clamp on its own writes.
+        if (info.SliderState == SliderState.CurveActive) return;
 
         // Re-enqueue the current slider position so the new cap takes effect on hardware now,
         // not when the user happens to touch the slider next.
@@ -1331,6 +1340,17 @@ public sealed class MonitorService : IDisposable
 
         if (sender is not MonitorInfo monitor) return;
 
+        // Auto-release a CurveActive (or CurveSleeping) row whenever an external write reaches us:
+        // tray FullDim/FullBright, scroll-wheel / hotkey delta, profile load, or any other path
+        // that assigns MonitorInfo.Brightness without SuspendHardwareWrites. The user's intent
+        // wins, and CurveReleased prevents the curve's next tick from immediately overwriting it.
+        // Mirrors the slider-drag release at BrightnessFlyout.PreviewMouseLeftButtonDown.
+        // Master/night-light are excluded:
+        // master never enters CurveReleased per the SliderState design,
+        // and night-light isn't subscribed to OnMonitorPropertyChanged anyway.
+        if (!monitor.IsMaster && !monitor.IsNightLight)
+            monitor.SliderState = SliderStateMachine.OnUserRelease(monitor.SliderState);
+
         EnqueueDirectBrightness(monitor, monitor.RoundedBrightness);
     }
 
@@ -1431,6 +1451,12 @@ public sealed class MonitorService : IDisposable
         foreach (MonitorInfo m in Monitors)
         {
             if (!m.IsHardwareFunctional) continue;
+            // Curve owns the bus on CurveActive rows; pushing the slider value here would clobber
+            // the curve target until the next 5s tick re-applied it. The curve service catches
+            // freshly-promoted rows via its MonitorsRefreshed subscription before this method runs,
+            // so a row that's CurveActive at this point genuinely belongs to the curve.
+            // Other slider-owns-hardware states (Enabled, Disabled, CurveSleeping, CurveReleased) keep the resync.
+            if (m.SliderState == SliderState.CurveActive) continue;
             // Topology change just landed - the bus value is unknown / wrong,
             // regardless of what EnqueueDirectBrightness last sent.
             // Clear the dedupe sentinel so the upcoming write isn't skipped on a same-pct match.

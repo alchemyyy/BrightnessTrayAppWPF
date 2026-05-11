@@ -36,6 +36,10 @@ public partial class App
     private BrightnessFlyout? _activeFlyout;
     private SettingsWindow? _settingsWindow;
     private GlobalHotkeyService? _hotkeyService;
+    private UpdateCheckService? _updateCheckService;
+    // Highest version we've already raised a tray balloon for in this process lifetime.
+    // Resets on every restart so the user gets one more chance to notice an unseen update.
+    private int _lastNotifiedUpdateVersion;
     private bool _suppressNextTrayClick;
 
 
@@ -201,6 +205,25 @@ public partial class App
         try { CreateTrayIcon(); }
         catch (Exception ex) { WPFLog.Log($"App.OnStartup: CreateTrayIcon failed: {ex.Message}"); }
 
+        // Auto-update poller. Constructed after the tray icon so the balloon-notification path
+        // (which only works once the notify icon is registered with the shell) is live by the time
+        // the first check completes. The service ignores its periodic tick when
+        // CheckForUpdatesEnabled is off, so it's safe to always Start() it.
+        if (_appSettings != null)
+        {
+            try
+            {
+                _updateCheckService = new UpdateCheckService(_appSettings);
+                _updateCheckService.StateChanged += OnUpdateStateChanged;
+                _updateCheckService.Start();
+                AppServices.UpdateCheckService = _updateCheckService;
+            }
+            catch (Exception ex)
+            {
+                WPFLog.Log($"App.OnStartup: UpdateCheckService init failed: {ex.Message}");
+            }
+        }
+
         try { RequestTrayRefresh(); }
         catch (Exception ex) { WPFLog.Log($"App.OnStartup: RequestTrayRefresh failed: {ex.Message}"); }
 
@@ -361,6 +384,7 @@ public partial class App
         _trayIconManager.RightClick += OnTrayRightClick;
         _trayIconManager.RefreshNeeded += RequestTrayRefresh;
         _trayIconManager.Scrolled += OnTrayScrolled;
+        _trayIconManager.BalloonClicked += OnUpdateBalloonClicked;
 
         RequestTrayRefresh();
         _trayIconManager.IsVisible = true;
@@ -706,6 +730,49 @@ public partial class App
         }, DispatcherPriority.ContextIdle);
     }
 
+    /// <summary>
+    /// Bridges UpdateCheckService into the visible UI:
+    /// pings the flyout so its bound IsUpdateAvailable / available-update info flip live, and shows a
+    /// tray balloon when a new update becomes available while the flyout isn't on screen.
+    /// One balloon per detected version per process lifetime so a long-running session that polls
+    /// hourly doesn't repeatedly nag.
+    /// </summary>
+    private void OnUpdateStateChanged()
+    {
+        _activeFlyout?.NotifyUpdateStateChanged();
+
+        UpdateCheckService? svc = _updateCheckService;
+        UpdateInfo? info = svc?.AvailableUpdate;
+        if (info == null) return;
+
+        if (_appSettings?.ShowUpdateNotificationsEnabled != true) return;
+
+        if (info.Version <= _lastNotifiedUpdateVersion) return;
+
+        bool flyoutVisible = _activeFlyout != null && _activeFlyout.IsVisible
+            && _activeFlyout.Left > -1000;
+        if (flyoutVisible) return;
+
+        _lastNotifiedUpdateVersion = info.Version;
+
+        string title = LocalizationManager.Instance["UpdateNotification_Title"];
+        string body = string.Format(
+            LocalizationManager.Instance["UpdateNotification_BodyFormat"], info.ReleaseName);
+        _trayIconManager?.ShowBalloon(title, body);
+    }
+
+    /// <summary>
+    /// Tray balloon click: behave exactly like clicking the in-flyout "Update!" affordance -
+    /// open the flyout (so the user lands somewhere recognizable) and surface the update prompt.
+    /// </summary>
+    private void OnUpdateBalloonClicked()
+    {
+        if (_updateCheckService?.AvailableUpdate == null) return;
+
+        ShowBrightnessFlyout();
+        _activeFlyout?.RequestUpdatePrompt();
+    }
+
 
     private void OnTrayLeftClick()
     {
@@ -997,6 +1064,11 @@ public partial class App
             // MonitorsRefreshed (which only fires on hotplug).
             if (_hotkeyService != null && _appSettings != null) _hotkeyService.Apply(_appSettings.Hotkeys);
 
+            // Pick up live changes to the update-related toggles. The settings store doesn't bubble
+            // per-property notifications, so the cheapest path is to recompute every dependent piece
+            // of UI on every Settings.Changed - same model used for tray refresh above.
+            _activeFlyout?.NotifyUpdateStateChanged();
+
             _contextMenu = CreateContextMenu();
         });
     }
@@ -1030,7 +1102,7 @@ public partial class App
 
         // Flyout-specific colors.
         Resources["ThemeSecondaryForeground"] = new SolidColorBrush(_theme.SecondaryForeground.For(isLightTheme));
-        Resources["ThemeFooterBackground"] = new SolidColorBrush(_theme.FooterBackground.For(isLightTheme));
+        Resources["ThemeFooterBackground"] = new SolidColorBrush(_theme.ResolveFooterBackground(_appSettings, isLightTheme));
 
         // Win11 Settings card background (slightly lighter than body).
         Resources["ThemeCardBackground"] = new SolidColorBrush(_theme.CardBackground.For(isLightTheme));
@@ -1233,6 +1305,13 @@ public partial class App
             _hotkeyService = null;
         }
 
+        if (_updateCheckService != null)
+        {
+            _updateCheckService.StateChanged -= OnUpdateStateChanged;
+            try { _updateCheckService.Dispose(); } catch { /* ignore */ }
+            _updateCheckService = null;
+        }
+
         _watcherMonitorCts?.Cancel();
         _watcherMonitorCts?.Dispose();
         _watcherMonitorCts = null;
@@ -1295,6 +1374,7 @@ public partial class App
             _trayIconManager.RightClick -= OnTrayRightClick;
             _trayIconManager.RefreshNeeded -= RequestTrayRefresh;
             _trayIconManager.Scrolled -= OnTrayScrolled;
+            _trayIconManager.BalloonClicked -= OnUpdateBalloonClicked;
             _trayIconManager.Dispose();
             _trayIconManager = null;
         }

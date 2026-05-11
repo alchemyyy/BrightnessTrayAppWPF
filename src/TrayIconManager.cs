@@ -89,6 +89,11 @@ public sealed class TrayIconManager : IDisposable
     public event Action<int>? Scrolled;
 
     /// <summary>
+    /// Raised when the user clicks the body of a balloon notification raised via <see cref="ShowBalloon"/>.
+    /// </summary>
+    public event Action? BalloonClicked;
+
+    /// <summary>
     /// Whether the taskbar is using light theme.
     /// </summary>
     public bool IsLightTheme
@@ -175,6 +180,22 @@ public sealed class TrayIconManager : IDisposable
         _shellIcon.RefreshNeeded += () => RefreshNeeded?.Invoke();
         _shellIcon.Scrolled += delta => Scrolled?.Invoke(delta);
         _shellIcon.TooltipPopup += OnTooltipPopup;
+        _shellIcon.BalloonClicked += () => BalloonClicked?.Invoke();
+    }
+
+    /// <summary>
+    /// Shows a tray balloon (toast) notification through the live notify-icon channel.
+    /// Marshalled to the dispatcher because Shell_NotifyIcon is thread-affine to the owning window.
+    /// </summary>
+    public void ShowBalloon(string title, string message)
+    {
+        if (!_dispatcher.CheckAccess())
+        {
+            if (_dispatcher.HasShutdownStarted) return;
+            _ = _dispatcher.BeginInvoke(() => ShowBalloon(title, message));
+            return;
+        }
+        _shellIcon.ShowBalloon(title, message);
     }
 
     // Refresh tooltip lazily right before the shell shows it,

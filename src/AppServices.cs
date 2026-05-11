@@ -25,4 +25,5 @@ internal static class AppServices
     public static DDCRecoveryService? DDCRecoveryService { get; set; }
     public static MonitorBrightnessRangeProvider? MonitorBrightnessRangeProvider { get; set; }
     public static GlobalHotkeyService? HotkeyService { get; set; }
+    public static UpdateCheckService? UpdateCheckService { get; set; }
 }

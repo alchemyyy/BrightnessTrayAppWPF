@@ -316,6 +316,10 @@ public partial class SettingsWindow : Window, IConfirmDialogService, IThemeHost
         EnvironmentalSection.LoadFromSettings(
             _settings, _profileManager, brightnessRangeProvider, brightnessFlyout, MapPickerOverlayHost);
 
+        // About page hosts the auto-update controls; it pulls the update service from AppServices
+        // (set by App.OnStartup) and stays in sync with its live state via that service's events.
+        AboutSection.LoadFromSettings(_settings);
+
         // GeneralSection is the initially-visible tab. The XAML-fired NavGeneral Checked event runs
         // during InitializeComponent (before this method) and calls RefreshOnShow then with a still-null
         // _profileManager on the page, so its profile-slot list and install rows come up empty. Run

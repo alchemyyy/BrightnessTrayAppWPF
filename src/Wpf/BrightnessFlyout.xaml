@@ -1139,6 +1139,52 @@
                 </Border>
             </Border>
 
+            <!-- Floating "Update!" affordance.
+                 Same row/anchor strategy as UndockButton (right-aligned, lifted into the top padding)
+                 so it sits to the immediate left of it without participating in the slider-list layout.
+                 ZIndex 2 sits above the slider list (which is the unstacked default) and above the
+                 undock button's ZIndex 1, so on very narrow flyouts the solid ThemeBackground fill
+                 occludes any monitor-name text that would otherwise show through.
+                 Width is exactly twice the HeaderIconButtonStyle width so the button is visibly a
+                 "long pill" next to the square undock glyph. Height matches HeaderIconButtonStyle
+                 so the two affordances align top and bottom. Visibility is driven by code-behind
+                 (NotifyUpdateStateChanged updates IsUpdateButtonVisible). -->
+            <Button x:Name="UpdateButton"
+                    Grid.Row="0"
+                    Panel.ZIndex="2"
+                    HorizontalAlignment="Right"
+                    VerticalAlignment="Top"
+                    Width="80"
+                    Height="32"
+                    Margin="0,-10,40,0"
+                    Content="{loc:Loc Flyout_Update_ButtonText}"
+                    ToolTip="{loc:Loc Flyout_Update_Tooltip}"
+                    Click="UpdateButton_Click"
+                    Visibility="{Binding IsUpdateButtonVisible, RelativeSource={RelativeSource AncestorType=Window}, Converter={StaticResource BoolToVisibility}}">
+                <Button.Template>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="UpdateButtonBorder"
+                                Background="{DynamicResource ThemeSliderTrack}"
+                                BorderBrush="{DynamicResource ThemeBorder}"
+                                BorderThickness="1"
+                                CornerRadius="{DynamicResource CornerRadiusMedium}">
+                            <ContentPresenter HorizontalAlignment="Center"
+                                              VerticalAlignment="Center"
+                                              TextElement.FontWeight="SemiBold"
+                                              TextElement.Foreground="{DynamicResource ThemeForeground}"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="UpdateButtonBorder" Property="Background" Value="{DynamicResource ThemeButtonHover}"/>
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="UpdateButtonBorder" Property="Background" Value="{DynamicResource ThemeButtonPressed}"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Button.Template>
+            </Button>
+
             <!-- Floating overlay layer for the undock/redock button.
                  Sits in row 0 as a sibling of the slider list, declared after it so it paints on top.
                  The slider list is always taller than the button, so Auto-row sizing is driven entirely by the list

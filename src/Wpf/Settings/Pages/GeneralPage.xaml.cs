@@ -470,13 +470,15 @@ public partial class GeneralPage : UserControl
 
     /// <summary>
     /// Post-install / post-uninstall fixup: re-target the autostart shortcut at the new
-    /// highest-priority install on disk, then refresh the install rows and the run-on-startup
-    /// description so the UI reflects what's now wired up. Retarget runs first so the path the
-    /// description reads back is the one we just wrote.
+    /// highest-priority install on disk, reconcile the Start Menu Programs entries with the
+    /// new install state, then refresh the install rows and the run-on-startup description
+    /// so the UI reflects what's now wired up. Retarget runs first so the path the description
+    /// reads back is the one we just wrote.
     /// </summary>
     private void RefreshAfterInstallChange()
     {
         StartupManager.RetargetShortcutIfPresent();
+        StartMenuShortcut.Sync();
         RefreshInstallationSection();
         UpdateRunOnStartupDescription();
     }
