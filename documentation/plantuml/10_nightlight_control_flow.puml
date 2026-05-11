@@ -123,7 +123,7 @@ package "Registry backend (Interop/NightLight/NightLightRegistry.cs)" $TINT_GREE
 
   [EnqueueSetStrengthSpaced(percent)\nfire-and-forget; off-loads CTS/dictionary\nwork to Task.Run before throttler] as REG_ENQ
 
-  [SchedulePostSettleResend(percent)\nsingle reusable Timer;\nTimer.Change(NightLightResettleDelayMs)\non every call - thread-safe, zero-alloc] as REG_RESEND
+  [SchedulePostSettleResend(percent)\nsingle reusable Timer;\nTimer.Change(NightLightUIHandleryRegistryEnforceDelayMs)\non every call - thread-safe, zero-alloc] as REG_RESEND
 
   [AsyncThrottler<string>\nkey="nightlight", cooldown=0\nlatest-pending-wins, single-flight] as REG_THROTTLE
 
@@ -183,7 +183,7 @@ note right of REG_RESEND
   ----
   Reusable System.Threading.Timer. Volatile-write
   the latest percent, then Timer.Change to re-arm
-  for NightLightResettleDelayMs from now. Each new
+  for NightLightUIHandleryRegistryEnforceDelayMs from now. Each new
   EnqueueSetStrengthSpaced cancels the prior pending
   fire - one-shot per quiet period.
 
@@ -381,7 +381,7 @@ note bottom of REG_THROTTLE
   NightLightFallbackDwellMs            = 50    (Registry path; if RegNotify fails to arm)
   NightLightCloudStoreFallbackDwellMs  = 250   (CloudStore path; same fallback)
   NightLightInterWriteDelayMs          = 15    (between bracket steps)
-  NightLightResettleDelayMs            = 500   (resend-timer quiet period)
+  NightLightUIHandleryRegistryEnforceDelayMs = 500 (resend-timer quiet period; also Settings-handler registry-enforce delay)
 end note
 
 @enduml

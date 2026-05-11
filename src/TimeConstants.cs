@@ -60,7 +60,7 @@ public static class TimeConstants
     public const int NightLightSaveNotifyTimeoutMs = 1_500;
     public const int NightLightFallbackDwellMs = 50;
     public const int NightLightInterWriteDelayMs = 15;
-    public const int NightLightResettleDelayMs = 500;
+    public const int NightLightUIHandleryRegistryEnforceDelayMs = 500;
     // CloudStore path's broker-wait dwell is longer than the registry path's
     // because the broker-mediated Save round-trip is genuinely slower than a raw key write.
     public const int NightLightCloudStoreFallbackDwellMs = 250;

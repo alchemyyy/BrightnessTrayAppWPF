@@ -196,7 +196,8 @@ internal static class NightLightRegistry
     /// without the visible flicker.
     /// </summary>
     // Belt-and-suspenders re-fire: if no further EnqueueSetStrengthSpaced call comes in for
-    // NightLightResettleDelayMs after the latest one, fire one more bracket at the same value. Without an
+    // NightLightUIHandleryRegistryEnforceDelayMs after the latest one, fire one more bracket at the same value.
+    // Without an
     // event signal that the broker actually applied a given write, this guards against the case where a
     // single bracket gets dropped (broker missed the IsDragging edge, raced with another process, etc).
     // One-shot per quiet period - the re-fire itself does NOT schedule another to avoid an infinite loop.
@@ -228,7 +229,8 @@ internal static class NightLightRegistry
 
     /// <summary>
     /// Updates the value the resend will fire with and re-arms the resend timer to fire
-    /// NightLightResettleDelayMs from now. If <see cref="EnqueueSetStrengthSpaced"/> is called again before
+    /// NightLightUIHandleryRegistryEnforceDelayMs from now.
+    /// If <see cref="EnqueueSetStrengthSpaced"/> is called again before
     /// the timer fires, the timer is reset and the previously scheduled fire never happens. Allocations per
     /// call: zero (Timer is reused; int field is volatile-written).
     /// </summary>
@@ -247,9 +249,10 @@ internal static class NightLightRegistry
             if (!ReferenceEquals(timer, candidate)) candidate.Dispose();
         }
 
-        // Re-arm: fire once, NightLightResettleDelayMs from now. Cancels any pending fire from prior call.
+        // Re-arm: fire once, NightLightUIHandleryRegistryEnforceDelayMs from now.
+        // Cancels any pending fire from prior call.
         // Timer.Change is thread-safe and effectively free.
-        timer.Change(TimeConstants.NightLightResettleDelayMs, Timeout.Infinite);
+        timer.Change(TimeConstants.NightLightUIHandleryRegistryEnforceDelayMs, Timeout.Infinite);
     }
 
     private static void OnResendTimerFired(object? state)

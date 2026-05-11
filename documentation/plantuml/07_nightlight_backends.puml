@@ -92,7 +92,7 @@ note bottom of B_REG
 
   Belt-and-suspenders: a single shared
   System.Threading.Timer re-fires the last
-  bracket NightLightResettleDelayMs after
+  bracket NightLightUIHandleryRegistryEnforceDelayMs after
   the most recent enqueue (one-shot per
   quiet period, no infinite loop).
 
