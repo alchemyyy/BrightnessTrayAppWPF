@@ -506,7 +506,7 @@
                             <Grid.Style>
                                 <Style TargetType="Grid">
                                     <Setter Property="Opacity" Value="1.0"/>
-                                    <Setter Property="Margin" Value="0,0,0,12"/>
+                                    <Setter Property="Margin" Value="0,0,0,6"/>
                                     <Setter Property="Visibility" Value="Visible"/>
                                     <Style.Triggers>
                                         <!-- Disabled (user excluded from master) and Failed (DDC unreachable) both
@@ -926,7 +926,7 @@
             <Border Grid.Row="1" Background="{DynamicResource ThemeFooterBackground}" CornerRadius="{DynamicResource CornerRadiusFooterBottom}" Margin="-16,0,-12,-8">
                 <Border.Style>
                     <Style TargetType="Border">
-                        <Setter Property="Padding" Value="12,12,12,8"/>
+                        <Setter Property="Padding" Value="12,6,12,6"/>
                         <Style.Triggers>
                             <!-- Tighten horizontal padding only when every footer button is on screen.
                                  EnvironmentalCurves + FooterPower + DisplaySettings + the always-shown Settings button (4 right-side buttons),
