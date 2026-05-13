@@ -12,7 +12,12 @@ namespace BrightnessTrayAppWPF.Interop.NightLight;
 /// fetching the matching PDB directly from the Microsoft public symbol server,
 /// and querying it via dbghelp.dll.
 ///
-/// First checks an on-disk JSON cache keyed on (DLL path, file version, file size).
+/// First checks an on-disk JSON cache keyed on (DLL path, file version, file size, PDB signature, PDB age).
+/// The PDB signature is the load-bearing piece of the key: Microsoft can (and does) push a refreshed
+/// SettingsHandlers_Display.dll binary that keeps the same FileVersion + FileSize but has a different
+/// internal layout - the only reliable invalidation signal is the CodeView (RSDS) PDB GUID embedded
+/// in the new binary. Without it, a cache hit on (path,version,size) returns RVAs for the old binary
+/// and dispatch ends up inside the wrong function -&gt; __fastfail.
 /// On miss, reads the CodeView (RSDS) record from the in-memory PE image
 /// to extract (PDB filename, GUID, Age),
 /// downloads the PDB into a per-app local cache laid out symstore-style:
@@ -107,7 +112,21 @@ internal static class PDBSymbolResolver
 
         string version = info.FileVersion ?? string.Empty;
 
-        if (TryReadFromCache(dllPath, version, fileSize, symbolNames, rvas)) return true;
+        // Pull the CodeView (PDB GUID + Age) up-front so the cache key includes it. Without this,
+        // a Microsoft binary refresh that keeps the same FileVersion + FileSize but changes the
+        // internal layout still hits the cache and dispatch crashes inside the DLL. A failure to
+        // read CodeView is non-fatal - we fall through with an empty signature, the cache lookup
+        // misses, and the standard download path will surface the same parse failure with its own
+        // explicit log line.
+        string pdbSignature = string.Empty;
+        uint pdbAge = 0;
+        if (TryReadCodeViewInfo(loadedModuleBase, out _, out Guid sigGuid, out uint age))
+        {
+            pdbSignature = sigGuid.ToString("N");
+            pdbAge = age;
+        }
+
+        if (TryReadFromCache(dllPath, version, fileSize, pdbSignature, pdbAge, symbolNames, rvas)) return true;
 
         // dbghelp's session APIs are only safe for one process-wide session at a time,
         // so serialise any concurrent resolution attempts.
@@ -115,13 +134,13 @@ internal static class PDBSymbolResolver
         lock (_gate)
         {
             // Re-check the cache inside the lock - another thread may have just resolved while we waited.
-            if (TryReadFromCache(dllPath, version, fileSize, symbolNames, rvas)) return true;
+            if (TryReadFromCache(dllPath, version, fileSize, pdbSignature, pdbAge, symbolNames, rvas)) return true;
 
             if (!ResolveByDownloadingPDB(dllPath, loadedModuleBase, symbolNames, rvas)) return false;
 
             try
             {
-                WriteToCache(dllPath, version, fileSize, rvas);
+                WriteToCache(dllPath, version, fileSize, pdbSignature, pdbAge, rvas);
             }
             catch (Exception ex)
             {
@@ -134,7 +153,7 @@ internal static class PDBSymbolResolver
     }
 
     private static bool TryReadFromCache(
-        string dllPath, string version, long fileSize,
+        string dllPath, string version, long fileSize, string pdbSignature, uint pdbAge,
         IReadOnlyList<string> symbolNames, Dictionary<string, int> rvas)
     {
         if (!File.Exists(CacheFile)) return false;
@@ -151,10 +170,17 @@ internal static class PDBSymbolResolver
             return false;
         }
 
+        // PDB signature is the authoritative key. FileVersion + FileSize are kept in the predicate as
+        // a belt-and-braces sanity check, but a Microsoft binary refresh with the same FileVersion +
+        // FileSize but a different PDB signature must miss here so the resolver re-resolves.
+        // Entries written by an older build of this app (no PdbSignature field) deserialize with
+        // empty strings, naturally miss, and get rewritten with the proper key on the next resolve.
         CacheEntry? entry = root?.Entries?.FirstOrDefault(e =>
             string.Equals(e.DllPath, dllPath, StringComparison.OrdinalIgnoreCase)
             && e.Version == version
-            && e.FileSize == fileSize);
+            && e.FileSize == fileSize
+            && string.Equals(e.PdbSignature, pdbSignature, StringComparison.OrdinalIgnoreCase)
+            && e.PdbAge == pdbAge);
 
         if (entry?.Symbols == null) return false;
 
@@ -173,7 +199,9 @@ internal static class PDBSymbolResolver
         return true;
     }
 
-    private static void WriteToCache(string dllPath, string version, long fileSize, Dictionary<string, int> rvas)
+    private static void WriteToCache(
+        string dllPath, string version, long fileSize, string pdbSignature, uint pdbAge,
+        Dictionary<string, int> rvas)
     {
         Directory.CreateDirectory(AppDataDir);
 
@@ -192,18 +220,21 @@ internal static class PDBSymbolResolver
         }
         root.Entries ??= [];
 
-        // Drop any existing entry for the same DLL+version+size before appending the fresh one.
+        // Drop any existing entry for the same DLL before appending the fresh one. We match only on
+        // DllPath here (not the full key) so stale entries written by older builds of this app -
+        // including the (path,version,size)-only entries that triggered the SettingsHandlers_Display
+        // cache-poisoning crash - get pruned on the next successful resolve instead of accumulating.
         root.Entries.RemoveAll(e =>
-            string.Equals(e.DllPath, dllPath, StringComparison.OrdinalIgnoreCase)
-            && e.Version == version
-            && e.FileSize == fileSize);
+            string.Equals(e.DllPath, dllPath, StringComparison.OrdinalIgnoreCase));
 
         root.Entries.Add(new CacheEntry
         {
-            DllPath  = dllPath,
-            Version  = version,
-            FileSize = fileSize,
-            Symbols  = new Dictionary<string, int>(rvas),
+            DllPath      = dllPath,
+            Version      = version,
+            FileSize     = fileSize,
+            PdbSignature = pdbSignature,
+            PdbAge       = pdbAge,
+            Symbols      = new Dictionary<string, int>(rvas),
         });
 
         string outJson = JsonSerializer.Serialize(root, CacheJsonOptions);
@@ -507,6 +538,11 @@ internal static class PDBSymbolResolver
         public string DllPath { get; set; } = string.Empty;
         public string Version { get; set; } = string.Empty;
         public long FileSize { get; set; }
+        // PDB GUID in `N` format (32 hex chars, no dashes). Empty string means the entry was written
+        // by an older build of this app that did not key on the PDB signature - those entries miss
+        // the lookup predicate and are overwritten on the next resolve.
+        public string PdbSignature { get; set; } = string.Empty;
+        public uint PdbAge { get; set; }
         public Dictionary<string, int>? Symbols { get; set; }
     }
 

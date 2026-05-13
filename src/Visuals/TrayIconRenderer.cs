@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Windows;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
+using Microsoft.Win32;
 using Brushes = System.Windows.Media.Brushes;
 using Color = System.Windows.Media.Color;
 using FlowDirection = System.Windows.FlowDirection;
@@ -14,15 +15,30 @@ namespace BrightnessTrayAppWPF.Visuals;
 /// Renders brightness tray icons with proper theme-aware rendering.
 /// Uses Segoe Fluent Icons glyphs for crisp icons.
 /// </summary>
-public sealed class TrayIconRenderer(AppTheme theme) : IDisposable
+public sealed class TrayIconRenderer : IDisposable
 {
+    private readonly AppTheme _theme;
     private Icon? _currentIcon;
     private int _lastBrightness = -1;
+    // Cache key extension: DPI must invalidate the bitmap.
+    // Without this, a display-scaling change at the same brightness % leaves the prior-size icon on a taskbar
+    // that now expects a different pixel size (audit_11 F1).
+    private uint _lastDpi;
     private bool _disposed;
     private bool _isLightTheme;
     private Color? _customColor;
     private Color? _brightColor;
     private Color? _dimColor;
+
+    public TrayIconRenderer(AppTheme theme)
+    {
+        _theme = theme;
+        // Display-settings changes (DPI/scaling, mode) need to bust the bitmap cache.
+        // The brightness-keyed short-circuit in CreateIcon doesn't notice DPI on its own.
+        SystemEvents.DisplaySettingsChanged += OnDisplaySettingsChanged;
+    }
+
+    private void OnDisplaySettingsChanged(object? sender, EventArgs e) => InvalidateCache();
 
     // Lazy init to avoid static-constructor COM issues with trimming.
     private static Typeface? _segoeFluent;
@@ -111,11 +127,19 @@ public sealed class TrayIconRenderer(AppTheme theme) : IDisposable
     /// </summary>
     public Icon? CreateIcon(int brightnessPercent)
     {
-        if (brightnessPercent == _lastBrightness && _currentIcon != null) return null;
-
-        _lastBrightness = brightnessPercent;
+        // Post-Dispose guard: an in-flight cooldown can land here after the manager was torn down.
+        // Without this, we'd allocate and leak a GDI Icon handle on the way out (audit_11 F4).
+        if (_disposed) return null;
 
         uint dpi = IconRenderingHelper.GetTaskbarDpi();
+
+        // Cache hit requires BOTH brightness and DPI to match.
+        // DPI change without brightness change must still force a re-render at the new pixel size.
+        if (brightnessPercent == _lastBrightness && dpi == _lastDpi && _currentIcon != null) return null;
+
+        _lastBrightness = brightnessPercent;
+        _lastDpi = dpi;
+
         int iconSize = IconRenderingHelper.GetIconSizeForDpi(dpi);
 
         Color foregroundColor = ResolveForegroundColor(brightnessPercent);
@@ -138,14 +162,14 @@ public sealed class TrayIconRenderer(AppTheme theme) : IDisposable
     {
         if (_brightColor.HasValue || _dimColor.HasValue)
         {
-            Color defaultFg = theme.Foreground.For(IsLightTheme);
+            Color defaultFg = _theme.Foreground.For(IsLightTheme);
             Color bright = _brightColor ?? defaultFg;
             Color dim = _dimColor ?? defaultFg;
             double t = Math.Clamp(brightnessPercent / 100.0, 0.0, 1.0);
             return Blend(dim, bright, t);
         }
 
-        return _customColor ?? theme.Foreground.For(IsLightTheme);
+        return _customColor ?? _theme.Foreground.For(IsLightTheme);
     }
 
     /// <summary>
@@ -316,6 +340,7 @@ public sealed class TrayIconRenderer(AppTheme theme) : IDisposable
         if (_disposed) return;
 
         _disposed = true;
+        SystemEvents.DisplaySettingsChanged -= OnDisplaySettingsChanged;
         _currentIcon?.Dispose();
         _currentIcon = null;
     }

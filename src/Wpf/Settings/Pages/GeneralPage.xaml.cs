@@ -131,7 +131,6 @@ public partial class GeneralPage : UserControl
             GammaRampNightLightToggle.IsChecked = settings.NightLightFallbackMode == NightLightFallbackMode.GammaRamp;
             SettingsHandlerNightLightToggle.IsChecked =
                 settings.NightLightFallbackMode == NightLightFallbackMode.SettingsHandler;
-            NightLightPulseOnStrengthChangeToggle.IsChecked = settings.NightLightPulseOnStrengthChange;
 
             SettingsBindings.BindSpinner(
                 EnvironmentalCurveTickIntervalBox,

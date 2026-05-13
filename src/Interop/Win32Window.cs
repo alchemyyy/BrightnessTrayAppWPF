@@ -1,8 +1,11 @@
 namespace BrightnessTrayAppWPF.Interop;
 
 /// <summary>
-/// A minimal Win32 window for receiving shell notification messages.
-/// This is used by ShellNotifyIcon to receive tray icon callbacks.
+/// A minimal hidden top-level Win32 window for receiving shell notification messages.
+/// Used by ShellNotifyIcon as the WM_CALLBACKMOUSEMSG / WM_INPUT / WM_TASKBARCREATED sink.
+/// Note: this is NOT a message-only window (HWND_MESSAGE) - it's a regular hidden top-level window created via
+/// NativeWindow.CreateHandle with default CreateParams. WM_TASKBARCREATED is broadcast to top-level windows only,
+/// so a message-only parent would silently drop the taskbar-restart signal that ShellNotifyIcon depends on.
 /// </summary>
 internal sealed class Win32Window : NativeWindow, IDisposable
 {

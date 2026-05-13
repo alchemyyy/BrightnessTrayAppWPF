@@ -181,22 +181,6 @@
             </utils:SettingsCard.Control>
         </utils:SettingsCard>
 
-        <!-- Force-pulse on strength change:
-             escape hatch for the 24H2/26200 BlueLightReduction regression where strength
-             writes sometimes don't take effect on the live filter until night light is
-             toggled off and back on. When enabled, every strength write is followed by an
-             off/on pulse - briefly visible as flicker, but guarantees the new strength
-             takes effect. Independent of the selected backend; off by default. -->
-        <utils:SettingsCard Title="{loc:Loc Settings_General_NightLightPulseOnStrengthChange_Title}"
-                               Description="{loc:Loc Settings_General_NightLightPulseOnStrengthChange_Description}">
-            <utils:SettingsCard.Control>
-                <CheckBox x:Name="NightLightPulseOnStrengthChangeToggle"
-                          Style="{StaticResource ToggleSwitchStyle}"
-                          Tag="NightLightPulseOnStrengthChange" Checked="BoolToggle_Changed"
-                          Unchecked="BoolToggle_Changed"/>
-            </utils:SettingsCard.Control>
-        </utils:SettingsCard>
-
         <!-- PDB symbol download timeout.
              Only fires when the SettingsHandler backend hits an unknown SettingsHandlers_Display.dll
              build (post-Windows-update) and has to fetch the matching PDB from the Microsoft public

@@ -1,4 +1,5 @@
 @startuml state_ownership
+' Revised 2026-05-13: applied audit_23/Wave-1-fix amendments
 !include dark-theme.puml
 title State / source-of-truth audit - every fact and where it lives
 
@@ -10,13 +11,19 @@ component NightLightProvider as NLP
 package "Current brightness per monitor" $TINT_RED {
   [DDC monitor (HW)\n*authoritative source*]                        as DDCHW
   [MonitorInfo.Brightness\n(0-100)\nUI mirror / user intent]        as MIB
-  [MonitorInfo.CurveTargetBrightness\n(curve-driven indicator;\nactive iff IsCurveDriven)] as MICT
+  [MonitorInfo.CurveTargetBrightness\n(curve-driven indicator;\nactive iff IsCurveDriven;\nmaster gated on IsCurveDriven - H-29)] as MICT
   [MonitorInfo.VirtualBrightness\nmaster slider unclamped]          as MIV
+  [MonitorInfo.IsReadDegraded\n(orthogonal to SliderState;\nslider stays operable while\nreads fail - cf2e77e)] as MIRD
+  [MonitorInfo.IsDragging\n(curve-apply skip flag - H-10;\nset by BFL on slider thumb drag)] as MIDR
+  component "MonitorEntry.NormCurveXs/Ys +\nFloorPercent / CeilingPercent\n(per-monitor norm curve\nconsumed by DoBrightnessWriteAsync)" as MENC
+  component "KnownDisplayEntry.LastBusBrightness\n(percent; stamped in MonitorService\nat write-success site;\nseed on cold-start +\nrecovery promote)" as KDLB
   component "BrightnessProfile.MonitorStates[]\n(persisted in profiles.xml)" as BPM
   DDCHW <-> MIB  : EnqueueDirectBrightness\n(throttled write -> retry -> verify)
-  MICT  ..> DDCHW : drained by EnvironmentalCurveService\nthrough MonitorService throttler
+  MICT  ..> DDCHW : drained by EnvironmentalCurveService\nthrough MonitorService throttler\n(skip when IsDragging - H-10)
   MIB   ..> MIV   : master / individual sync
   MIB   ..> BPM   : on profile Save
+  MENC  ..> DDCHW : per-monitor floor/ceiling\nand norm curve gating
+  KDLB  ..> MIB  : cold-start seed for new-monitor\nbranch + recovery promote
 }
 
 note as N_THROTTLE $TINT_RED
@@ -33,7 +40,7 @@ package "Night-light state" $TINT_BLUE {
   [Windows BlueLightReduction\n(CloudStore / SettingsHandler\n*OS SoT*)]                  as NLOS
   [AppSettings.NightLightFallbackMode\n(backend selector: Auto /\nRegistry / GammaRamp /\nSettingsHandler)]  as ASNLM
   [AppSettings.NightLightLastNonZeroStrength\n(restore-on-toggle memo, 0-100)]            as ASNLR
-  [AppSettings.NightLightPulseOnStrengthChange\nAppSettings.TurnOffNightLightAtZeroStrength\nAppSettings.NightLightPDBDownloadTimeoutSeconds] as ASNLT
+  [AppSettings.TurnOffNightLightAtZeroStrength\nAppSettings.NightLightPDBDownloadTimeoutSeconds] as ASNLT
   [BrightnessFlyout._isNightLightActive\n+ NightLightMonitor.Brightness\n(UI mirror, polled from NLP)] as BFNL
   [NightLightMonitor.CurveTargetBrightness\n(curve indicator)]                            as NLCT
   [BrightnessProfile.NightLight\n(0-100, persisted)]                                      as BPN
@@ -61,11 +68,14 @@ package "Active profile / curve" $TINT_GREEN {
   component "ProfileManager.Profiles\n(ProfileCollection,\npersisted to profiles.xml)" as PPI
   [ProfileManager.HasUnsavedChanges]                   as HUC
   [BrightnessFlyout.IsBrightnessCurveEnabled\nBrightnessFlyout.IsNightLightCurveEnabled\n(mirrored to EnvironmentalCurveService\n+ persisted on AppSettings)] as FCEN
-  [EnvironmentalCurveService\n._cachedShiftedCurve\n(sun-shifted clone;\n_cachedShifted{Date,Lat,Lon,Dst}\nkey)] as ECS_CACHE
+  [EnvironmentalCurveService\n._cachedShiftedCurve\n(sun-shifted clone;\nkey = (sourceCurveRef,\nVersion, Date, Lat, Lon, DST) - H-28)] as ECS_CACHE
   [EnvironmentalCurveService\n._isInDisabledPeriod\n+ _isSuspended (preview sweep)] as ECS_FLAGS
+  [IsBrightnessCurveEnabledQuery + IsInDisabledPeriodQuery\n(live closures passed to MonitorService\nso physical brightness recovery consults real-time\nengagement / disabled-period - H-03)] as CFCQ
   PMI -> PPI
-  PPI ..> ECS_CACHE : cached lazily;\nkeyed by source-curve identity\nplus date / location / DST
+  PPI ..> ECS_CACHE : cached lazily;\nkeyed by source-curve identity\nplus date / location / DST / Version
   FCEN ..> ECS_CACHE : engages timer\n+ tick apply
+  FCEN ..> CFCQ : live read by recovery /\nharmonize call sites
+  ECS_FLAGS ..> CFCQ
 }
 
 ' ----- Slider visible state (single enum) -----
@@ -120,13 +130,38 @@ package "Tray icon state" $TINT_AMBER {
 ' ----- Theme -----
 package "Theme" $TINT_PINK {
   component "AppTheme\n(theme.xml; ThemeColor pairs,\nglyphs, profile-button defaults)" as APT
-  [AppTheme.IsLightTheme\n(runtime; Personalize regkey watch)] as APTL
+  [AppTheme.IsLightTheme\n(runtime; SystemEvents.UserPreferenceChanged\nfiltered to UserPreferenceCategory.General;\nregkey read on-demand inside handler)] as APTL
   [AppSettings.ThemeMode\n(System / Light / Dark)]            as ASTM
   [AppSettings NullableThemeColor overrides\n(Text, Background, TrayIcon*, Environmental*Curve, etc.)] as ASCOL
   APTL ..> APT
   ASTM ..> APT : ResolveEffectiveIsLightTheme
   ASCOL ..> APT : per-color override wins\nover ThemeColor default
 }
+
+note as N_REFRESH $TINT_GREEN
+  **Refresh reentrancy guard (Wave 2 fix - H-01):**
+  MonitorService.Refresh captures snapshots
+  (latestByID, edidKeyByID, nameOverridesByEDID,
+  strategyChanged) in Phase A and consumes them
+  in deferred Phase B at +1500 ms. A new
+  _refreshGen Volatile counter bumps on every
+  Refresh entry; the deferred Phase B closure
+  compares its captured gen against the current
+  value and bails when superseded. Sweep at
+  +2 s / +5 s no longer races the initial
+  Phase B.
+end note
+
+note as N_SEED $TINT_AMBER
+  **MasterMonitor.Brightness seed:**
+  Literal 50 in BrightnessFlyout ctor.
+  Reseeded after deferred Phase B completes
+  (UpdateMasterFromEnabledIndividuals fires
+  inside the _suppressPropagation scope as
+  monitors attach). Offset-mode baseline is
+  50 for ~1.5 s during the cold-start window
+  if a curve was persisted on.
+end note
 
 note as N1
   **Multiple sources of truth still flagged:**

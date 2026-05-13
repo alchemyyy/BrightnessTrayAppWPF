@@ -2,6 +2,7 @@ using System.Collections.ObjectModel;
 using System.Windows.Threading;
 using BrightnessTrayAppWPF.Models;
 using BrightnessTrayAppWPF.Utils;
+using Microsoft.Win32;
 
 namespace BrightnessTrayAppWPF.Services;
 
@@ -11,6 +12,20 @@ namespace BrightnessTrayAppWPF.Services;
 /// <see cref="MonitorService.EnqueueDirectBrightness"/>, night-light via
 /// <see cref="NightLightProvider.SetStrength(int)"/>). Promoted out of <c>BrightnessFlyout</c> so curves
 /// continue to drive monitors while the flyout is hidden.
+///
+/// LOAD-BEARING INVARIANT: the curve evaluator NEVER writes to per-monitor offset / user-intent state.
+/// Specifically forbidden: any assignment to <see cref="MonitorInfo.Offset"/>,
+/// <see cref="MonitorInfo.LastUserBrightness"/>, the per-row IsSliderEnabled state, or anything else
+/// that records the user's intended per-monitor relationship. The curve consumes these fields as inputs
+/// (absolute mode reads <c>Offset</c>; offset mode reads <c>LastUserBrightness</c>) and produces
+/// hardware writes via <see cref="MonitorService.EnqueueDirectBrightness"/> + indicator writes via
+/// <see cref="MonitorInfo.CurveTargetBrightness"/>. Nothing else.
+///
+/// Offsets and LastUserBrightness change only on user actions (slider touch / wheel / keyboard, group
+/// toggle, individual re-engage) and topology / enrollment events (AttachMonitor, DetachMonitor,
+/// PromoteRecovered, curve-toggle-ON snapshot). The curve walking the master across the day must NOT
+/// reach into those fields - if it does, a user's per-monitor spread would drift over a curve session,
+/// and re-engaging an individual would land at a corrupted baseline.
 /// </summary>
 public sealed class EnvironmentalCurveService : IDisposable
 {
@@ -26,16 +41,21 @@ public sealed class EnvironmentalCurveService : IDisposable
     private DispatcherTimer? _curveTimer;
     private DispatcherTimer? _curveEventThrottleTimer;
 
-    // Sun-shifted runtime curve cache so we don't pay an SPA round trip every tick. Keyed by (profile
-    // reference, today's date, current location, DST flag); rebuilds whenever any axis changes. Stored curve
-    // identity is enough - swapping profiles or editing the shape both produce a new EnvironmentalCurve
-    // reference via SettingsWindow's promote-on-edit path, and a midnight transition flips the date axis.
+    // Sun-shifted runtime curve cache so we don't pay an SPA round trip every tick. Keyed by
+    // (source-curve reference, source-curve Version, today's date, current location, DST flag);
+    // rebuilds whenever any axis changes. The reference check catches "different curve object"
+    // (profile switch, promote-on-edit), and the Version check catches "same reference, mutated points"
+    // - the settings editor mutates the curve's lists in place rather than cloning, so without the
+    // Version stamp a FollowTheSun-on profile would keep sampling the pre-edit shape until midnight.
+    // Mutation sites that take the in-place path bump Version via <see cref="InvalidateCurveCache"/> /
+    // <see cref="RequestEvaluation"/>; the cache key check below picks up the bump deterministically.
     private EnvironmentalCurve? _cachedShiftedCurve;
     private DateTime _cachedShiftedDate = DateTime.MinValue;
     private double _cachedShiftedLat;
     private double _cachedShiftedLon;
     private bool _cachedShiftedDst;
     private object? _cachedShiftedSourceCurve;
+    private int _cachedShiftedSourceVersion;
 
     private bool _isInDisabledPeriod;
     private bool _isSuspended;
@@ -71,6 +91,19 @@ public sealed class EnvironmentalCurveService : IDisposable
         // runs (which now skips CurveActive rows). Without this, a recovered row would receive a slider-value
         // resync that the curve would only correct on its next periodic 5s tick, producing visible flicker.
         _monitorService.MonitorsRefreshed += OnMonitorsRefreshed;
+
+        // DST transition / timezone change / user-set clock change invalidates the sun-shifted cache:
+        // SunShifter's SPA evaluation honours the local UTC offset, so the cached shape can be stale by
+        // up to one full day after a TZ change until the next midnight rolls over.
+        // SystemEvents.TimeChanged marshals onto its own thread; the handler only nulls cache fields
+        // and posts the immediate re-evaluation back to the dispatcher.
+        SystemEvents.TimeChanged += OnSystemTimeChanged;
+
+        // Arm the periodic timer unconditionally at construction so the disabled-period detection runs
+        // regardless of the persisted curve-flag state - the flyout's crescent glyph swap and the
+        // IsInDisabledPeriod mirror both depend on Evaluate firing even when both curve toggles are off.
+        // Start() is idempotent and short-circuits cleanly if no profile is loaded yet.
+        Start();
     }
 
     /// <summary>
@@ -83,6 +116,45 @@ public sealed class EnvironmentalCurveService : IDisposable
     /// Whether the night-light curve is currently engaged. Mirrors <c>BrightnessFlyout.IsNightLightCurveEnabled</c>.
     /// </summary>
     public bool IsNightLightCurveEnabled { get; set; }
+
+    /// <summary>
+    /// Returns the night-light strength (0..100) the curve would write at this moment,
+    /// or null when the curve isn't actively driving night light right now
+    /// (curve disengaged, sleeping inside a disabled period, no profile loaded, backend unavailable).
+    /// The toggle-on path uses this to seed the backend with the curve's value instead of
+    /// <see cref="AppSettings.NightLightLastNonZeroStrength"/>,
+    /// so enabling night light while the curve is engaged lands on the curve's warmth
+    /// rather than the user's last manual pick.
+    /// </summary>
+    public int? GetActiveNightLightCurveStrength()
+    {
+        if (_disposed) return null;
+        if (!IsNightLightCurveEnabled) return null;
+        if (_nightLightMonitor.SliderState != SliderState.CurveActive) return null;
+
+        EnvironmentalCurve? curve = ResolveLiveCurve();
+        EnvironmentalCurve? stored = ResolveStoredCurve();
+        if (curve == null || stored == null) return null;
+
+        double t = EnvironmentalCurveSampler.CurrentDayFraction();
+        if (EnvironmentalCurveSampler.IsInDisabledPeriod(stored, t)) return null;
+
+        double smoothness = (_appSettings?.EnvironmentalCurveSmoothness ?? 100) / 100.0;
+        if (IsCurveAbsoluteMode)
+        {
+            double sample = EnvironmentalCurveSampler.Sample(curve.NightLight, t, smoothness);
+            if (!double.IsFinite(sample)) sample = 100.0;
+            return Math.Clamp((int)Math.Round(sample), 0, 100);
+        }
+
+        // Offset mode mirrors ApplyNightLightCurve's offset branch: deviation around 50 -> +/-100 percent,
+        // stacked on top of the slider's current strength (slider position run through the invert mapper).
+        double offsetSample = EnvironmentalCurveSampler.Sample(curve.NightLightOffset, t, smoothness);
+        if (!double.IsFinite(offsetSample)) offsetSample = 100.0;
+        double offsetPercent = (offsetSample - 50.0) * 2.0;
+        int currentStrength = _flipIfNightLightInverted(_nightLightMonitor.RoundedBrightness);
+        return Math.Clamp((int)Math.Round(currentStrength + offsetPercent), 0, 100);
+    }
 
     /// <summary>
     /// True while the active profile's disabled-period window is currently passing through. Updated only inside
@@ -141,6 +213,7 @@ public sealed class EnvironmentalCurveService : IDisposable
     /// </summary>
     public void Stop()
     {
+        if (_disposed) return;
         if (_curveTimer is { IsEnabled: true }) _curveTimer.Stop();
     }
 
@@ -150,6 +223,7 @@ public sealed class EnvironmentalCurveService : IDisposable
     /// </summary>
     public void Suspend()
     {
+        if (_disposed) return;
         _isSuspended = true;
         if (_curveTimer is { IsEnabled: true }) _curveTimer.Stop();
         if (_curveEventThrottleTimer is { IsEnabled: true }) _curveEventThrottleTimer.Stop();
@@ -161,6 +235,7 @@ public sealed class EnvironmentalCurveService : IDisposable
     /// </summary>
     public void Resume()
     {
+        if (_disposed) return;
         _isSuspended = false;
         Start();
         Evaluate();
@@ -184,12 +259,11 @@ public sealed class EnvironmentalCurveService : IDisposable
         if (_isSuspended) return;
 
         // Invalidate the sun-shifted clone cache so the upcoming evaluation rebuilds from the freshly-edited
-        // stored curve. The cache keys on ReferenceEquals(source) which doesn't trip when the user mutates
-        // points inside the existing curve's lists - without this, FollowTheSun-enabled profiles (the default)
-        // would keep sampling the pre-edit shape forever. Periodic ticks aren't affected: those don't pass
-        // through here, so they keep the warm cache.
-        _cachedShiftedSourceCurve = null;
-        _cachedShiftedCurve = null;
+        // stored curve. The cache keys on (ReferenceEquals(source), Version) - reference catches the
+        // profile-switch path, Version catches the in-place mutation path. Bump Version on the stored
+        // curve as well so any other RequestEvaluation-bypassing call site that compares Version
+        // post-edit sees the shape has changed.
+        BumpCurveVersionAndDropCache();
 
         if (_curveEventThrottleTimer == null)
         {
@@ -213,11 +287,27 @@ public sealed class EnvironmentalCurveService : IDisposable
     /// <summary>
     /// Drops the sun-shifted curve cache so the next evaluation rebuilds from scratch. Called when a curve's
     /// points have been mutated in place (settings-window edit) so a FollowTheSun-enabled profile picks up the
-    /// freshly-edited shape.
+    /// freshly-edited shape. Also bumps the stored curve's <see cref="EnvironmentalCurve.Version"/> so any
+    /// future cache key consumer can detect the in-place mutation via the integer stamp alone.
     /// </summary>
     public void InvalidateCurveCache()
     {
+        if (_disposed) return;
+        BumpCurveVersionAndDropCache();
+    }
+
+    /// <summary>
+    /// Shared invalidation primitive: nulls the sun-shifted cache fields AND bumps the stored
+    /// curve's <see cref="EnvironmentalCurve.Version"/> so the next <see cref="ResolveLiveCurve"/>
+    /// cache lookup misses on both the reference path and the version path. Safe to call when no
+    /// profile resolves - just nulls the cache.
+    /// </summary>
+    private void BumpCurveVersionAndDropCache()
+    {
+        EnvironmentalCurve? stored = ResolveStoredCurve();
+        if (stored != null) stored.Version++;
         _cachedShiftedSourceCurve = null;
+        _cachedShiftedSourceVersion = 0;
         _cachedShiftedCurve = null;
     }
 
@@ -229,6 +319,7 @@ public sealed class EnvironmentalCurveService : IDisposable
     /// </summary>
     public void ClearCurveTargets()
     {
+        if (_disposed) return;
         _masterMonitor.SliderState = SliderStateMachine.OnCurveDisengaged(_masterMonitor.SliderState);
         _nightLightMonitor.SliderState = SliderStateMachine.OnCurveDisengaged(_nightLightMonitor.SliderState);
         foreach (MonitorInfo monitor in _monitors)
@@ -245,6 +336,7 @@ public sealed class EnvironmentalCurveService : IDisposable
     /// </summary>
     public void EngageBrightnessCurveStates()
     {
+        if (_disposed) return;
         bool inDisabled = _isInDisabledPeriod;
         _masterMonitor.SliderState = SliderStateMachine.OnCurveEngaged(_masterMonitor.SliderState, inDisabled);
         foreach (MonitorInfo monitor in _monitors)
@@ -254,6 +346,7 @@ public sealed class EnvironmentalCurveService : IDisposable
     /// <summary>Symmetric counterpart to <see cref="EngageBrightnessCurveStates"/> for the night-light row.</summary>
     public void EngageNightLightCurveStates()
     {
+        if (_disposed) return;
         bool inDisabled = _isInDisabledPeriod;
         _nightLightMonitor.SliderState = SliderStateMachine.OnCurveEngaged(_nightLightMonitor.SliderState, inDisabled);
     }
@@ -265,6 +358,7 @@ public sealed class EnvironmentalCurveService : IDisposable
     /// </summary>
     public void DisengageBrightnessCurveStates()
     {
+        if (_disposed) return;
         _masterMonitor.SliderState = SliderStateMachine.OnCurveDisengaged(_masterMonitor.SliderState);
         foreach (MonitorInfo monitor in _monitors)
             monitor.SliderState = SliderStateMachine.OnCurveDisengaged(monitor.SliderState);
@@ -273,8 +367,11 @@ public sealed class EnvironmentalCurveService : IDisposable
     /// <summary>
     /// Symmetric counterpart to <see cref="DisengageBrightnessCurveStates"/> for the night-light row.
     /// </summary>
-    public void DisengageNightLightCurveStates() =>
+    public void DisengageNightLightCurveStates()
+    {
+        if (_disposed) return;
         _nightLightMonitor.SliderState = SliderStateMachine.OnCurveDisengaged(_nightLightMonitor.SliderState);
+    }
 
     /// <summary>
     /// Per-tick reconciliation called from <see cref="Evaluate"/> when the brightness curve is engaged.
@@ -296,6 +393,14 @@ public sealed class EnvironmentalCurveService : IDisposable
 
     private static void HarmonizeRow(MonitorInfo m, bool inDisabled)
     {
+        // DDC-health gate: a Failed row (sticky until a successful re-probe) must never be promoted into
+        // CurveActive / CurveSleeping by the per-tick walk - the SliderStateMachine treats Failed as
+        // dominant for hardware-absent reasons, and harmonizing past it would let the curve enqueue
+        // writes against unreachable hardware. The switch below already preserves Failed via the
+        // wildcard arm, but the explicit guard matches audit_03 Finding 4 and forecloses any future
+        // arm that would relax that. Same gate covers IsHardwareFunctional which is `!= Failed` today.
+        if (m.SliderState == SliderState.Failed || !m.IsHardwareFunctional) return;
+
         m.SliderState = m.SliderState switch
         {
             SliderState.Enabled =>
@@ -394,6 +499,12 @@ public sealed class EnvironmentalCurveService : IDisposable
     {
         if (_disposed) return false;
 
+        // No _isSuspended gate here: the preview-sweep tick (today's only caller) calls Suspend()
+        // exactly to silence the periodic timer, then repeatedly calls ApplyAt for the duration of the
+        // sweep. An early-return on _isSuspended (proposed in audit_07 F-12 as a defensive measure for
+        // a hypothetical second caller) would break the preview. If a second caller is ever added,
+        // give it a distinct gate rather than overloading _isSuspended.
+
         EnvironmentalCurve? curve = ResolveLiveCurve();
         EnvironmentalCurve? stored = ResolveStoredCurve();
         if (curve == null || stored == null) return false;
@@ -483,9 +594,17 @@ public sealed class EnvironmentalCurveService : IDisposable
 
     private void OnSelectedProfileChanged(int newIndex)
     {
+        if (_disposed) return;
+
         // Stale shifted clone keyed to the outgoing profile must not carry over.
         // The new profile's first tick rebuilds it from its own EnvironmentalCurve.
         InvalidateCurveCache();
+
+        // Drive an immediate evaluation so the new profile's curve takes effect within the same
+        // dispatcher frame instead of waiting up to one EnvironmentalCurveTickIntervalMs (default 5s)
+        // for the periodic tick - audit_07 F-05 / M-03. The Evaluate itself short-circuits cleanly
+        // when both curve flags are off or the profile has no curve resolved.
+        Evaluate();
     }
 
     /// <summary>
@@ -530,7 +649,13 @@ public sealed class EnvironmentalCurveService : IDisposable
         DateTime today = DateTime.Today;
         bool dst = stored.UseDaylightSavings;
 
+        // Cache check uses BOTH ReferenceEquals(source) AND Version: reference catches "different curve
+        // object" (profile switch / promote-on-edit), Version catches "same reference, mutated points"
+        // (settings editor's in-place edit, which doesn't allocate a new EnvironmentalCurve). Without
+        // the Version arm, an in-place mutation that bypasses RequestEvaluation / InvalidateCurveCache
+        // would keep sampling the pre-edit shape until midnight.
         if (ReferenceEquals(_cachedShiftedSourceCurve, stored)
+            && _cachedShiftedSourceVersion == stored.Version
             && _cachedShiftedDate == today
             && _cachedShiftedLat == lat
             && _cachedShiftedLon == lon
@@ -552,6 +677,7 @@ public sealed class EnvironmentalCurveService : IDisposable
         _cachedShiftedLon = lon;
         _cachedShiftedDst = dst;
         _cachedShiftedSourceCurve = stored;
+        _cachedShiftedSourceVersion = stored.Version;
         return shifted;
     }
 
@@ -654,7 +780,10 @@ public sealed class EnvironmentalCurveService : IDisposable
                 // (CurveActive or CurveSleeping). Released / disabled / failed rows have their slider
                 // thumb own the displayed value and should not get a stale CurveTargetBrightness write
                 // - the indicator dot's binding hides itself when SliderState isn't curve-driven.
-                _masterMonitor.CurveTargetBrightness = absoluteMasterTarget;
+                // Master row is gated on IsCurveDriven the same way as the per-row loop below,
+                // matching the per-row pattern (audit_07 F-01 / H-29) so a future master-Disabled or
+                // master-Released path can't accidentally land a stale curve target on a slider-owned row.
+                if (_masterMonitor.IsCurveDriven) _masterMonitor.CurveTargetBrightness = absoluteMasterTarget;
                 foreach (MonitorInfo monitor in _monitors)
                 {
                     if (monitor.IsCurveDriven)
@@ -664,25 +793,29 @@ public sealed class EnvironmentalCurveService : IDisposable
                 // Hardware writes only on rows actively driven by the curve. CurveSleeping rows hold
                 // their indicator at the would-be position but the user's slider owns hardware
                 // during the sleep window. CurveReleased / Disabled / Failed are skipped naturally.
+                // H-10: also skip writes against a row whose user is mid-drag - the curve write would
+                // shove the bound slider thumb out from under the user's mouse.
                 foreach (MonitorInfo monitor in _monitors)
                 {
                     if (monitor.SliderState != SliderState.CurveActive) continue;
+                    if (monitor.IsDragging) continue;
                     int rowTargetPct = (int)Math.Round(Math.Clamp(absoluteMasterTarget + monitor.Offset, 0.0, 100.0));
                     _monitorService.EnqueueDirectBrightness(monitor, rowTargetPct);
                 }
             },
             applyOffsetPercent: offsetPercent =>
             {
-                // Master always claims a curve target while the curve is engaged; per-row indicators
-                // follow only on curve-driven rows. Released / disabled / failed rows show their
-                // slider's own value via RoundedBrightness (EffectiveRoundedBrightness short-circuits
-                // when IsCurveDriven is false).
+                // Per-row indicators follow only on curve-driven rows. Released / disabled / failed rows
+                // show their slider's own value via RoundedBrightness (EffectiveRoundedBrightness
+                // short-circuits when IsCurveDriven is false).
+                // Master row is gated on IsCurveDriven for the same reasons as the per-row loop -
+                // see absolute-mode comment and audit_07 F-01 / H-29.
                 // Baseline reads LastUserBrightness, not Brightness, so a Brightness drift from a
                 // recovery / hot-plug hardware-sync (which goes through SyncBrightnessFromHardware
                 // and intentionally does NOT touch LastUserBrightness) can't reroute the offset onto
                 // the wrong baseline and skew the master / per-row targets.
                 double masterTarget = Math.Clamp(_masterMonitor.LastUserBrightness + offsetPercent, 0.0, 100.0);
-                _masterMonitor.CurveTargetBrightness = masterTarget;
+                if (_masterMonitor.IsCurveDriven) _masterMonitor.CurveTargetBrightness = masterTarget;
                 foreach (MonitorInfo monitor in _monitors)
                 {
                     if (monitor.IsCurveDriven)
@@ -693,6 +826,9 @@ public sealed class EnvironmentalCurveService : IDisposable
                 foreach (MonitorInfo monitor in _monitors)
                 {
                     if (monitor.SliderState != SliderState.CurveActive) continue;
+                    // H-10: skip writes against a row whose user is mid-drag - the curve write would
+                    // shove the bound slider thumb out from under the user's mouse.
+                    if (monitor.IsDragging) continue;
                     int hwTarget = (int)Math.Round(
                         Math.Clamp(monitor.LastUserBrightness + offsetPercent, 0.0, 100.0));
                     _monitorService.EnqueueDirectBrightness(monitor, hwTarget);
@@ -755,6 +891,31 @@ public sealed class EnvironmentalCurveService : IDisposable
     }
 
     /// <summary>
+    /// SystemEvents.TimeChanged callback - DST transition, user-set clock change, or system TZ change.
+    /// Each of these invalidates the sun-shifted cache because SunShifter's SPA evaluation depends on
+    /// the active UTC offset (see audit_07 F-03 / F-04 / M-01). The handler runs on the
+    /// SystemEvents background thread; cache nulling + Version bump are tiny benign writes, and the
+    /// follow-up evaluation is dispatched onto the WPF UI thread where the curve service's other
+    /// callers all run.
+    /// </summary>
+    private void OnSystemTimeChanged(object? sender, EventArgs e)
+    {
+        if (_disposed) return;
+
+        // Background-thread context: marshal the cache invalidation + re-evaluation onto the WPF
+        // dispatcher so we stay on the same thread as every other Evaluate / RequestEvaluation caller.
+        // Dispatcher may be null very briefly during shutdown; the null-check keeps us safe.
+        System.Windows.Application.Current?.Dispatcher?.BeginInvoke(new Action(() =>
+        {
+            if (_disposed) return;
+            InvalidateCurveCache();
+            // Drive an immediate evaluation so the post-change shape lands within the same frame
+            // rather than waiting for the next periodic tick (matches M-03's profile-switch path).
+            Evaluate();
+        }));
+    }
+
+    /// <summary>
     /// MonitorService.Refresh just landed (topology event, recovery promotion, etc.).
     /// Run an immediate evaluation so freshly-promoted Enabled rows get harmonized into CurveActive
     /// and the curve target is written before the topology-event handler's next-line ReapplySliderState
@@ -771,13 +932,22 @@ public sealed class EnvironmentalCurveService : IDisposable
         Evaluate();
     }
 
+    /// <summary>
+    /// Tears down every subscription and timer the service owns.
+    /// Idempotent (the _disposed guard makes a double-Dispose cheap).
+    /// Every public method that the caller might re-enter post-dispose has its own _disposed check
+    /// so a late event from a not-yet-unsubscribed source can't fault inside.
+    /// </summary>
     public void Dispose()
     {
         if (_disposed) return;
         _disposed = true;
 
+        // Symmetric unsubscribe order: external event sources first so no in-flight callback can
+        // arrive mid-tear-down, then own timers.
         _profileManager.SelectedProfileChanged -= OnSelectedProfileChanged;
         _monitorService.MonitorsRefreshed -= OnMonitorsRefreshed;
+        SystemEvents.TimeChanged -= OnSystemTimeChanged;
 
         if (_curveTimer != null)
         {

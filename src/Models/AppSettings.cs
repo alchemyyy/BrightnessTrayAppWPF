@@ -500,14 +500,27 @@ public class AppSettings
     /// </summary>
     public int NightLightLastNonZeroStrength { get; set; } = 50;
 
+    // NightLightPulseOnStrengthChange was removed (audit_10 F-02): production code uses
+    // EnqueueSetStrengthSpaced, which has no pulse parameter, so toggling the UI did nothing.
+
     /// <summary>
-    /// When true, every night-light registry write is followed by an off/on pulse
-    /// to force the BlueLightReduction service to re-read the strength immediately.
-    /// Adds a brief flicker but defeats the 24H2/26200 regression where settings-only writes
-    /// (with FILETIME bump) sometimes still aren't applied to the live filter.
-    /// Off by default - the FILETIME bump alone is usually enough.
+    /// Per-monitor cap on automatic DDC recovery attempts before the recovery loop gives up
+    /// and stops issuing probes for that monitor (the panel stays in Failed / ReadDegraded
+    /// but no more bus traffic is generated for it).
+    /// At the 1s tick cadence the default 60 means "try for one minute".
     /// </summary>
-    public bool NightLightPulseOnStrengthChange { get; set; } = false;
+    public int MaxRecoveryAttempts { get; set; } = 60;
+
+    /// <summary>
+    /// Last computed master-row brightness from the previous session, used as the seed for the
+    /// MasterMonitor row at flyout construction time. The flyout's MasterMonitor is constructed
+    /// before MonitorService.Refresh has populated the Monitors collection (Phase B is deferred
+    /// 1.5s), so until AttachMonitor first runs, the master slider visibly shows whatever literal
+    /// we seed here. Without a memo the slider sat at 50, then snapped to the computed value -
+    /// persisting and restoring keeps the slider on a sensible value across the settle window.
+    /// 100 is the cold-first-launch default: most users keep monitors at full brightness.
+    /// </summary>
+    public int LastMasterBrightness { get; set; } = 100;
 
     /// <summary>
     /// When true, dragging the night-light strength all the way to 0 also disables night light
@@ -739,14 +752,51 @@ public class AppSettings
                 NewLineHandling = NewLineHandling.Replace
             };
 
-            using FileStream stream = new(path, FileMode.Create);
-            using XmlWriter writer = XmlWriter.Create(stream, writerSettings);
-            XmlSerializer serializer = new(typeof(AppSettings));
-            serializer.Serialize(writer, this, namespaces);
+            WriteAtomic(path, stream =>
+            {
+                using XmlWriter writer = XmlWriter.Create(stream, writerSettings);
+                XmlSerializer serializer = new(typeof(AppSettings));
+                serializer.Serialize(writer, this, namespaces);
+            });
+        }
+        catch (Exception ex)
+        {
+            // Best-effort: a locked file (AV scan), full disk, or roaming-profile hiccup
+            // loses the latest edit but doesn't crash the app.
+            // Previously silent - now logged so the next investigation has something to grep.
+            WPFLog.Log($"AppSettings.Save: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// Writes <paramref name="finalPath"/> atomically by streaming <paramref name="writeContent"/> into
+    /// <c><paramref name="finalPath"/>.tmp</c> (exclusive lock, FileShare.None) and then moving the tmp file
+    /// over the destination via <see cref="File.Move(string, string, bool)"/> with overwrite.
+    /// Defeats the FileMode.Create truncate-then-write window where a crash or concurrent writer
+    /// could otherwise leave a zero-byte file that the next load silently replaces with defaults.
+    /// On failure the tmp file is best-effort deleted and the exception is rethrown
+    /// to the caller's outer try so it can be logged through the existing path.
+    /// </summary>
+    private static void WriteAtomic(string finalPath, Action<Stream> writeContent)
+    {
+        string tmpPath = finalPath + ".tmp";
+        try
+        {
+            using (FileStream stream = new(tmpPath, FileMode.Create, FileAccess.Write, FileShare.None))
+            {
+                writeContent(stream);
+                stream.Flush();
+            }
+            File.Move(tmpPath, finalPath, overwrite: true);
         }
         catch
         {
-            // best-effort
+            try { if (File.Exists(tmpPath)) File.Delete(tmpPath); }
+            catch
+            {
+                // ignored - the next save attempt will overwrite the tmp file anyway
+            }
+            throw;
         }
     }
 

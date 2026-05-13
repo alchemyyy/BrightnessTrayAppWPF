@@ -1,4 +1,6 @@
 @startuml class_dependencies
+' Revised 2026-05-13: applied audit_23 amendments (UpdateCheckService,
+' StartMenuShortcut, UpdateConfirmationWindow, DisplayIdentifierService static)
 !include dark-theme.puml
 title Service & UI dependency graph (who depends on whom)
 
@@ -24,10 +26,12 @@ class ProfileManager                   <<service>>
 class EnvironmentalCurveService        <<service>>
 class NightLightProvider               <<service>>
 class GlobalHotkeyService              <<service>>
-class DisplayIdentifierService         <<service>>
+class DisplayIdentifierService         <<service>> /' static class - see note '/
 class StartupManager                   <<service>>
 class InstallationService              <<service>>
 class AsyncThrottler                   <<service>>
+class UpdateCheckService               <<service>>
+class StartMenuShortcut                <<service>>
 
 ' ----- Helpers / models / theming (treated as services for grouping) -----
 class AppSettings                      <<service>>
@@ -49,6 +53,7 @@ class DisplayIdentifierOverlayWindow   <<ui>>
 class UninstallerWindow                <<ui>>
 class NumericSpinner                   <<ui>>
 class WindowDragHelper                 <<ui>>
+class UpdateConfirmationWindow         <<ui>>
 
 ' ----- Interop -----
 interface IDisplayService              <<interop>>
@@ -91,6 +96,8 @@ App --> SettingsWindow
 App --> UninstallerWindow                : --uninstall mode
 App --> StartupManager
 App --> PDBSymbolResolver                : DownloadTimeout
+App --> UpdateCheckService               : OnStartup -> StateChanged
+UpdateCheckService --> AppSettings       : CheckForUpdatesEnabled /\nUpdateCheckIntervalMinutes /\nUpdateChannel
 
 ' ===========================================================================
 ' Tray icon stack
@@ -157,6 +164,8 @@ BrightnessFlyout --> NightLightProvider
 BrightnessFlyout --> NightLightIconRenderer
 BrightnessFlyout --> AppTheme
 BrightnessFlyout *-- WindowDragHelper
+BrightnessFlyout --> UpdateCheckService          : reads AvailableUpdate /\nNotifyUpdateStateChanged
+BrightnessFlyout *-- UpdateConfirmationWindow    : modal child on\nRequestUpdatePrompt
 
 SettingsWindow --> AppSettings
 SettingsWindow --> ProfileManager
@@ -173,8 +182,15 @@ CurveEditor --> EnvironmentalCurveSampler
 CurveEditor --> ProfileManager
 CurveEditor --> MonitorBrightnessRangeProvider
 
-DisplayIdentifierService --> DisplayIdentifierOverlayWindow
+' DisplayIdentifierService is a static class that manages a private list
+' of overlay windows internally (DisplayIdentifierService.cs:13, 18).
+DisplayIdentifierService ..> DisplayIdentifierOverlayWindow : owns N (one per monitor)
 UninstallerWindow --> InstallationService
+
+' StartMenuShortcut wiring (cf410f7: Start Menu shortcuts).
+Program --> StartMenuShortcut            : --admin-action sync-startmenu
+InstallationService --> StartMenuShortcut : Sync()
+StartupManager --> StartMenuShortcut     : RepairShortcutIfStale
 
 ' ===========================================================================
 ' Notes

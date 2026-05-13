@@ -257,13 +257,33 @@ internal static class NightLightRegistry
 
     private static void OnResendTimerFired(object? state)
     {
-        int percent = Volatile.Read(ref _lastResettlePercent);
-        // Already on a thread pool thread (Timer callback dispatches there). Same throttler key as user
-        // calls, so a real user call that slips in between the timer firing and the throttler picking us up
-        // wins via latest-pending-wins.
-        _ = _throttler.RunAsync(
-            ThrottlerKey,
-            ctx => SetStrengthSpacedAsync(percent, ctx));
+        // System.Threading.Timer callbacks run on a thread pool thread. An unhandled exception escaping the
+        // callback tears down the process (timer faults are uncatchable from the caller). Belt-and-suspenders
+        // catch-all: log and swallow so a transient throw doesn't crash the app.
+        try
+        {
+            int percent = Volatile.Read(ref _lastResettlePercent);
+            // Already on a thread pool thread. Same throttler key as user calls, so a real user call that
+            // slips in between the timer firing and the throttler picking us up wins via latest-pending-wins.
+            _ = _throttler.RunAsync(
+                ThrottlerKey,
+                ctx => SetStrengthSpacedAsync(percent, ctx));
+        }
+        catch (Exception ex)
+        {
+            WPFLog.Log($"NightLightRegistry.OnResendTimerFired: {ex}");
+        }
+    }
+
+    /// <summary>
+    /// Cancels any pending post-settle resend so the next callback never fires until a fresh
+    /// <see cref="EnqueueSetStrengthSpaced"/> arms it again. Used by the auto-off-at-zero path to make sure
+    /// the resend doesn't race against an off-state - the resend's bracket assumes on-state semantics.
+    /// </summary>
+    public static void CancelPendingResend()
+    {
+        System.Threading.Timer? timer = _resendTimer;
+        timer?.Change(Timeout.Infinite, Timeout.Infinite);
     }
 
     private static async Task SetStrengthSpacedAsync(int percent, IThrottlerContext ctx)

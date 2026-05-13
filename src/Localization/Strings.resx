@@ -173,6 +173,9 @@ Ctrl+click: sync all displays to the brightest individual</value>
   <data name="NightLight_KelvinSuffix_Format" xml:space="preserve">
     <value>: {0}K</value>
   </data>
+  <data name="NightLight_OffSuffix" xml:space="preserve">
+    <value>: off</value>
+  </data>
   <data name="SettingsWindow_Caption_Close" xml:space="preserve">
     <value>Close</value>
   </data>
@@ -695,12 +698,6 @@ Requires at least one slider in the flyout to be set to curve mode.</value>
   </data>
   <data name="Settings_General_NightLightPDBDownloadTimeout_Title" xml:space="preserve">
     <value>Night Light symbol download timeout</value>
-  </data>
-  <data name="Settings_General_NightLightPulseOnStrengthChange_Description" xml:space="preserve">
-    <value>If sliding the night-light strength does nothing visible until you toggle night light off and back on, enable this. Each strength change is followed by a brief off/on pulse so Windows re-applies the new value. Adds a momentary flicker per change. Applies to whichever backend is selected.</value>
-  </data>
-  <data name="Settings_General_NightLightPulseOnStrengthChange_Title" xml:space="preserve">
-    <value>Force-apply strength changes</value>
   </data>
   <data name="Settings_General_NightLight_Header" xml:space="preserve">
     <value>Night Light</value>

@@ -10,15 +10,20 @@ namespace BrightnessTrayAppWPF;
 ///
 /// Exit code behavior:
 /// - Exit code 0: Normal exit (user clicked Exit menu) - don't restart
-/// - Exit code 1: Terminated by user (taskkill, task manager) - don't restart
 /// - Other exit codes: Crash or unexpected termination - restart
+/// Note: exit code 1 used to be in UserExitCodes (treated as taskkill) but that bucket also catches
+/// our own UnhandledException / DispatcherUnhandledException Environment.Exit(1) calls, which suppressed
+/// the watcher restart on real crashes (M-13). Letting 1 flow through to the restart path matches
+/// the original intent -- taskkill on a tray app is rare and an extra restart-then-quit cycle is harmless,
+/// whereas a missed restart on a real crash leaves the user with no brightness UI.
 /// </summary>
 internal static class CrashHandler
 {
     private const int MaxRapidRestarts = 5;
 
-    // Exit codes that should NOT trigger a restart
-    private static readonly int[] UserExitCodes = [0, 1];
+    // Exit codes that should NOT trigger a restart. Only 0 (clean user-initiated exit) qualifies;
+    // see class docstring for why 1 was removed.
+    private static readonly int[] UserExitCodes = [0];
 
     /// <summary>
     /// Runs the crash handler/watcher loop.

@@ -131,6 +131,7 @@ public class MonitorInfo : INotifyPropertyChanged
     private double _curveTargetBrightness;
     private SliderState _sliderState = SliderState.Enabled;
     private SliderState _preFailureSliderState = SliderState.Enabled;
+    private bool _isDragging;
 
     /// <summary>
     /// Unique identifier for the monitor.
@@ -453,6 +454,23 @@ public class MonitorInfo : INotifyPropertyChanged
     /// Brightness offset captured relative to the master at drag-start.
     /// During a master drag, <c>Brightness = master.Brightness + Offset</c> (clamped to 0-100).
     /// Kept through clamps so the user's intended per-monitor relationship survives the edge.
+    ///
+    /// WRITE INVARIANT: this field records the user's per-monitor spread. Only the following code paths
+    /// are allowed to assign it:
+    ///   - <c>BrightnessFlyout.CaptureOffsetsFromMaster</c> from any of:
+    ///       * flyout constructor (initial enrollment seed)
+    ///       * Master slider PreviewMouseLeftButtonDown / wheel / keyboard (USER actions, including
+    ///         offset-mode master drags that intentionally re-anchor the spread)
+    ///       * <c>OnCurveToggleStateChanged</c> when curve transitions ON (one-shot snapshot)
+    ///       * Sleep / disabled-period resyncs after a master change
+    ///   - <c>BrightnessFlyout.InitializeOffsetFromMaster</c> for a newly attached row only
+    ///   - <c>BrightnessFlyout.HandleCurveSliderTouch</c> re-engage branch (double-click on a
+    ///     CurveReleased row - USER action)
+    ///   - <c>MonitorService.PromoteRecovered</c> (Failed-monitor recovery; enrollment-equivalent)
+    ///
+    /// <see cref="Services.EnvironmentalCurveService"/> MUST NOT write this field. The curve tick
+    /// reads <c>Offset</c> as an input only - a curve evaluator that wrote here would silently corrupt
+    /// the user's per-monitor spread over the course of a curve session.
     /// </summary>
     public double Offset { get; set; }
 
@@ -599,6 +617,20 @@ public class MonitorInfo : INotifyPropertyChanged
                     OnPropertyChanged(nameof(EffectiveRoundedBrightness));
             }
         }
+    }
+
+    /// <summary>
+    /// Runtime-only flag set by the flyout while the user is physically interacting with this row's
+    /// slider thumb or track. Covers both the click-to-position track drag and the thumb drag
+    /// (the flyout wires it from Slider.PreviewMouseLeftButtonDown/Up plus Thumb.DragStarted/Completed).
+    /// Read by the curve service's per-row write path to suppress hardware writes that would visibly
+    /// shove the thumb out from under the user's pointer mid-gesture.
+    /// Plain field, not INPC: nothing in XAML binds to it - it's purely an apply-path gate.
+    /// </summary>
+    public bool IsDragging
+    {
+        get => _isDragging;
+        set => _isDragging = value;
     }
 
     public event PropertyChangedEventHandler? PropertyChanged;

@@ -124,12 +124,32 @@ internal static class NightLightSettingsHandler
 
     private static void OnDeferredRegistryTimerFired(object? state)
     {
-        int percent = Volatile.Read(ref _deferredStrengthPercent);
-        if (percent < 0) return;
+        // System.Threading.Timer callbacks run on a thread pool thread; an unhandled throw here crashes the
+        // process. Belt-and-suspenders catch-all so a transient registry-write fault doesn't take the app
+        // down.
+        try
+        {
+            int percent = Volatile.Read(ref _deferredStrengthPercent);
+            if (percent < 0) return;
 
-        // Reset the sentinel before the write so a gesture that arrives while we're writing
-        // still snapshots fresh state on its EnsureDeferredStrengthSeeded call.
-        Volatile.Write(ref _deferredStrengthPercent, -1);
-        NightLightRegistry.SetStrength(percent);
+            // Reset the sentinel before the write so a gesture that arrives while we're writing
+            // still snapshots fresh state on its EnsureDeferredStrengthSeeded call.
+            Volatile.Write(ref _deferredStrengthPercent, -1);
+            NightLightRegistry.SetStrength(percent);
+        }
+        catch (Exception ex)
+        {
+            WPFLog.Log($"NightLightSettingsHandler.OnDeferredRegistryTimerFired: {ex}");
+        }
+    }
+
+    /// <summary>
+    /// Cancels any pending deferred registry settle-write. Used by the auto-off-at-zero path so the deferred
+    /// write doesn't race against the off-state transition that follows.
+    /// </summary>
+    public static void CancelPendingResend()
+    {
+        System.Threading.Timer? timer = _deferredRegistryTimer;
+        timer?.Change(Timeout.Infinite, Timeout.Infinite);
     }
 }

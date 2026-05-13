@@ -42,6 +42,11 @@ public partial class App
     private int _lastNotifiedUpdateVersion;
     private bool _suppressNextTrayClick;
 
+    // H-17 reentry guard: ExitApplication calls Shutdown(0) which on some logoff flows can synchronously
+    // re-pump WM_QUERYENDSESSION through the dispatcher and re-raise our SessionEnding handler.
+    // Set inside the SessionEnding handler before invoking ExitApplication; never cleared.
+    private bool _sessionEnding;
+
 
     protected override void OnStartup(StartupEventArgs e)
     {
@@ -66,11 +71,14 @@ public partial class App
 
         // Crash-path shutdown handlers. Each makes a best-effort DDC drain before terminating.
         // The drain caps the wait so a hung op can't block the exit, while still letting any in-flight op
-        // finish cleanly when it can.
+        // finish cleanly when it can. Each ALSO writes a synchronous fatal-crash.log line before
+        // touching WPFLog, so even if the buffered logger's flush is racing the process death
+        // the forensic record survives.
         // Quick caps (200-500ms) because these paths are urgent:
         // Windows has its own kill-this-process timer if we sit here too long.
         AppDomain.CurrentDomain.UnhandledException += (_, args) =>
         {
+            WriteFatalCrashRecord("UnhandledException", args.ExceptionObject?.ToString());
             WPFLog.Log($"FATAL UnhandledException: {args.ExceptionObject}");
             TryDrainQuickly(TimeSpan.FromMilliseconds(TimeConstants.CrashHandlerDrainTimeoutMs));
             WPFLog.Flush();
@@ -79,11 +87,32 @@ public partial class App
         DispatcherUnhandledException += (_, args) =>
         {
             args.Handled = true;
+            WriteFatalCrashRecord("DispatcherUnhandledException", args.Exception?.ToString());
             WPFLog.Log($"FATAL DispatcherUnhandledException: {args.Exception}");
             TryDrainQuickly(TimeSpan.FromMilliseconds(TimeConstants.CrashHandlerDrainTimeoutMs));
             WPFLog.Flush();
             Environment.Exit(1);
         };
+        // Background Task exceptions that nothing observed otherwise become fatal at GC time -
+        // catch them so we can log the cause, then exit deterministically.
+        System.Threading.Tasks.TaskScheduler.UnobservedTaskException += (_, args) =>
+        {
+            WriteFatalCrashRecord("UnobservedTaskException", args.Exception?.ToString());
+            WPFLog.Log($"FATAL UnobservedTaskException: {args.Exception}");
+            args.SetObserved();
+        };
+        // Optional first-chance exception trace - off by default because it's noisy. Enable with
+        // BTAWPF_TRACE_FIRSTCHANCE=1 in the launch environment when triaging a crash whose
+        // managed handlers don't fire (StackOverflowException, native AV, explicit __fastfail).
+        if (string.Equals(Environment.GetEnvironmentVariable("BTAWPF_TRACE_FIRSTCHANCE"), "1", StringComparison.Ordinal))
+        {
+            AppDomain.CurrentDomain.FirstChanceException += (_, args) =>
+            {
+                // Best-effort - first-chance fires for EVERY exception including ones that get caught.
+                // We log type + message only to keep volume manageable.
+                WriteFatalCrashRecord("FirstChance", $"{args.Exception.GetType().FullName}: {args.Exception.Message}");
+            };
+        }
         AppDomain.CurrentDomain.ProcessExit += (_, _) =>
         {
             TryDrainQuickly(TimeSpan.FromMilliseconds(TimeConstants.ProcessExitDrainTimeoutMs));
@@ -97,6 +126,17 @@ public partial class App
             WPFLog.Log($"SessionEnding: reason={args.ReasonSessionEnding}");
             TryDrainQuickly(TimeSpan.FromMilliseconds(TimeConstants.SessionEndingDrainTimeoutMs));
             WPFLog.Flush();
+
+            // H-17: previously SessionEnding logged + flushed and returned, leaving NIM_DELETE,
+            // hotkey unregister, and KnownDisplays flush undone -- producing ghost tray icons after
+            // logoff and stale hotkey registrations. Run the full ExitApplication path now.
+            // _sessionEnding guards against reentry: ExitApplication calls Shutdown(0), which on some
+            // session-end flows can synchronously re-raise SessionEnding via WM_QUERYENDSESSION
+            // pumping through the dispatcher.
+            if (_sessionEnding) return;
+            _sessionEnding = true;
+            try { ExitApplication(); }
+            catch (Exception ex) { WPFLog.Log($"SessionEnding -> ExitApplication failed: {ex.Message}"); }
         };
 
         // Load app settings first - theme needs them.
@@ -186,7 +226,7 @@ public partial class App
         {
             try
             {
-                _ddcRecoveryService = new DDCRecoveryService(_monitorService);
+                _ddcRecoveryService = new DDCRecoveryService(_monitorService, _appSettings);
                 _ddcRecoveryService.Start();
                 AppServices.DDCRecoveryService = _ddcRecoveryService;
             }
@@ -290,6 +330,9 @@ public partial class App
         try
         {
             _theme = AppTheme.LoadOrDefault(AppTheme.GetDefaultPath());
+            // Wire AppServices.Theme so the shared AppTheme.ResolveEffectiveIsLightTheme
+            // helper sees the same instance the local code does.
+            AppServices.Theme = _theme;
             UpdateThemeResources(ResolveEffectiveIsLightTheme());
         }
         catch (Exception ex)
@@ -308,18 +351,10 @@ public partial class App
 
     /// <summary>
     /// Returns the theme to apply (light=true) after considering the user's ThemeMode override.
+    /// Delegates to <see cref="AppTheme.ResolveEffectiveIsLightTheme"/> so SettingsWindow,
+    /// ThemePage, and App all share one canonical resolver (M-17).
     /// </summary>
-    private bool ResolveEffectiveIsLightTheme()
-    {
-        if (_appSettings == null || _theme == null) return _theme?.IsLightTheme ?? false;
-
-        return _appSettings.ThemeMode switch
-        {
-            SettingsThemeMode.Light => true,
-            SettingsThemeMode.Dark => false,
-            _ => _theme.IsLightTheme,
-        };
-    }
+    private bool ResolveEffectiveIsLightTheme() => AppTheme.ResolveEffectiveIsLightTheme(_appSettings);
 
     /// <summary>
     /// Polls the watcher process and exits the app when it dies, so we don't run orphaned.
@@ -639,6 +674,11 @@ public partial class App
     {
         if (_activeFlyout == null || _activeFlyout.Monitors.Count == 0) return;
 
+        // Group adjust is semantically a master-row touch -- disengage the brightness curve up front
+        // so the curve's next tick doesn't stomp the hotkey-applied value.
+        // Mirrors the tray-scroll Brightness branch (see OnTrayScrolled).
+        _activeFlyout.NotifyUserBrightnessAdjustment();
+
         // Hotkey "adjust all monitors" is a group operation - skip Disabled / Failed rows
         // for the same reason the master drag and the master icon-toggle's sync do.
         foreach (MonitorInfo m in _activeFlyout.Monitors)
@@ -651,6 +691,10 @@ public partial class App
     private void AdjustNightLightBrightness(int delta)
     {
         if (_activeFlyout == null || !NightLightProvider.IsSupported()) return;
+
+        // Match tray-scroll NightLight branch: disengage the night-light curve before the user's manual write
+        // so the curve's next tick doesn't stomp the hotkey-applied value.
+        _activeFlyout.NotifyUserNightLightAdjustment();
 
         MonitorInfo nl = _activeFlyout.NightLightMonitor;
         nl.Brightness = Math.Clamp(nl.Brightness + delta, 0, 100);
@@ -943,6 +987,11 @@ public partial class App
     {
         if (_activeFlyout == null || _activeFlyout.Monitors.Count == 0) return;
 
+        // FullDim / FullBright / their hotkey counterparts are master-row touches:
+        // disengage the brightness curve up front so the curve's next tick can't stomp the applied value.
+        // Mirrors the tray-scroll Brightness branch (see OnTrayScrolled) and the hotkey master-adjust path.
+        _activeFlyout.NotifyUserBrightnessAdjustment();
+
         // FullDim / FullBright are group actions - exclude Disabled / Failed rows from both the snapshot
         // and the target write so a disabled monitor isn't dragged to 0/100
         // and isn't expected to match the applied target during the "still in applied state" repeat-click check.
@@ -1206,6 +1255,10 @@ public partial class App
     {
         // HMONITOR handles may be stale and the monitor set may have shifted;
         // re-enumerate so sliders keep controlling the right physical panel across hot-plug.
+        // Mark as a topology-event-driven Refresh so Phase B applies the post-detection settle
+        // (LG-checksum protection); cold-start and sweep Refreshes leave this untouched and run
+        // Phase B synchronously.
+        _monitorService?.NotifyTopologyEvent();
         _monitorService?.Refresh();
 
         // Push the slider/profile state back to the panels.
@@ -1294,6 +1347,18 @@ public partial class App
 
     private void ExitApplication()
     {
+        // H-16: a mid-drag mouse-down at quit time would otherwise never see its MouseUp commit
+        // because the captured element (typically a slider thumb) gets torn down with the flyout.
+        // Force-release any mouse capture so the drag's pending value-commit handlers fire cleanly
+        // before window teardown. Mouse.Captured is per-input-device but this app only ever runs one
+        // capture at a time -- a single Mouse.Capture(null) clears it.
+        // Cheap, idempotent, and runs before any service disposal so dependents see a consistent state.
+        try
+        {
+            if (System.Windows.Input.Mouse.Captured != null) System.Windows.Input.Mouse.Capture(null);
+        }
+        catch (Exception ex) { WPFLog.Log($"App.ExitApplication: mouse-capture sweep failed: {ex.Message}"); }
+
         // Tear down the global hotkey service first to unregister all WM_HOTKEY bindings
         // so they can't fire into an app that's mid-shutdown.
         if (_hotkeyService != null)
@@ -1360,6 +1425,13 @@ public partial class App
             _activeFlyout = null;
         }
 
+        // H-13: persist any in-memory profile-collection edits that the debounced auto-save hasn't
+        // committed yet. Goes after the flyout teardown so the curve service has stopped its timer
+        // and won't race a final Save with another mutation. SaveOnShutdown is idempotent and safe
+        // when there are no unsaved changes.
+        try { AppServices.ProfileManager?.SaveOnShutdown(); }
+        catch (Exception ex) { WPFLog.Log($"App.ExitApplication: ProfileManager.SaveOnShutdown failed: {ex.Message}"); }
+
         if (_theme != null)
         {
             _theme.ThemeChanged -= OnThemeChanged;
@@ -1423,6 +1495,34 @@ public partial class App
         catch (Exception ex)
         {
             WPFLog.Log($"App.TryDrainQuickly: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// Writes a single fatal-crash record to <c>%LOCALAPPDATA%\BrightnessTrayAppWPF\fatal-crash.log</c>
+    /// SYNCHRONOUSLY, bypassing WPFLog's buffer + flush timer. Survives even when the host has
+    /// milliseconds left to live (e.g. UnhandledException -> Environment.Exit, where WPFLog's
+    /// buffered flush might race the process death).
+    /// File is opened in append mode so each crash adds a record without losing history.
+    /// All failures are swallowed - this is purely best-effort forensic.
+    /// </summary>
+    private static void WriteFatalCrashRecord(string category, string? detail)
+    {
+        try
+        {
+            string appData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+            string folder = System.IO.Path.Combine(appData, Program.ApplicationName);
+            System.IO.Directory.CreateDirectory(folder);
+            string path = System.IO.Path.Combine(folder, "fatal-crash.log");
+            string timestamp = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss.fff");
+            int pid = Environment.ProcessId;
+            string thread = System.Threading.Thread.CurrentThread.ManagedThreadId.ToString();
+            string text = $"[{timestamp}] pid={pid} tid={thread} {category}: {detail}{Environment.NewLine}{Environment.NewLine}";
+            System.IO.File.AppendAllText(path, text, System.Text.Encoding.UTF8);
+        }
+        catch
+        {
+            // Swallow: forensic logger is best-effort and never throws back to the crash handler.
         }
     }
 }

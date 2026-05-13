@@ -1,0 +1,65 @@
+@startuml ddc_recovery_state
+' Created 2026-05-13: per claudeit/_diagram_amendments.md
+!include dark-theme.puml
+title DDC recovery state machine\nOwned by DDCRecoveryService; transitions verified at commit 4b5600b
+
+' Per-monitor recovery state lives on MonitorInfo (SliderState + IsReadDegraded)
+state Healthy : SliderState != Failed\n!IsReadDegraded
+state Failed : SliderState == Failed\nLastDDCError set\n_entries.Remove, _writeThrottler.Drop
+state ReadDegraded : SliderState != Failed\nIsReadDegraded == true\nSlider operable, reads fail
+state Abandoned : RecoveryAttempts >= MaxRecoveryAttempts\nMonitorAbandoned event raised\nUI surfaces "gave up" badge
+
+[*] --> Healthy
+
+Healthy --> Failed : DoBrightnessWriteAsync exhausted (:1769-1784)\nOR VerifyAppliedAsync exhausted (:1822-1882)\nOR Refresh re-probe failure (:603-612)\nOR WasEverDDCCapable monitor disappeared (:475-491)
+
+Failed --> Healthy : PromoteRecovered (:1463-1517)\n(read succeeded)
+Failed --> ReadDegraded : PromoteReadDegraded (:1361-1389)\n(read failed but TryDDCWriteProbe succeeded)
+Failed --> Failed : both probes failed, refresh LastDDCError
+Failed --> Abandoned : attempts >= AppSettings.MaxRecoveryAttempts
+ReadDegraded --> Abandoned : attempts >= AppSettings.MaxRecoveryAttempts
+
+ReadDegraded --> Healthy : reads come back -> PromoteRecovered
+ReadDegraded --> Failed : writes start failing\n(BeginInvoke at :1295-1312)
+
+note bottom of Failed
+  DDCRecoveryService.OnTick (1 s) consumes Failed and ReadDegraded as
+  candidates via GetStuckRecoveryCandidateIds:1162.
+  PickAction (:177-189):
+    attempts 1..3   -> Probe
+    attempts 4..6   -> RefreshHandle
+    attempts 7..    -> alternate (attempt%2==0)?RefreshHandle:Probe
+  Per-monitor post-detection settle now gates the next attempt (H-31),
+  giving the panel a chance to stabilize after a topology-driven
+  failure burst before the next probe.
+  Independent: every 30 s the OnTick gate opens for rate-limited
+  full Refresh.
+end note
+
+note bottom of Abandoned
+  Terminal state at AppSettings.MaxRecoveryAttempts (default 60).
+  MonitorAbandoned event signals the UI so the row can show the
+  user-visible "gave up" indicator and stop the runaway probe loop.
+  Recovery resumes if the user re-triggers (manual refresh, topology
+  change, app restart) which resets RecoveryAttempts.
+end note
+
+note bottom of ReadDegraded
+  ReadDegraded monitors STAY candidates so probes continue to test reads.
+  TryDDCWriteProbe (MonitorService.cs:1332-1350) writes const ProbeRaw=50
+  (an in-range raw VCP value, no scaling dependency on entry.Max).
+  Safe across Max=100 and Max=255 panels.
+end note
+
+' Primitives explicitly NOT present (verified absent at commit 4b5600b)
+note as N_ABSENT
+  Primitives the project does NOT have today:
+  - CCD soft-replug (SetDisplayConfig deactivate/reactivate). CCD.cs has
+    only the read-only trio.
+  - PnPCycle (SetupDi disable/enable). No PnPDeviceService.cs.
+  - ElevationService / AllowPnPRecovery setting / install-elevation-task.
+  - VCP 0x04 factory reset (user-excluded per feedback memory).
+  Hard power-off VCP 0xD6 is user-initiated only (Ctrl+click).
+end note
+
+@enduml

@@ -255,6 +255,10 @@ public sealed class DisplayEventManager : IDisposable
             if (hwidGap || countGap)
             {
                 WPFLog.Log("DisplayEventManager: gap detected, calling Refresh");
+                // Mark this as a topology-event-driven Refresh so MonitorService applies the
+                // post-detection settle to Phase B. Cold-start / sweep / recovery Refreshes do not
+                // call this and Phase B runs synchronously, keeping the launch path responsive.
+                _monitorService.NotifyTopologyEvent();
                 _monitorService.Refresh();
             }
         }

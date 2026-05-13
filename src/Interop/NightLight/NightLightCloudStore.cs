@@ -5,7 +5,6 @@ using System.Runtime.InteropServices;
 using System.Text;
 using System.Xml;
 using System.Xml.Serialization;
-using BrightnessTrayAppWPF.Models;
 
 namespace BrightnessTrayAppWPF.Interop.NightLight;
 
@@ -68,11 +67,13 @@ internal static class NightLightCloudStore
     // Verified RVAs for known builds. Falls through to PDBSymbolResolver on miss; the resolver caches its
     // result so the symbol-server hit is a one-time cost per Windows update.
     //
-    // Defaults are mirrored to %LocalAppData%\BrightnessTrayAppWPF\nightlight_known_rvas.xml on first run so
-    // users can add entries for new Windows builds without recompiling. If the file matches the canonical
-    // default serialization byte-for-byte we keep the in-memory defaults; if it has been hand-edited we
-    // discard defaults and load the file. See LoadKnownRvas for the full reconciliation logic.
-    private static readonly string KnownRvasFileName = Path.Combine(PDBSymbolResolver.NightlightDir, "nightlight_known_rvas.xml");
+    // Defaults are mirrored to %LocalAppData%\BrightnessTrayAppWPF\nightlight\nightlight_known_rvas.xml on
+    // first run so users can add entries for new Windows builds without recompiling. If the file matches the
+    // canonical default serialization byte-for-byte we keep the in-memory defaults; if it has been
+    // hand-edited we discard defaults and load the file. See LoadKnownRvas for the full reconciliation logic.
+    private const string KnownRvasFileName = "nightlight_known_rvas.xml";
+    private static readonly string KnownRvasFilePath =
+        Path.Combine(PDBSymbolResolver.NightlightDir, KnownRvasFileName);
     private const string HexPrefix = "0x";
     private static readonly Dictionary<string,
         (int InitializeRva, int SInstanceRva, int SetTargetColorTemperatureRva, int SetPreviewRva)>
@@ -325,11 +326,12 @@ internal static class NightLightCloudStore
             (int InitializeRva, int SInstanceRva, int SetTargetColorTemperatureRva, int SetPreviewRva)>
             defaults = BuildDefaultKnownRvas();
 
-        string path;
         byte[] defaultsBytes;
         try
         {
-            path = Path.Combine(AppSettings.GetDefaultDirectory(), KnownRvasFileName);
+            // Ensure the parent dir exists - PDBSymbolResolver only creates AppDataDir, not the
+            // nightlight subdir we hang our XML mirror off of.
+            Directory.CreateDirectory(PDBSymbolResolver.NightlightDir);
             defaultsBytes = SerializeKnownRvas(defaults);
         }
         catch (Exception ex)
@@ -341,13 +343,13 @@ internal static class NightLightCloudStore
 
         try
         {
-            if (!File.Exists(path))
+            if (!File.Exists(KnownRvasFilePath))
             {
-                File.WriteAllBytes(path, defaultsBytes);
+                File.WriteAllBytes(KnownRvasFilePath, defaultsBytes);
                 return defaults;
             }
 
-            byte[] onDisk = File.ReadAllBytes(path);
+            byte[] onDisk = File.ReadAllBytes(KnownRvasFilePath);
             return BytesEqual(onDisk, defaultsBytes) ? defaults : ParseKnownRvas(onDisk);
         }
         catch (Exception ex)

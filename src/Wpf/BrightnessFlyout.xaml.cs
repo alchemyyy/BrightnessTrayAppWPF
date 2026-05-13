@@ -49,6 +49,7 @@ public partial class BrightnessFlyout : Window, INotifyPropertyChanged
     public bool IsNightLightActive => _isNightLightActive;
     public bool ShowNightLightKelvinLabel => _appSettings?.ShowNightLightKelvinLabel ?? false;
     public bool InvertNightLightSlider => _appSettings?.InvertNightLightSlider ?? false;
+    public bool TurnOffNightLightAtZeroStrength => _appSettings?.TurnOffNightLightAtZeroStrength ?? false;
     public bool IsManualSaveButtonVisible => _appSettings?.Autosave == false;
 
     /// <summary>
@@ -362,7 +363,11 @@ public partial class BrightnessFlyout : Window, INotifyPropertyChanged
             ID = "master",
             Name = LocalizationManager.Instance["Flyout_MasterRowName"],
             IconGlyph = "\uEDAB", // Sync Badge 12 glyph - master icon-toggle force-syncs all monitors
-            Brightness = 50,
+            // Seed from the persisted last-session master value so the slider doesn't flash on a
+            // literal 50% during the MonitorPostDetectionSettleDelayMs window before Phase B
+            // populates Monitors and AttachMonitor recomputes Master from real individuals.
+            // Falls back to the AppSettings default (100) on first launch.
+            Brightness = _appSettings?.LastMasterBrightness ?? 100,
             IsMaster = true,
         };
 
@@ -486,14 +491,19 @@ public partial class BrightnessFlyout : Window, INotifyPropertyChanged
             IsNightLightCurveEnabled = _isNightLightCurveEnabled,
         };
 
-        // Let MonitorService's Failed-recovered paths consult the curve's engaged state and the master
-        // row's current brightness. The curve query is the fallback gate when no persisted bus value
-        // is available; the master query is used to recompute Offset when Brightness is restored from
-        // the persisted bus value (mirrors AttachMonitor's "Offset = Brightness - master" formula).
+        // Let MonitorService's physical-brightness recovery paths consult the brightness curve's
+        // engaged state and the master row's current brightness. The curve query is the fallback
+        // gate when no persisted bus value is available; the master query is used to recompute Offset
+        // when Brightness is restored from the persisted bus value
+        // (mirrors AttachMonitor's "Offset = Brightness - master" formula).
         // Closures capture _curveService and MasterMonitor; null queries before this point preserve prior behaviour.
-        _monitorService.IsCurveEnabledQuery =
-            () => _curveService.IsBrightnessCurveEnabled || _curveService.IsNightLightCurveEnabled;
+        _monitorService.IsBrightnessCurveEnabledQuery =
+            () => _curveService?.IsBrightnessCurveEnabled == true;
         _monitorService.MasterBrightnessQuery = () => MasterMonitor.Brightness;
+        // Disabled-period gate query: lets MonitorService distinguish "curve engaged AND currently writing"
+        // from "curve engaged but window is parked" - the auto-release CurveActive->CurveReleased transition
+        // must not fire during a disabled-period master drag, since hardware is owned by the slider path then.
+        _monitorService.IsInDisabledPeriodQuery = () => _isInCurveDisabledPeriod;
 
         BuildProfileButtonItems();
 
@@ -523,6 +533,14 @@ public partial class BrightnessFlyout : Window, INotifyPropertyChanged
         // (start the periodic timer and run an immediate first evaluation),
         // but skipped during field seeding to avoid running before Monitors and friends were wired up.
         if (_isBrightnessCurveEnabled || _isNightLightCurveEnabled) OnCurveToggleStateChanged();
+
+        // H-21: external Windows changes to night-light enable state (Settings app, scheduled task,
+        // schedule transitions) don't route through our toggle paths, so _isNightLightActive would
+        // otherwise stay stale until the user opened the flyout and a settings save fired
+        // OnAppSettingsChanged as a coincidental refresh.
+        // UserPreferenceChanged / General fires on the night-light registry / CloudStore mutations,
+        // so a cheap re-query on each event keeps the gate at line ~1510 truthful.
+        Microsoft.Win32.SystemEvents.UserPreferenceChanged += OnSystemUserPreferenceChanged;
 
         SourceInitialized += OnFlyoutSourceInitialized;
         Closed += OnFlyoutClosed;
@@ -564,6 +582,58 @@ public partial class BrightnessFlyout : Window, INotifyPropertyChanged
             _hwndSource.RemoveHook(WindowProcHook);
             _hwndSource = null;
         }
+
+        // H-19: stop the 24h preview sweep if one is still running. The DispatcherTimer would
+        // otherwise keep ticking and CompositionTarget.Rendering would keep firing - both rooted
+        // on this window instance, leaking it through the static event handlers.
+        // CancelPreviewSweep is idempotent (early-returns when the timer is null).
+        CancelPreviewSweep();
+
+        // H-18: release every ctor-time subscription so the flyout instance can be GC'd after Close().
+        // Mirrors the wiring block at the bottom of the constructor.
+        MasterMonitor.PropertyChanged -= OnMonitorPropertyChanged;
+        foreach (MonitorInfo m in Monitors)
+            m.PropertyChanged -= OnMonitorPropertyChanged;
+        NightLightMonitor.PropertyChanged -= OnNightLightPropertyChanged;
+        if (_appSettings != null) _appSettings.Changed -= OnAppSettingsChanged;
+        Monitors.CollectionChanged -= OnMonitorsCollectionChanged;
+        _profileManager.SelectedProfileChanged -= OnSelectedProfileChanged;
+        _profileManager.UnsavedChangesStatusChanged -= UpdateSaveButtonState;
+
+        // H-21: matching unsubscribe for the SystemEvents.UserPreferenceChanged hookup.
+        // SystemEvents is a static global, so leaving the handler attached keeps the flyout rooted
+        // forever - including across flyout reconstruction on theme changes.
+        Microsoft.Win32.SystemEvents.UserPreferenceChanged -= OnSystemUserPreferenceChanged;
+
+        // MonitorService queries hold closures over _curveService and _isInCurveDisabledPeriod;
+        // null them out so the service doesn't keep this flyout alive after Close() either.
+        _monitorService.IsBrightnessCurveEnabledQuery = null;
+        _monitorService.MasterBrightnessQuery = null;
+        _monitorService.IsInDisabledPeriodQuery = null;
+
+        // Persist the current Master brightness so the next launch can seed MasterMonitor with a
+        // sensible value during the Phase B settle window instead of flashing the literal default.
+        // Best-effort: if Save throws, the next launch just falls back to the AppSettings default.
+        if (_appSettings != null)
+        {
+            try
+            {
+                int rounded = (int)Math.Round(Math.Clamp(MasterMonitor.Brightness, 0.0, 100.0));
+                if (_appSettings.LastMasterBrightness != rounded)
+                {
+                    _appSettings.LastMasterBrightness = rounded;
+                    _appSettings.Save();
+                }
+            }
+            catch (Exception ex) { WPFLog.Log($"BrightnessFlyout.OnFlyoutClosed: master persist failed: {ex.Message}"); }
+        }
+
+        // H-14: dispose the curve service the flyout owns. Stops its dispatcher timers,
+        // unhooks SystemEvents.TimeChanged + ProfileManager + MonitorService subscriptions.
+        // Safe after the query closures are nulled out - the service's own teardown does not
+        // re-enter back into this flyout.
+        try { _curveService?.Dispose(); }
+        catch (Exception ex) { WPFLog.Log($"BrightnessFlyout.OnFlyoutClosed: curve service dispose failed: {ex.Message}"); }
     }
 
     /// <summary>
@@ -651,12 +721,46 @@ public partial class BrightnessFlyout : Window, INotifyPropertyChanged
 
         m.PropertyChanged += OnMonitorPropertyChanged;
 
-        // Seed this new monitor's offset from the master's current value
-        // so the next master drag shifts it by its current relative position.
-        m.Offset = m.Brightness - MasterMonitor.Brightness;
+        // Topology changes must not rewrite existing monitors' offsets or manual baselines.
+        // Seed only the newly attached row's Offset against the current master, then recompute the
+        // displayed master value under propagation suppression. Existing rows keep the offset snapshot
+        // they had before the topology event, so a staggered monitor acquisition cannot retarget them.
+        _suppressPropagation = true;
+        try
+        {
+            // Per-monitor profile restore (event-driven, fires per Monitors.Add regardless of how
+            // long Phase B took - works whether the monitor arrives in 100ms or an hour).
+            // The settle-deferred Refresh has just enrolled this monitor with its live hardware
+            // brightness, which during a brightness-curve-driven session reflects the curve target,
+            // not the user's saved manual intent. Restore the saved slider value here so the row
+            // shows user intent the instant it appears. When ApplyBrightnessOnStartup is on and the
+            // brightness curve is off, use the same event-driven path to apply the selected profile
+            // to a monitor that arrived after the constructor's bulk profile pass.
+            // SuspendHardwareWrites only for brightness curve ownership: in that state the curve
+            // remains the sole physical-brightness hardware writer.
+            bool restoreBrightnessProfile = _isBrightnessCurveEnabled || _appSettings?.ApplyBrightnessOnStartup == true;
+            if (restoreBrightnessProfile)
+            {
+                IDisposable? hardwareWriteSuspension = _isBrightnessCurveEnabled
+                    ? _monitorService.SuspendHardwareWrites()
+                    : null;
+                try
+                {
+                    _profileManager.ApplyCurrentProfile([m], includeBrightness: true);
+                }
+                finally
+                {
+                    hardwareWriteSuspension?.Dispose();
+                }
+            }
 
-        // Refresh master to reflect the new group membership.
-        UpdateMasterFromEnabledIndividuals();
+            InitializeOffsetFromMaster(m);
+            UpdateMasterFromEnabledIndividuals();
+        }
+        finally
+        {
+            _suppressPropagation = false;
+        }
     }
 
     private void DetachMonitor(MonitorInfo m)
@@ -665,8 +769,17 @@ public partial class BrightnessFlyout : Window, INotifyPropertyChanged
         MasterMonitor.Dependents.Remove(m);
         AllItems.Remove(m);
 
-        // Refresh master now that the set of individuals changed.
-        UpdateMasterFromEnabledIndividuals();
+        // Recompute only the displayed master value. Removing a monitor must not recapture offsets
+        // for surviving rows; their curve/manual baselines should be topology-stable.
+        _suppressPropagation = true;
+        try
+        {
+            UpdateMasterFromEnabledIndividuals();
+        }
+        finally
+        {
+            _suppressPropagation = false;
+        }
     }
 
     /// <summary>
@@ -940,6 +1053,29 @@ public partial class BrightnessFlyout : Window, INotifyPropertyChanged
             }
         }
 
+        // SliderState transitions can change IsParticipatingInMaster membership (Disabled / Failed are
+        // excluded; Enabled / CurveActive / CurveSleeping / CurveReleased participate). When a monitor
+        // joins or leaves the participating set, the master's computed value is stale until the next
+        // user interaction. Re-derive eagerly so the master reflects the current group - covers the
+        // Failed -> Enabled recovery path (PromoteRecovered / PromoteReadDegraded set SliderState
+        // directly), user toggle on/off, and curve engage/disengage transitions.
+        // Suppression mirrors the Brightness-path branch above: the recompute writes
+        // MasterMonitor.Brightness, which we don't want to propagate back to individuals.
+        if (e.PropertyName == nameof(MonitorInfo.SliderState)
+            && sender != MasterMonitor
+            && !_suppressPropagation)
+        {
+            _suppressPropagation = true;
+            try
+            {
+                UpdateMasterFromEnabledIndividuals();
+            }
+            finally
+            {
+                _suppressPropagation = false;
+            }
+        }
+
         // Offset-mode live re-eval: if the user dragged a slider while the brightness curve is engaged in offset mode,
         // the curve's "slider + offset" target moved with them.
         // Ping the throttled re-eval so the next tick writes the new (slider + offset) to hardware
@@ -963,16 +1099,42 @@ public partial class BrightnessFlyout : Window, INotifyPropertyChanged
     /// </summary>
     private void ApplyMasterToEnabledMonitors()
     {
-        foreach (MonitorInfo monitor in Monitors)
+        // Disabled-period gate (H-04):
+        // when a master drag runs inside the curve's disabled-period window,
+        // assigning monitor.Brightness directly would route every individual setter through
+        // MonitorService.OnMonitorPropertyChanged -> OnUserRelease,
+        // silently flipping every CurveActive row to CurveReleased.
+        // After the window ends, HarmonizeBrightnessCurveStates leaves CurveReleased sticky,
+        // so the curve permanently loses control of every monitor.
+        // Wrap the Brightness writes in SuspendHardwareWrites so MonitorService's setter-handler
+        // short-circuits, and route the hardware writes ourselves via EnqueueDirectBrightness
+        // so the panels still track the drag.
+        bool suspendForDisabledPeriod = _isInCurveDisabledPeriod && IsBrightnessCurveEnabled;
+        IDisposable? hardwareWriteSuspension =
+            suspendForDisabledPeriod ? _monitorService.SuspendHardwareWrites() : null;
+        try
         {
-            if (!monitor.IsParticipatingInMaster) continue;
+            foreach (MonitorInfo monitor in Monitors)
+            {
+                if (!monitor.IsParticipatingInMaster) continue;
 
-            double unclamped = MasterMonitor.Brightness + monitor.Offset;
-            // Round the propagated value so each individual slider lands on an integer position;
-            // direct user dragging on an individual slider can still produce fractional Brightness,
-            // but master-driven values must match the int that save / RoundedBrightness will apply.
-            monitor.Brightness = Math.Round(Math.Clamp(unclamped, 0, 100));
-            monitor.VirtualBrightness = unclamped;
+                double unclamped = MasterMonitor.Brightness + monitor.Offset;
+                // Round the propagated value so each individual slider lands on an integer position;
+                // direct user dragging on an individual slider can still produce fractional Brightness,
+                // but master-driven values must match the int that save / RoundedBrightness will apply.
+                double clamped = Math.Round(Math.Clamp(unclamped, 0, 100));
+                monitor.Brightness = clamped;
+                monitor.VirtualBrightness = unclamped;
+
+                // Disabled-period side-channel: setter-driven write was suspended, so push the value
+                // to hardware directly. EnqueueDirectBrightness bypasses the suspension counter by design.
+                if (suspendForDisabledPeriod)
+                    _monitorService.EnqueueDirectBrightness(monitor, (int)clamped);
+            }
+        }
+        finally
+        {
+            hardwareWriteSuspension?.Dispose();
         }
     }
 
@@ -1012,6 +1174,22 @@ public partial class BrightnessFlyout : Window, INotifyPropertyChanged
     private void SelectProfileApplyingMode(int index)
     {
         if (index < 0 || index >= _profileManager.Profiles.Profiles.Count) return;
+
+        // H-09: a profile switch mid-drag (number-key hotkey or profile-button click while the user
+        // is actively dragging a slider) overwrites the in-flight Brightness;
+        // the drag-release then writes the old value back over the freshly-applied profile,
+        // and autosave persists the drift into the profile being switched to.
+        // _draggingSlider catches track-click captures; the IsDragging scan catches thumb drags
+        // (whose capture lives on WPF's native Track.Thumb and never sets _draggingSlider).
+        // Drop the request entirely - the user can re-trigger the switch after releasing the slider.
+        if (_draggingSlider != null
+            || MasterMonitor.IsDragging
+            || NightLightMonitor.IsDragging
+            || Monitors.Any(m => m.IsDragging))
+        {
+            WPFLog.Log($"SelectProfileApplyingMode({index}) skipped: drag in progress");
+            return;
+        }
 
         if (_appSettings != null)
         {
@@ -1125,6 +1303,34 @@ public partial class BrightnessFlyout : Window, INotifyPropertyChanged
         }
     }
 
+    private void InitializeOffsetFromMaster(MonitorInfo monitor)
+    {
+        bool preserve = _appSettings?.PreserveMasterSliderOffsets == true;
+        double source = preserve ? monitor.VirtualBrightness : monitor.LastUserBrightness;
+        monitor.Offset = source - MasterMonitor.LastUserBrightness;
+    }
+
+    /// <summary>
+    /// H-21: refresh the cached night-light active flag whenever Windows broadcasts a general
+    /// user-preference change. Catches external state flips
+    /// (Settings app toggle, schedule transition, scheduled task) so the slider's "is night light on"
+    /// gate in <see cref="BrightnessSlider_ValueChanged"/> doesn't ride a stale value
+    /// until the user touches the flyout.
+    /// IsEnabled() is a cheap registry / CloudStore read,
+    /// so no debounce or throttle is needed here.
+    /// </summary>
+    private void OnSystemUserPreferenceChanged(object? sender, Microsoft.Win32.UserPreferenceChangedEventArgs e)
+    {
+        if (e.Category != Microsoft.Win32.UserPreferenceCategory.General) return;
+        Dispatcher.BeginInvoke(() =>
+        {
+            bool nowActive = NightLightProvider.IsSupported() && NightLightProvider.IsEnabled();
+            if (_isNightLightActive == nowActive) return;
+            _isNightLightActive = nowActive;
+            OnPropertyChanged(nameof(IsNightLightActive));
+        });
+    }
+
     private void OnAppSettingsChanged()
     {
         Dispatcher.BeginInvoke(() =>
@@ -1164,6 +1370,7 @@ public partial class BrightnessFlyout : Window, INotifyPropertyChanged
             OnPropertyChanged(nameof(IsNightLightActive));
             OnPropertyChanged(nameof(ShowNightLightKelvinLabel));
             OnPropertyChanged(nameof(InvertNightLightSlider));
+            OnPropertyChanged(nameof(TurnOffNightLightAtZeroStrength));
             OnPropertyChanged(nameof(IsManualSaveButtonVisible));
             // Curve-related window properties may have flipped
             // (offset mode toggle, indicator visibility setting, curve smoothness, tick interval).
@@ -1483,6 +1690,12 @@ public partial class BrightnessFlyout : Window, INotifyPropertyChanged
         // since both eventually move the master value.
         if (slider.Tag is MonitorInfo { IsMaster: true }) CaptureOffsetsFromMaster();
 
+        // H-10: mark the row as user-dragging for any subsequent curve write path.
+        // PreviewMouseLeftButtonDown fires for both thumb-press and track-click,
+        // so this single hook covers every left-mouse drag start.
+        // Cleared in Slider_PreviewMouseLeftButtonUp (track) and Thumb_DragCompleted (thumb path).
+        if (slider.Tag is MonitorInfo dragMonitor) dragMonitor.IsDragging = true;
+
         Track? track = FindVisualChild<Track>(slider);
         if (track?.Thumb == null) return;
 
@@ -1519,7 +1732,15 @@ public partial class BrightnessFlyout : Window, INotifyPropertyChanged
 
     private void Slider_PreviewMouseLeftButtonUp(object sender, MouseButtonEventArgs e)
     {
-        if (sender is not Slider slider || _draggingSlider != slider) return;
+        if (sender is not Slider slider) return;
+
+        // H-10: clear the row's drag flag on every mouse-up that pairs with the corresponding Down,
+        // whether or not the gesture was a track-capture drag.
+        // Thumb drags also fire MouseLeftButtonUp at the slider level via routed-event bubbling,
+        // so this branch covers them too (Thumb_DragCompleted is the backup for capture-lost scenarios).
+        if (slider.Tag is MonitorInfo monitor) monitor.IsDragging = false;
+
+        if (_draggingSlider != slider) return;
 
         StopDragging(slider);
     }
@@ -1527,6 +1748,30 @@ public partial class BrightnessFlyout : Window, INotifyPropertyChanged
     private void Slider_MouseLeave(object sender, MouseEventArgs e)
     {
         // No-op: keep dragging even if the mouse leaves.
+    }
+
+    /// <summary>
+    /// H-10 thumb-drag start hook.
+    /// Slider raises Thumb.DragStarted as a bubbling routed event from its internal Track.Thumb,
+    /// so listening on the Slider catches every native thumb-drag gesture (mouse, touch, pen).
+    /// PreviewMouseLeftButtonDown also fires for these gestures, so IsDragging is typically already true
+    /// by the time this runs - the redundant assignment is intentional defence-in-depth for any
+    /// non-mouse drag path that skips the preview mouse events.
+    /// </summary>
+    private void Slider_ThumbDragStarted(object sender, DragStartedEventArgs e)
+    {
+        if (sender is Slider { Tag: MonitorInfo monitor }) monitor.IsDragging = true;
+    }
+
+    /// <summary>
+    /// H-10 thumb-drag end hook.
+    /// Companion to <see cref="Slider_ThumbDragStarted"/>; clears the row's drag flag when WPF's
+    /// native Track.Thumb releases capture, including the capture-lost scenarios where the
+    /// PreviewMouseLeftButtonUp pair might never reach the slider.
+    /// </summary>
+    private void Slider_ThumbDragCompleted(object sender, DragCompletedEventArgs e)
+    {
+        if (sender is Slider { Tag: MonitorInfo monitor }) monitor.IsDragging = false;
     }
 
     private void MonitorGrid_PreviewMouseWheel(object sender, MouseWheelEventArgs e)
@@ -1980,6 +2225,16 @@ public partial class BrightnessFlyout : Window, INotifyPropertyChanged
         if (monitor.IsNightLight)
         {
             if (!NightLightProvider.IsSupported()) return;
+
+            // Toggling on while the curve is actively driving: seed the backend with the curve's
+            // current strength so it lands at the curve's warmth instead of NightLightLastNonZeroStrength
+            // (the manual fallback EnsureNonZeroStrengthBeforeEnable would otherwise restore).
+            // Skipped when the curve is sleeping, released, or disengaged - those cases keep the
+            // existing manual-restore behaviour, which matches what the slider thumb is showing.
+            if (!NightLightProvider.IsEnabled()
+                && _curveService?.GetActiveNightLightCurveStrength() is int curveStrength
+                && curveStrength > 0)
+                NightLightProvider.SetStrength(curveStrength, persistAsLastUserValue: false);
 
             NightLightProvider.Toggle();
             _isNightLightActive = NightLightProvider.IsEnabled();

@@ -1,5 +1,6 @@
 @startuml nightlight_control_flow
 !include dark-theme.puml
+' Revised 2026-05-13: applied audit_23/Wave-1-fix amendments
 title Night-light - control flow at runtime (UI gesture -> Provider dispatch -> bracket -> broker -> hardware)
 
 ' ===========================================================================
@@ -25,14 +26,15 @@ left to right direction
 ' 1. App entry points
 ' ---------------------------------------------------------------------------
 package "App entry points" $TINT_BLUE {
-  [Brightness flyout slider\n(BrightnessFlyout.xaml.cs:1394)]   as UI_SLIDER
-  [Brightness flyout NL toggle\n(BrightnessFlyout.xaml.cs:1822)] as UI_TOGGLE
-  [Hotkey ToggleNightLight\n(App.xaml.cs:580)]                   as UI_HOTKEY
-  [Hotkey Increment/Decrement\n(App.xaml.cs:583/586 -> slider)]  as UI_HOTKEY_DELTA
-  [Tooltip / flyout-open read\n(App.xaml.cs:1146 / Flyout:314,1074)] as UI_READ
-  [Environmental curve tick\n(EnvironmentalCurveService:458/721/738)] as UI_CURVE
-  [Display topology relink\n(App.xaml.cs:1132 -> Reapply)]       as UI_RELINK
-  [Profile apply\n(BrightnessFlyout.xaml.cs:380)]                as UI_PROFILE
+  [Brightness flyout slider\n(BrightnessFlyout.xaml.cs)]          as UI_SLIDER
+  [Brightness flyout NL toggle\n(BrightnessFlyout.xaml.cs)]       as UI_TOGGLE
+  [Hotkey ToggleNightLight\n(App.xaml.cs)]                        as UI_HOTKEY
+  [Hotkey Increment/Decrement\n(App.xaml.cs -> slider)]           as UI_HOTKEY_DELTA
+  [Tooltip / flyout-open read\n(App.xaml.cs / Flyout)]            as UI_READ
+  [Environmental curve tick\n(EnvironmentalCurveService)]         as UI_CURVE
+  [Display topology relink\n(App.xaml.cs -> Reapply)]             as UI_RELINK
+  [Profile apply\n(BrightnessFlyout.xaml.cs)]                     as UI_PROFILE
+  [Tray icon wheel TrayWheelTarget.NightLight\n(App.xaml.cs OnTrayScrolled\n-> NightLightMonitor.Brightness)] as UI_TRAY
 }
 
 ' ---------------------------------------------------------------------------
@@ -70,6 +72,7 @@ UI_SLIDER       --> NLP_SET
 UI_HOTKEY_DELTA --> NLP_SET     : via slider write
 UI_PROFILE      --> NLP_SET
 UI_CURVE        --> NLP_SET     : persistAsLastUserValue=false
+UI_TRAY         --> NLP_SET     : via NightLightMonitor.Brightness setter\n(same as flyout slider)
 UI_TOGGLE       --> NLP_TOG
 UI_HOTKEY       --> NLP_TOG
 UI_RELINK       --> NLP_REAPPLY
@@ -92,11 +95,16 @@ note top of NLP_SET
        None            -> no-op
   3. If percent > 0 && persistAsLastUserValue:
        AppSettings.NightLightLastNonZeroStrength := percent
-       (synchronous XML save under _gate; curve callers opt out
-        with persistAsLastUserValue=false to avoid 100x/sec save churn)
+       (M-05 fix: no longer holds _gate across
+        AppSettings.Save so a slow disk cannot
+        block a parallel SetEnabled / Toggle)
   4. If percent == 0
        && AppSettings.TurnOffNightLightAtZeroStrength
-       && IsEnabled() : SetEnabled(false)
+       && IsEnabled():
+         CancelPendingResend on BOTH
+         NightLightRegistry and
+         NightLightSettingsHandler FIRST
+         (M-07 zero-trap fix), then SetEnabled(false)
 end note
 
 note top of NLP_EN
@@ -104,11 +112,12 @@ note top of NLP_EN
   ----
   Guard for the off->on transition only.
   If the active backend reports strength 0,
-  pre-write a restored value via the SYNCHRONOUS
-  per-backend SetStrength (Registry: SetStrength,
-  SettingsHandler: SaveSettingsKelvin) before
-  flipping the on-bit. Otherwise toggling on at 0%
-  produces no visible tint and feels broken.
+  pre-write a restored value via the SPACED
+  pipeline (M-14 fix: now uses
+  EnqueueSetStrengthSpaced rather than a bare
+  synchronous SetStrength, so toggling NL on
+  from strength=0 no longer visibly flickers
+  - DUP-19 closed).
 
   Restored value:
     AppSettings.NightLightLastNonZeroStrength
@@ -187,12 +196,36 @@ note right of REG_RESEND
   EnqueueSetStrengthSpaced cancels the prior pending
   fire - one-shot per quiet period.
 
+  Callback wrapped in try/catch (M-11 fix) so any
+  thrown exception is logged and swallowed rather
+  than tearing down the process from a thread-pool
+  context with no handler.
+
+  CancelPendingResend is now public so the zero-trap
+  fix at NightLightProvider.SetStrength(0) can drop
+  a queued resend before flipping enabled=false.
+
   History: an earlier impl allocated a fresh CTS per
   call and threw OperationCanceledException for every
   supersession. At 60+/sec slider rates the kernel-handle
   + exception churn caused UI hitches even though all
   the work happened on the thread pool. Timer.Change
   is thread-safe and effectively free.
+end note
+
+note over NLP_RESOLVE $TINT_BLUE
+  Registry-only flicker-free bracket
+  ----
+  Uses an IsDragging Bond CB tag (C2 46 01,
+  field 70 BOOL). Probe G+H show that
+  CloudCacheInvalidator only fires for
+  CloudStore-API saves, not raw registry
+  writes - so for the Registry backend the
+  broker observes the bracket purely via its
+  own RegNotifyChangeKeyValue subscription
+  plus the false->true->false IsDragging edges.
+  Debounce is done via Timer.Change (no CTS
+  churn).
 end note
 
 note bottom of REG_STORE
@@ -218,6 +251,8 @@ package "SettingsHandler backend (Interop/NightLight)" $TINT_PURPLE {
   [NightLightCloudStore.EnsureInit\n(MTA thread + LoadLibraryW +\nRVA resolve via known table or PDB +\nBlueLightSingleton::Initialize +\nsanity-check inner ptrs at +272 / +296)] as SH_INIT
 
   [SaveSettingsKelvinAsync(percent)\n3-step RVA bracket via marshalled delegates:\n  setTargetColorTemperature(_singleton, kelvin)\n  setPreviewColorTemperatureChanges(_singleton, 1)\n  setPreviewColorTemperatureChanges(_singleton, 0)\neach call wrapped in IssueWithSaveNotifyAsync] as SH_BRACKET
+
+  [_deferredRegistryTimer\nSystem.Threading.Timer\nNightLightUIHandleryRegistryEnforceDelayMs (500ms),\nlatest-wins by Volatile.Read on\n_deferredStrengthPercent;\ncallback try/catch wrapped (M-11);\nCancelPendingResend cancels it on zero-trap (M-07)] as SH_DEFERRED
 }
 
 NLP_SET --> SH_FACADE : Backend.SettingsHandler
@@ -228,6 +263,21 @@ NLP_TOG --> SH_BRACKET : EnsureNonZeroStrengthBeforeEnable\n(SaveSettingsKelvin 
 
 SH_FACADE --> SH_INIT     : first IsSupported() probe
 SH_FACADE --> SH_BRACKET  : RunAsync(throttled)
+SH_FACADE --> SH_DEFERRED : ArmDeferredRegistryWrite\n(every SetStrength / SetEnabled / Toggle)
+SH_DEFERRED --> REG_SYNC_SET : OnDeferredRegistryTimerFired\n-> NightLightRegistry.SetStrength(latest)\n+ RefreshStateFileTime
+
+note bottom of SH_DEFERRED
+  Belt-and-suspenders settle-write
+  ----
+  Even when SaveSettingsKelvinAsync lands and
+  SHTaskPool successfully bumps the CloudStore
+  version, some 24H2 cohorts still miss the live
+  filter re-evaluate. This deferred fire writes
+  the registry directly (RefreshStateFileTime
+  bump included), guaranteeing the broker sees
+  a state transition. 500ms quiet so a slider
+  drag doesn't issue redundant writes mid-gesture.
+end note
 
 note left of SH_INIT
   Initialize prerequisites
@@ -382,6 +432,25 @@ note bottom of REG_THROTTLE
   NightLightCloudStoreFallbackDwellMs  = 250   (CloudStore path; same fallback)
   NightLightInterWriteDelayMs          = 15    (between bracket steps)
   NightLightUIHandleryRegistryEnforceDelayMs = 500 (resend-timer quiet period; also Settings-handler registry-enforce delay)
+end note
+
+note right of UI_SLIDER $TINT_RESOLVED
+  Slider gate "_isNightLightActive flag"
+  ----
+  BrightnessFlyout now subscribes to
+  SystemEvents.UserPreferenceChanged
+  (category General) and refreshes the
+  cached flag on each tick (H-21 fix).
+  External Windows-Settings flips
+  (Settings app toggle, scheduled
+  transitions, hotkey from another app)
+  are observed promptly so the slider gate
+  is no longer stale.
+
+  Previously the flag updated only on
+  construction, OnAppSettingsChanged,
+  and own toggle. NightLightPulseOnStrengthChange
+  was also removed entirely (H-22).
 end note
 
 @enduml

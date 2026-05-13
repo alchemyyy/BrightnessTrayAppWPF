@@ -1,5 +1,6 @@
 @startuml nightlight_backends
 !include dark-theme.puml
+' Revised 2026-05-13: applied audit_23/Wave-1-fix amendments
 title Night-light dispatch - two live backends, registry as the source of truth
 
 [Caller (UI / hotkey / env curve)] as CALLER
@@ -21,6 +22,7 @@ package "SettingsHandler write path (kelvin only)" $TINT_PURPLE {
   [BlueLightSingleton\n::SetTargetColorTemperature\n::SetPreviewColorTemperatureChanges] as SING
   [SHTaskPool\nSaveSettingsAsync (tag 258)] as SHTP
   [ICloudStore::Save\n(succeeds on SHTaskPool thread)] as CSAVE
+  [NightLightSettingsHandler\n._deferredRegistryTimer\n(System.Threading.Timer,\nNightLightUIHandleryRegistryEnforceDelayMs;\nmirror of NightLightRegistry._resendTimer)] as SHDEF
 }
 
 package "Registry write path (kelvin only)" $TINT_TEAL {
@@ -32,7 +34,7 @@ package "Registry write path (kelvin only)" $TINT_TEAL {
 [BlueLightReductionService\n(broker live filter)] as BROKER
 
 CALLER --> NLP : SetStrength / SetEnabled\nToggle / Reapply / IsEnabled\nGetStrength
-MODE  ..> NLP  : Changed event\ninvalidates cache\nonly when mode flips
+MODE  ..> NLP  : Changed event\nInvalidateBackendCache only when\nNightLightFallbackMode actually moves\n(other AppSettings.Changed fires are no-ops)
 NLP   --> RESOLVE : first call /\non mode change
 
 RESOLVE --> B_SH   : mode == SettingsHandler\n&& CloudStore.IsSupported()
@@ -50,6 +52,8 @@ end note
 
 B_SH  --> CS : SetStrength(percent)\nSaveSettingsKelvinAsync
 B_SH  --> B_REG : Get / IsEnabled\nSetEnabled / Toggle\n(Registry is the read+toggle owner)
+B_SH  --> SHDEF : ArmDeferredRegistryWrite\n(every SetStrength / SetEnabled / Toggle)
+SHDEF --> B_REG : OnDeferredRegistryTimerFired\n-> NightLightRegistry.SetStrength(latest)\n+ RefreshStateFileTime\n(callback wrapped in try/catch - M-11)
 
 CS --> SING : 1) SetTargetColorTemperature(kelvin)\n2) SetPreviewColorTemperatureChanges(1)\n3) SetPreviewColorTemperatureChanges(0)
 SING --> SHTP : queue SaveSettingsAsync\nbetween steps
@@ -94,7 +98,22 @@ note bottom of B_REG
   System.Threading.Timer re-fires the last
   bracket NightLightUIHandleryRegistryEnforceDelayMs after
   the most recent enqueue (one-shot per
-  quiet period, no infinite loop).
+  quiet period, no infinite loop). The same
+  constant is the dueTime for the
+  SettingsHandler backend's
+  _deferredRegistryTimer settle-write.
+
+  Both timer callbacks now wrapped in
+  try/catch (M-11) so background-thread
+  exceptions cannot tear down the process.
+
+  CancelPendingResend is a public method
+  on both NightLightRegistry and
+  NightLightSettingsHandler. The zero-trap
+  fix (M-07) calls it on BOTH backends
+  before SetEnabled(false), so a pending
+  resend can never resurrect a non-zero
+  strength after the user just toggled off.
 
   PulseApply (toggle off then on) is kept
   as a manual recovery primitive only;

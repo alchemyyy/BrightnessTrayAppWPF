@@ -67,6 +67,25 @@ public sealed class MonitorService : IDisposable
     // fresh work.
     private volatile bool _draining;
 
+    // Reentrancy guard for Refresh's Phase B probe pass.
+    // Incremented on every Refresh before Phase B is started or scheduled; async probe continuations
+    // capture the generation and bail when a newer Refresh has already incremented.
+    // Without this, two Refreshes within the post-detection settle window (1.5 s) would stack two
+    // deferred Phase Bs running on stale captured snapshots - producing duplicate add/probe work and
+    // visible churn on the flyout's CollectionChanged path.
+    // ScheduleStartupRecoverySweep's +2s/+5s Refreshes go through Refresh() so they participate in
+    // this generation naturally - the latest scheduled Phase B wins.
+    private int _refreshGen;
+
+    // Wall-clock of the last topology event reported by the caller (via NotifyTopologyEvent).
+    // Phase B uses (now - this) to decide whether the monitor MCU still needs a post-arrival
+    // settle window. Cold-start Refresh from the ctor leaves this at MinValue so Phase B runs
+    // synchronously - the monitors have been connected since boot and don't need a settle.
+    // WM_DEVICECHANGE-driven Refresh from DisplayEventManager sets this to UtcNow before calling
+    // Refresh, so Phase B defers for the remaining settle window. Event-driven gating, no
+    // unconditional 1.5 s delay on the user's startup path.
+    private DateTime _lastTopologyEventUtc = DateTime.MinValue;
+
     /// <summary>
     /// Raised after <see cref="Refresh"/> finishes applying add/remove/handle-refresh mutations.
     /// Always fires on the UI thread.
@@ -74,12 +93,22 @@ public sealed class MonitorService : IDisposable
     public event Action? MonitorsRefreshed;
 
     /// <summary>
-    /// Optional caller-supplied predicate: returns true when an environmental curve (brightness or
-    /// night-light) is currently engaged. Used as the fallback gate for the Failed-recovered paths
+    /// Optional caller-supplied predicate: returns true when the brightness environmental curve is
+    /// currently engaged. Used as the fallback gate for the physical brightness Failed-recovered paths
     /// when no persisted LastBusBrightness is available - keeps the legacy "skip sync when curve is
     /// engaged" behaviour for first-ever-recoveries. Null query -> false.
     /// </summary>
-    public Func<bool>? IsCurveEnabledQuery { get; set; }
+    public Func<bool>? IsBrightnessCurveEnabledQuery { get; set; }
+
+    /// <summary>
+    /// Optional caller-supplied predicate: returns true when the environmental curve's
+    /// disabled-period window is currently passing through. Plumbed into
+    /// <see cref="SliderStateMachine.OnHardwareRecovered"/> on every promote path so a recovered row
+    /// lands directly in CurveActive / CurveSleeping in one PropertyChanged fan-out
+    /// instead of going Enabled -> CurveActive on the curve service's harmonize pass and triggering
+    /// per-row master jitter. Null query -> false.
+    /// </summary>
+    public Func<bool>? IsInDisabledPeriodQuery { get; set; }
 
     /// <summary>
     /// Optional caller-supplied getter for the master row's current brightness. Used on
@@ -267,10 +296,12 @@ public sealed class MonitorService : IDisposable
         // sitting at the old shaped value, which would short-circuit the upcoming re-push.
         entry.LastEnqueuedPercentage = -1;
 
-        // Don't clobber a CurveActive row with the slider value; the curve owns the bus there
+        // Don't clobber a curve-owned row with the slider value; the curve owns the bus there
         // and will pick up the new norm-curve shape on its next tick (EnqueueDirectBrightness
         // inside the curve service applies the same per-monitor curve before sampling).
-        if (info.SliderState == SliderState.CurveActive) return;
+        // This also covers startup before the flyout-owned curve service has harmonized rows into
+        // CurveActive: the persisted brightness-curve flag is enough to suppress slider replay.
+        if (ShouldSuppressSliderBrightnessWrite(info)) return;
 
         // Re-enqueue the current slider position so the new curve takes effect on hardware now.
         // EnqueueDirectBrightness applies the just-updated curve (and floor/ceiling) internally.
@@ -324,9 +355,11 @@ public sealed class MonitorService : IDisposable
         // sitting at the old floor/ceiling, which would short-circuit the upcoming re-push.
         entry.LastEnqueuedPercentage = -1;
 
-        // Don't clobber a CurveActive row with the slider value; the curve owns the bus there
+        // Don't clobber a curve-owned row with the slider value; the curve owns the bus there
         // and the curve service applies the same floor/ceiling clamp on its own writes.
-        if (info.SliderState == SliderState.CurveActive) return;
+        // This also covers startup before the flyout-owned curve service has harmonized rows into
+        // CurveActive: the persisted brightness-curve flag is enough to suppress slider replay.
+        if (ShouldSuppressSliderBrightnessWrite(info)) return;
 
         // Re-enqueue the current slider position so the new cap takes effect on hardware now,
         // not when the user happens to touch the slider next.
@@ -380,6 +413,16 @@ public sealed class MonitorService : IDisposable
     }
 
     /// <summary>
+    /// Called by event sources (currently <see cref="DisplayEventManager"/>) right before a topology-event-driven
+    /// Refresh, to indicate that a real monitor arrival / departure / wake just fired. The next Refresh's
+    /// Phase B uses this timestamp to gate the post-detection settle: monitors that JUST changed state need
+    /// the LG-checksum settle window before being probed; monitors that have been stable since boot do not.
+    /// Cold-start, startup recovery sweep, and DDC recovery rung-3 Refreshes leave this untouched so Phase B
+    /// runs synchronously - no unconditional wait on the user's launch path.
+    /// </summary>
+    public void NotifyTopologyEvent() => _lastTopologyEventUtc = DateTime.UtcNow;
+
+    /// <summary>
     /// Re-enumerates physical monitors and reconciles the <see cref="Monitors"/> collection with the current hardware
     /// topology:
     /// <list type="bullet">
@@ -421,6 +464,13 @@ public sealed class MonitorService : IDisposable
         Dictionary<string, DDCMonitor> latestByID = new(StringComparer.Ordinal);
         Dictionary<string, DDCMonitor> latestByEdidKey = new(StringComparer.Ordinal);
         Dictionary<string, string> edidKeyByID = new(StringComparer.Ordinal);
+        // Port-form key (port:DeviceID, or port:Name fallback) for every enumerated DDC.
+        // Used as the third "still here?" signal to rescue rows whose EDIDKey was minted as port-form
+        // on a cold-start probe that ran before the registry EDID landed. The follow-up Refresh
+        // (startup recovery sweep) finds the same physical panel under an edid:-prefixed key; without
+        // this map the row would look dropped in Phase A and would be destroyed+recreated under the new
+        // edid: key, losing SliderState / Offset / LastUserBrightness / subscriptions.
+        Dictionary<string, DDCMonitor> latestByPortForm = new(StringComparer.Ordinal);
         foreach (DDCMonitor ddc in enumerated)
         {
             string id = ComputeMonitorId(ddc, _activeStrategy);
@@ -431,6 +481,8 @@ public sealed class MonitorService : IDisposable
             string edidKey = ComputeEDIDKey(ddc);
             edidKeyByID[id] = edidKey;
             if (!string.IsNullOrEmpty(edidKey)) latestByEdidKey[edidKey] = ddc;
+            string portForm = ComputePortFormKey(ddc);
+            if (!string.IsNullOrEmpty(portForm)) latestByPortForm[portForm] = ddc;
         }
 
         // Persist a record of every unique display we've seen, keyed by EDIDKey.
@@ -465,6 +517,18 @@ public sealed class MonitorService : IDisposable
             bool stillPresent = !string.IsNullOrEmpty(existing.EDIDKey)
                 ? latestByEdidKey.ContainsKey(existing.EDIDKey)
                 : latestByID.ContainsKey(existing.ID);
+            // EDID-upgrade rescue: a row whose EDIDKey starts with "port:" was minted before EDID was
+            // available. If the underlying port is still present in the enumeration (regardless of
+            // whether it now reports a real EDID), treat it as still here - Phase B will re-key it in
+            // place rather than letting Phase A drop the row and forcing a destroy+recreate. See M-16
+            // / audit_08 F-06.
+            if (!stillPresent
+                && !string.IsNullOrEmpty(existing.EDIDKey)
+                && existing.EDIDKey.StartsWith("port:", StringComparison.Ordinal)
+                && latestByPortForm.ContainsKey(existing.EDIDKey))
+            {
+                stillPresent = true;
+            }
             if (stillPresent) continue;
 
             bool wasEverCapable = !string.IsNullOrEmpty(existing.EDIDKey)
@@ -509,14 +573,48 @@ public sealed class MonitorService : IDisposable
         Dictionary<string, string> capturedEdidKeyByID = edidKeyByID;
         Dictionary<string, string> capturedNameOverrides = nameOverridesByEDID;
         bool capturedStrategyChanged = strategyChanged;
-        _ = Task.Delay(TimeConstants.MonitorPostDetectionSettleDelayMs).ContinueWith(_ =>
+        // latestByPortForm is consumed by Phase A above; Phase B computes its own per-DDC port form
+        // inline via ComputePortFormKey, so no capture is needed here.
+        _ = latestByPortForm;
+
+        // Event-gated settle: only delay Phase B if a topology event actually fired within the settle
+        // window (LG-checksum protection). Cold-start, startup-sweep, and recovery-rung-3 Refreshes
+        // never call NotifyTopologyEvent so _lastTopologyEventUtc is MinValue (or stale by much more
+        // than the settle window), and Phase B starts immediately below. No unconditional 1.5 s wait
+        // on the user's launch path.
+        double elapsedMs = (DateTime.UtcNow - _lastTopologyEventUtc).TotalMilliseconds;
+        int remainingSettleMs = TimeConstants.MonitorPostDetectionSettleDelayMs - (int)elapsedMs;
+        int scheduledGen = Interlocked.Increment(ref _refreshGen);
+        if (remainingSettleMs <= 0)
+        {
+            // No active settle window - start probing immediately. The DDC read retries run off-dispatcher;
+            // row mutations resume on this dispatcher and bail if a newer Refresh superseded this generation.
+            _ = RefreshProbePhaseAsync(
+                capturedLatestByID,
+                capturedEdidKeyByID,
+                capturedNameOverrides,
+                capturedStrategyChanged,
+                scheduledGen);
+            return;
+        }
+
+        // The generation captured above lets the deferred continuation detect a fresher Refresh that
+        // landed during the settle window and bail without running on a stale snapshot.
+        _ = Task.Delay(remainingSettleMs).ContinueWith(_ =>
         {
             if (_disposed || _draining) return;
+            // Threadpool-side gen check: if the gen has already moved past the one we scheduled,
+            // a fresher Refresh is queued and will fire its own Phase B, so dropping this one is fine.
+            if (Volatile.Read(ref _refreshGen) != scheduledGen) return;
             _dispatcher.BeginInvoke(new Action(() =>
             {
                 if (_disposed || _draining) return;
-                RefreshProbePhase(
-                    capturedLatestByID, capturedEdidKeyByID, capturedNameOverrides, capturedStrategyChanged);
+                _ = RefreshProbePhaseAsync(
+                    capturedLatestByID,
+                    capturedEdidKeyByID,
+                    capturedNameOverrides,
+                    capturedStrategyChanged,
+                    scheduledGen);
             }));
         });
     }
@@ -525,41 +623,71 @@ public sealed class MonitorService : IDisposable
     /// Per-monitor probe + reconcile + add phase of <see cref="Refresh"/>.
     /// Split out so a settle delay can sit between the (immediate) enumeration/removal phase and this
     /// (deferred) phase. See the comment block in <see cref="Refresh"/> for the rationale.
-    /// Runs on the UI dispatcher and mutates <see cref="Monitors"/> / <see cref="_entries"/>.
+    /// Runs row mutations on the UI dispatcher; retrying DDC reads are awaited off-dispatcher so
+    /// retry backoffs do not block startup or hot-plug UI.
     /// </summary>
-    private void RefreshProbePhase(
+    private async Task RefreshProbePhaseAsync(
         Dictionary<string, DDCMonitor> latestByID,
         Dictionary<string, string> edidKeyByID,
         Dictionary<string, string> nameOverridesByEDID,
-        bool strategyChanged)
+        bool strategyChanged,
+        int phaseGen)
     {
+        if (!IsRefreshProbePhaseCurrent(phaseGen)) return;
+
         foreach ((string id, DDCMonitor ddc) in latestByID)
         {
             string edidKey = edidKeyByID[id];
+            string portForm = ComputePortFormKey(ddc);
 
             // EDIDKey-first match is what makes power-cycles non-destructive: the same physical panel keeps its
             // MonitorInfo (and the UI / _entries / write-loop state attached to it) across topology shuffles where
             // its OS-assigned display number drifts.
             // ID-based match is the fallback for monitors with empty EDIDs.
+            // Port-form match is the EDID-upgrade rescue: a row minted on a cold-start probe before the
+            // registry EDID landed sits under EDIDKey "port:DeviceID"; the follow-up Refresh sees the same
+            // panel with a real EDID and would otherwise treat it as new. See M-16 / audit_08 F-06.
             MonitorInfo? existingInfo = null;
             if (!string.IsNullOrEmpty(edidKey)) existingInfo = Monitors.FirstOrDefault(m => m.EDIDKey == edidKey);
             existingInfo ??= Monitors.FirstOrDefault(m => m.ID == id);
+            bool reKeyingFromPortForm = false;
+            if (existingInfo == null && !string.IsNullOrEmpty(portForm))
+            {
+                MonitorInfo? portMatch = Monitors.FirstOrDefault(m =>
+                    !string.IsNullOrEmpty(m.EDIDKey)
+                    && m.EDIDKey.StartsWith("port:", StringComparison.Ordinal)
+                    && string.Equals(m.EDIDKey, portForm, StringComparison.Ordinal));
+                if (portMatch != null && !string.Equals(portMatch.EDIDKey, edidKey, StringComparison.Ordinal))
+                {
+                    existingInfo = portMatch;
+                    reKeyingFromPortForm = true;
+                }
+            }
 
             if (existingInfo != null)
             {
-                // Re-key when the user explicitly changed identity strategy.
-                // That's the only legitimate reason to mutate the ID - physical topology shuffles must not, since
-                // every external state store keyed on ID (profiles, hotkey bindings, _entries) would orphan if we
-                // let display-number drift change the ID.
-                if (strategyChanged && existingInfo.ID != id)
+                // Re-key when the user explicitly changed identity strategy, OR when a port-form
+                // EDIDKey is being promoted to its proper edid: identity now that EDID is readable.
+                // Both cases mutate ID/EDIDKey in place rather than destroy+recreate, so SliderState,
+                // Offset, LastUserBrightness, PropertyChanged subscriptions, and the throttler's
+                // queued payload all survive.
+                if ((strategyChanged && existingInfo.ID != id) || reKeyingFromPortForm)
                 {
                     string oldId = existingInfo.ID;
-                    if (_entries.Remove(oldId, out MonitorEntry? movingEntry))
+                    if (oldId != id && _entries.Remove(oldId, out MonitorEntry? movingEntry))
                     {
                         movingEntry.ID = id;
+                        movingEntry.EDIDKey = edidKey;
                         _entries[id] = movingEntry;
                     }
                     existingInfo.ID = id;
+                    if (reKeyingFromPortForm)
+                    {
+                        WPFLog.Log(
+                            $"MonitorService: re-keyed '{existingInfo.Name}' from "
+                            + $"{(string.IsNullOrEmpty(oldId) ? "<empty>" : oldId)} -> {id} "
+                            + $"(EDIDKey upgrade {portForm} -> {edidKey})");
+                    }
                 }
 
                 // Always keep arrangement data fresh - Windows rearrange affects sorting for both supported and
@@ -591,40 +719,58 @@ public sealed class MonitorService : IDisposable
                     entry.DDC.EDIDSerial = ddc.EDIDSerial;
                     entry.DDC.FriendlyName = ddc.FriendlyName;
 
-                    if (TryReadBrightness(ddc, out _, out _, out string? probeError))
+                    // Use the full retry mechanism (80/160/480 backoff + final-attempt RefreshHandle) so
+                    // a single transient read failure (INVALID_DEVICE / INVALID_MESSAGE_CHECKSUM) doesn't
+                    // demote a healthy monitor and produce a ~1-2s warning-glyph blink before the recovery
+                    // loop probes it back. Single-shot reads here were responsible for the curve-toggle
+                    // and topology-event flicker observed in the field.
+                    var probe = await TryReadBrightnessWithRetryAsync(ddc);
+                    if (!IsRefreshProbePhaseCurrent(phaseGen)) return;
+
+                    if (probe.Ok)
                         existingInfo.LastDDCError = null;
                     else
                     {
                         existingInfo.SliderState = SliderStateMachine.OnHardwareFailed();
-                        existingInfo.LastDDCError = probeError;
+                        existingInfo.LastDDCError = probe.Error;
                         _entries.Remove(existingInfo.ID);
                         // Drop any queued write for this monitor - a fresh value applied to a now-demoted entry would
                         // only generate a doomed retry. An in-flight payload is left to drain on its own (it
                         // captured the entry's DDC handle and will release cleanly).
                         _writeThrottler.Drop(existingInfo.ID);
                         WPFLog.Log(
-                            $"MonitorService: demoted '{ddc.Name}' during Refresh re-probe ({probeError})");
+                            $"MonitorService: demoted '{ddc.Name}' during Refresh re-probe ({probe.Error})");
                     }
                 }
                 else
                 {
                     // Previously unsupported - attempt promotion with fresh handles
-                    if (TryReadBrightnessWithRetry(ddc, out uint current, out uint max, out string? promoteError))
+                    var promote = await TryReadBrightnessWithRetryAsync(ddc);
+                    if (!IsRefreshProbePhaseCurrent(phaseGen)) return;
+
+                    if (promote.Ok)
                     {
-                        int percent = max == 0 ? 0 : (int)Math.Round(current * 100.0 / max);
+                        int percent = promote.Max == 0
+                            ? 0
+                            : (int)Math.Round(promote.Current * 100.0 / promote.Max);
                         LogProfileIfMatched(ddc);
                         _entries[existingInfo.ID] = new MonitorEntry
                         {
                             ID = existingInfo.ID,
                             EDIDKey = edidKey,
                             DDC = ddc,
-                            Max = max > 0 ? max : 100,
+                            Max = promote.Max > 0 ? promote.Max : 100,
                         };
                         // Restore Brightness from the persisted last-bus value if we have one; otherwise
                         // fall back to the legacy hardware-read sync (gated on curve state). Going through
                         // the Brightness setter intentionally updates LastUserBrightness too so the slider's
                         // value of record matches the bus value, and we recompute Offset off the same baseline.
                         // See PromoteRecovered for the full rationale.
+                        // Snapshot the curve-state flags once and reuse them for both the bus-sync gate
+                        // and the SliderState transition below - same call cost, single source of truth.
+                        bool curveEngagedAtPromote = IsBrightnessCurveEnabledForHardware();
+                        bool inDisabledAtPromote = IsBrightnessCurveDisabledPeriodActive();
+
                         KnownDisplayEntry? recoverKnown =
                             !string.IsNullOrEmpty(edidKey) ? _knownDisplays.Find(edidKey) : null;
                         if (recoverKnown?.LastBusBrightness is int recoverBus)
@@ -635,31 +781,34 @@ public sealed class MonitorService : IDisposable
                         }
                         else
                         {
-                            bool curveEngagedNow = IsCurveEnabledQuery?.Invoke() == true;
-                            if (!existingInfo.WasCurveDrivenBeforeFailure && !curveEngagedNow)
+                            if (!existingInfo.WasCurveDrivenBeforeFailure && !curveEngagedAtPromote)
                                 existingInfo.SyncBrightnessFromHardware(Math.Clamp(percent, 0, 100));
                         }
-                        // Recovery transitions Failed -> Enabled;
-                        // the curve service's per-tick harmonization picks the row up into CurveActive / CurveSleeping
-                        // if curves are engaged.
-                        // Passing curveEngaged: false here keeps MonitorService free of curve-flag knowledge
-                        // - one source of truth lives in the curve service.
+                        // Recovery transitions Failed -> the right curve-aware state in ONE PropertyChanged fan-out.
+                        // Plumbing the live curve flags here lets the row land directly in CurveActive / CurveSleeping
+                        // when curves are engaged, instead of going Enabled first and getting harmonized after by the
+                        // curve service's MonitorsRefreshed handler (which fired a second PropertyChanged per row and
+                        // produced visible master jitter on cold start).
                         existingInfo.SliderState = SliderStateMachine.OnHardwareRecovered(
-                            existingInfo.SliderState, curveEngaged: false, inDisabledPeriod: false);
+                            existingInfo.SliderState, curveEngagedAtPromote, inDisabledAtPromote);
                         existingInfo.LastDDCError = null;
                         WPFLog.Log($"MonitorService: promoted '{ddc.Name}' to DDC/CI-supported");
                     }
                     else
-                        existingInfo.LastDDCError = promoteError;
+                        existingInfo.LastDDCError = promote.Error;
                 }
                 continue;
             }
 
             // New monitor - try DDC/CI; if it answers, normal path;
             // otherwise add as a disabled row that later refreshes can promote.
-            bool supported =
-                TryReadBrightnessWithRetry(ddc, out uint newCurrent, out uint newMax, out string? newError);
-            int newPct = supported && newMax > 0 ? (int)Math.Round(newCurrent * 100.0 / newMax) : 0;
+            var newRead = await TryReadBrightnessWithRetryAsync(ddc);
+            if (!IsRefreshProbePhaseCurrent(phaseGen)) return;
+
+            bool supported = newRead.Ok;
+            int newPct = supported && newRead.Max > 0
+                ? (int)Math.Round(newRead.Current * 100.0 / newRead.Max)
+                : 0;
 
             // Restore the last-known bus value from displays.json. When the user power-cycles a monitor
             // that drops off OS enumeration entirely, this is the only path that re-creates its
@@ -677,6 +826,10 @@ public sealed class MonitorService : IDisposable
                 ? Math.Clamp(storedBus, 0, 100)
                 : Math.Clamp(newPct, 0, 100);
 
+            SliderState initialSliderState = supported
+                ? InitialHardwareFunctionalSliderState()
+                : SliderState.Failed;
+
             MonitorInfo info = new()
             {
                 ID = id,
@@ -691,9 +844,9 @@ public sealed class MonitorService : IDisposable
                 ArrangementY = ddc.Y,
                 Brightness = seededBrightness,
                 IsPoweredOn = true,
-                LastDDCError = supported ? null : newError,
+                LastDDCError = supported ? null : newRead.Error,
                 IconGlyph = "\uE7F4",
-                SliderState = supported ? SliderState.Enabled : SliderState.Failed,
+                SliderState = initialSliderState,
             };
 
             if (supported)
@@ -704,7 +857,7 @@ public sealed class MonitorService : IDisposable
                     ID = id,
                     EDIDKey = edidKey,
                     DDC = ddc,
-                    Max = newMax > 0 ? newMax : 100,
+                    Max = newRead.Max > 0 ? newRead.Max : 100,
                 };
             }
             else
@@ -746,6 +899,36 @@ public sealed class MonitorService : IDisposable
         ProjectWasEverDDCCapableToMonitors();
 
         MonitorsRefreshed?.Invoke();
+    }
+
+    private bool IsRefreshProbePhaseCurrent(int phaseGen) =>
+        !_disposed && !_draining && Volatile.Read(ref _refreshGen) == phaseGen;
+
+    private Task<(bool Ok, uint Current, uint Max, string? Error)> TryReadBrightnessWithRetryAsync(DDCMonitor ddc) =>
+        Task.Run(() =>
+        {
+            bool ok = TryReadBrightnessWithRetry(ddc, out uint current, out uint max, out string? error);
+            return (ok, current, max, error);
+        });
+
+    private bool IsBrightnessCurveEnabledForHardware() =>
+        IsBrightnessCurveEnabledQuery?.Invoke() ?? _settings.EnvironmentalBrightnessCurveEnabled;
+
+    private bool IsBrightnessCurveDisabledPeriodActive() => IsInDisabledPeriodQuery?.Invoke() == true;
+
+    private SliderState InitialHardwareFunctionalSliderState()
+    {
+        if (!IsBrightnessCurveEnabledForHardware()) return SliderState.Enabled;
+        return IsBrightnessCurveDisabledPeriodActive() ? SliderState.CurveSleeping : SliderState.CurveActive;
+    }
+
+    private bool ShouldSuppressSliderBrightnessWrite(MonitorInfo monitor)
+    {
+        if (monitor.IsMaster || monitor.IsNightLight) return false;
+        if (!IsBrightnessCurveEnabledForHardware()) return false;
+        if (IsBrightnessCurveDisabledPeriodActive()) return false;
+
+        return monitor.SliderState is SliderState.Enabled or SliderState.CurveActive;
     }
 
     /// <summary>
@@ -906,6 +1089,8 @@ public sealed class MonitorService : IDisposable
             int waitMs = ReadRetryBackoffMs(i);
             if (waitMs > 0)
             {
+                // RefreshProbePhaseAsync calls this via Task.Run so these retry backoffs do not block
+                // the dispatcher. Recovery callers already run on a worker thread.
                 try { Thread.Sleep(waitMs); } catch {
                     /* interrupted - fall through to next attempt */
                 }
@@ -1006,6 +1191,15 @@ public sealed class MonitorService : IDisposable
     /// </summary>
     private static string ComputeEDIDKey(DDCMonitor ddc) =>
         ComputeMonitorId(ddc, MonitorIdentityStrategy.EDIDSerial);
+
+    /// <summary>
+    /// Port-form fallback key (always <c>port:</c>-prefixed) regardless of whether EDID is currently
+    /// available. Used to detect "same physical panel, EDID arrived between Refreshes" so a cold-start
+    /// row keyed under <c>port:</c> can be re-keyed in place to its proper <c>edid:</c> identity
+    /// rather than destroyed and recreated. See M-16 / audit_08 F-06.
+    /// </summary>
+    private static string ComputePortFormKey(DDCMonitor ddc) =>
+        ComputeMonitorId(ddc, MonitorIdentityStrategy.HardwarePort);
 
     /// <summary>
     /// Adds any newly-seen displays to <see cref="KnownDisplaysStore"/>
@@ -1258,7 +1452,12 @@ public sealed class MonitorService : IDisposable
                 break;
         }
 
-        if (!TryReadBrightness(ddc, out uint current, out uint max, out string? readError) || max == 0)
+        // Full retry mechanism here: a single failed read isn't strong evidence the read half is broken,
+        // it's almost always a transient blip (INVALID_DEVICE / INVALID_MESSAGE_CHECKSUM under bus
+        // contention). Only after the configured retry budget (80/160/480 ms backoff + final-attempt
+        // RefreshHandle) actually exhausts do we treat the read half as failed and consider promoting
+        // to ReadDegraded.
+        if (!TryReadBrightnessWithRetry(ddc, out uint current, out uint max, out string? readError) || max == 0)
         {
             // Read failed - probe the write half before declaring full failure. DDC/CI reads and writes
             // are physically different I2C transactions and fail independently: monitors with wedged reply
@@ -1312,27 +1511,29 @@ public sealed class MonitorService : IDisposable
     }
 
     /// <summary>
-    /// Sends a no-op brightness write to verify the monitor's write half is alive when reads fail.
+    /// Sends a fixed in-range brightness write to verify the monitor's write half is alive when reads fail.
     /// Used to distinguish full DDC failure (both halves dead) from asymmetric read-degraded state
     /// (writes still land - slider remains usable, no warning glyph required).
-    /// Targets the persisted last-bus brightness when available so the write is visually a no-op;
-    /// falls back to the slider's current value otherwise. Goes through WithDDCLock to serialize
-    /// against any in-flight user write on the same panel.
+    /// The probe only validates that the I2C write-half responds, not that the value is meaningful -
+    /// so any in-range raw VCP value suffices, regardless of the panel's actual max.
+    /// We don't consult _entries.Max here because the Failed -> ReadDegraded transition removes the
+    /// MonitorEntry before this runs, and we can't read capabilities (reads are the half we know is failing).
+    /// Goes through WithDDCLock to serialize against any in-flight user write on the same panel.
     /// </summary>
     private bool TryDDCWriteProbe(MonitorInfo info, DDCMonitor ddc, out string? error)
     {
-        int targetRaw = -1;
-        if (!string.IsNullOrEmpty(info.EDIDKey))
-        {
-            KnownDisplayEntry? entry = _knownDisplays.Find(info.EDIDKey);
-            if (entry?.LastBusBrightness is int bus) targetRaw = bus;
-        }
-        if (targetRaw < 0) targetRaw = (int)Math.Round(info.Brightness);
-        targetRaw = Math.Clamp(targetRaw, 0, 100);
+        // 50 is safe for every DDC brightness range we've ever observed:
+        // - VESA Luminance (0x10) max is at least 100 by spec, often 255 - 50 is mid-range or low end.
+        // - The handful of older panels with max=100 see a ~50% step, which is acceptable for a
+        //   write-half-alive probe on a monitor that's already failing reads.
+        // info parameter retained so the recovery path can pass MonitorInfo context to future probe
+        // strategies (e.g. an entry-aware variant when capability discovery is wired up).
+        _ = info;
+        const uint ProbeRaw = 50;
 
         (bool ok, string? writeErr) = WithDDCLock(ddc, () =>
         {
-            bool wrote = _display.TrySetVCPFeature(ddc, ddc.BrightnessCode, (uint)targetRaw, out string? e);
+            bool wrote = _display.TrySetVCPFeature(ddc, ddc.BrightnessCode, ProbeRaw, out string? e);
             return (wrote, e);
         });
         error = writeErr;
@@ -1370,8 +1571,12 @@ public sealed class MonitorService : IDisposable
             };
         }
 
+        // Plumb the live curve flags so a read-degraded promotion under an engaged curve lands directly
+        // in CurveActive / CurveSleeping rather than Enabled (same H-03 fan-out rationale as PromoteRecovered).
+        bool curveEngagedAtPromote = IsBrightnessCurveEnabledForHardware();
+        bool inDisabledAtPromote = IsBrightnessCurveDisabledPeriodActive();
         info.SliderState = SliderStateMachine.OnHardwareRecovered(
-            info.SliderState, curveEngaged: false, inDisabledPeriod: false);
+            info.SliderState, curveEngagedAtPromote, inDisabledAtPromote);
         info.IsReadDegraded = true;
         info.LastDDCError = readError;
         info.WasEverDDCCapable = true;
@@ -1474,6 +1679,11 @@ public sealed class MonitorService : IDisposable
         // Going through the Brightness setter intentionally also updates LastUserBrightness so the
         // slider's value of record matches the bus value, and we recompute Offset off the same baseline
         // (mirrors AttachMonitor's "freshly-attached monitor gets Offset = Brightness - master").
+        // Snapshot the curve-state flags once and reuse them for both the bus-sync gate
+        // and the SliderState transition below - same call cost, single source of truth.
+        bool curveEngagedAtPromote = IsBrightnessCurveEnabledForHardware();
+        bool inDisabledAtPromote = IsBrightnessCurveDisabledPeriodActive();
+
         KnownDisplayEntry? promoteKnown =
             !string.IsNullOrEmpty(info.EDIDKey) ? _knownDisplays.Find(info.EDIDKey) : null;
         if (promoteKnown?.LastBusBrightness is int promoteBus)
@@ -1484,14 +1694,14 @@ public sealed class MonitorService : IDisposable
         }
         else
         {
-            bool curveEngagedNow = IsCurveEnabledQuery?.Invoke() == true;
-            if (!info.WasCurveDrivenBeforeFailure && !curveEngagedNow)
+            if (!info.WasCurveDrivenBeforeFailure && !curveEngagedAtPromote)
                 info.SyncBrightnessFromHardware(Math.Clamp(pct, 0, 100));
         }
-        // Same Failed -> Enabled transition the Refresh-promotion path uses;
-        // the curve service's per-tick harmonize will pick the row up into CurveActive / Sleeping if needed.
+        // Same Failed -> right-curve-state transition the Refresh-promotion path uses, plumbed with the live
+        // curve flags so the row lands in one PropertyChanged fan-out instead of two (see Refresh inline block
+        // comment for the master-jitter rationale).
         info.SliderState = SliderStateMachine.OnHardwareRecovered(
-            info.SliderState, curveEngaged: false, inDisabledPeriod: false);
+            info.SliderState, curveEngagedAtPromote, inDisabledAtPromote);
         info.IsReadDegraded = false;
         info.LastDDCError = null;
         info.WasEverDDCCapable = true;
@@ -1558,6 +1768,7 @@ public sealed class MonitorService : IDisposable
         if (Volatile.Read(ref _hardwareWritesSuspendCount) > 0) return;
 
         if (sender is not MonitorInfo monitor) return;
+        if (ShouldSuppressSliderBrightnessWrite(monitor)) return;
 
         // Auto-release a CurveActive (or CurveSleeping) row whenever an external write reaches us:
         // tray FullDim/FullBright, scroll-wheel / hotkey delta, profile load, or any other path
@@ -1674,12 +1885,11 @@ public sealed class MonitorService : IDisposable
         foreach (MonitorInfo m in Monitors)
         {
             if (!m.IsHardwareFunctional) continue;
-            // Curve owns the bus on CurveActive rows; pushing the slider value here would clobber
-            // the curve target until the next 5s tick re-applied it. The curve service catches
-            // freshly-promoted rows via its MonitorsRefreshed subscription before this method runs,
-            // so a row that's CurveActive at this point genuinely belongs to the curve.
-            // Other slider-owns-hardware states (Enabled, Disabled, CurveSleeping, CurveReleased) keep the resync.
-            if (m.SliderState == SliderState.CurveActive) continue;
+            // Curve-owned rows must not get the slider value replayed here. This guard also covers
+            // startup before the flyout-owned curve service has harmonized freshly-added rows into
+            // CurveActive; the persisted brightness-curve setting is enough to keep manual replay off
+            // until the curve evaluator applies its direct-write target.
+            if (ShouldSuppressSliderBrightnessWrite(m)) continue;
             // Topology change just landed - the bus value is unknown / wrong,
             // regardless of what EnqueueDirectBrightness last sent.
             // Clear the dedupe sentinel so the upcoming write isn't skipped on a same-pct match.
@@ -1937,9 +2147,9 @@ public sealed class MonitorService : IDisposable
             m.PropertyChanged -= OnMonitorPropertyChanged;
 
         // Flush any pending debounced brightness / offset stamps so a last-moment slider drag
-        // doesn't get lost on shutdown. Safe to call before the throttler teardown - the store's
-        // I/O is independent of DDC writes.
-        try { _knownDisplays.Flush(); } catch { /* best-effort during shutdown */ }
+        // doesn't get lost on shutdown, and dispose the timer (H-15). Dispose internally flushes
+        // and stops the debounce timer so the System.Threading.Timer is not leaked.
+        try { _knownDisplays.Dispose(); } catch { /* best-effort during shutdown */ }
 
         // Tear down the throttler - cancels any in-flight payload at its next dwell-await
         // and rejects further enqueues. In-flight DDC ops still finish naturally on their threadpool thread.

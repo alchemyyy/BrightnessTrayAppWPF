@@ -94,8 +94,19 @@ public partial class NormCurveEditor : UserControl
 
     /// <summary>
     /// Raised whenever a control point is added, removed, or moved.
+    /// Fires per MouseMove during a drag so the editor itself (and other live consumers)
+    /// can repaint - but heavy persistence should hook <see cref="CurveDragCompleted"/> instead
+    /// to avoid one-write-per-sample churn.
     /// </summary>
     public event Action? CurveChanged;
+
+    /// <summary>
+    /// Raised once after a thumb drag settles (mouse-up), and after non-drag mutations
+    /// (click-to-add, right-click-to-remove). Hosts that persist to disk should subscribe
+    /// here rather than to <see cref="CurveChanged"/> so a 1-second drag results in one save,
+    /// not ~120.
+    /// </summary>
+    public event Action? CurveDragCompleted;
 
     public NormCurveEditor()
     {
@@ -109,11 +120,18 @@ public partial class NormCurveEditor : UserControl
     /// Replaces the editor's point list with the supplied collection.
     /// The list is held by reference, so in-place mutations on the list outside the editor
     /// stay reflected on the next <see cref="Redraw"/>.
+    /// If a drag is in flight when SetPoints lands (e.g. a hot-plug refresh races a thumb drag
+    /// and the host recycles the DataTemplate), Mouse.Capture must be released
+    /// so the dangling capture doesn't swallow input for the rest of the gesture.
     /// </summary>
     public void SetPoints(List<NormCurvePoint> points)
     {
+        if (_dragPoint != null)
+        {
+            _dragPoint = null;
+            if (PlotCanvas.IsMouseCaptured) PlotCanvas.ReleaseMouseCapture();
+        }
         _points = points;
-        _dragPoint = null;
         _hoveredThumb = null;
         EnsureMinimumNodes();
         Redraw();
@@ -448,7 +466,10 @@ public partial class NormCurveEditor : UserControl
         double y = Math.Clamp(FromScreenY(pos.Y, h), DataMin, DataMax);
         _points.Add(new NormCurvePoint { X = x, Y = y });
         Redraw();
+        // Add is a single discrete edit (no drag), so fire both events: CurveChanged for live
+        // visuals (anything else watching), CurveDragCompleted for one-shot persistence.
         CurveChanged?.Invoke();
+        CurveDragCompleted?.Invoke();
         e.Handled = true;
     }
 
@@ -470,7 +491,10 @@ public partial class NormCurveEditor : UserControl
         // but EnsureMinimumNodes keeps the invariant intact even if the protection logic is ever bypassed.
         EnsureMinimumNodes();
         Redraw();
+        // Right-click delete is a single discrete edit, treat like add: notify visuals AND fire the
+        // persist-friendly completion event.
         CurveChanged?.Invoke();
+        CurveDragCompleted?.Invoke();
         e.Handled = true;
     }
 
@@ -528,7 +552,10 @@ public partial class NormCurveEditor : UserControl
         if (_dragPoint is null) return;
         _dragPoint = null;
         PlotCanvas.ReleaseMouseCapture();
+        // CurveChanged keeps firing for the final-position repaint;
+        // CurveDragCompleted is the once-per-drag boundary persistence hooks key off of.
         CurveChanged?.Invoke();
+        CurveDragCompleted?.Invoke();
     }
 
     private void PlotCanvas_MouseEnter(object sender, MouseEventArgs e)

@@ -1,4 +1,5 @@
 @startuml event_flow
+' Revised 2026-05-13: applied audit_23/H-01/H-03/H-22 amendments
 !include dark-theme.puml
 title Event Flow - Win32 messages -> .NET events -> handlers
 
@@ -41,6 +42,9 @@ package "App + Services" $TINT_AMBER {
   [AppTheme]                                                            as ATH
   [NightLightProvider.Reapply]                                          as NLR
   [DDCRecoveryService]                                                  as DRS
+  [UpdateCheckService\n(GitHub poller)]                                 as UCS
+  [MonitorBrightnessRangeProvider]                                      as MBR
+  [App.OnUpdateStateChanged /\nOnUpdateBalloonClicked]                  as AUSC
 }
 
 ' ------------ Win32 -> message-only HWNDs ------------
@@ -67,8 +71,26 @@ AOD --> MSRA : ReapplySliderState()
 AOD --> NLR  : NightLightProvider.Reapply()
 AOD --> RTR
 
-MSR ..> AOMRH : MonitorsRefreshed event\n(also subscribed by DEM and DRS\nfor short-circuit / candidate refresh)
+MSR ..> AOMRH : MonitorsRefreshed event\n(fan-out: DEM short-circuit, DRS candidate refresh,\nECS immediate Evaluate, MBR resubscribe)
 AOMRH --> GHS : Apply(_appSettings.Hotkeys)\n(re-register per-monitor bindings)
+MSR ..> ECS  : MonitorsRefreshed -> OnMonitorsRefreshed\n(immediate Evaluate so freshly-promoted rows\nharmonize before ReapplySliderState)
+MSR ..> DRS  : MonitorsRefreshed -> re-check\nrecovery candidates
+MSR ..> MBR  : MonitorsRefreshed -> Resubscribe
+DRS ..> MBR  : MonitorAbandoned event\n(per-monitor settle stamps)
+
+note right of MSR
+  fixed (H-01): Refresh has a _refreshGen
+  Volatile-checked reentrancy guard so a second
+  Refresh within the 1.5 s Phase-B window
+  supersedes the first instead of stacking.
+  WM_DEVICECHANGE coalescer: 250 ms fast path
+  fires exactly once per window (OnCoalesceTick
+  Stops the timer before invoking; Kick does
+  Stop+Start per signal). Burst counter resets
+  on each hot-plug but the single periodic
+  instance lives until AllProfileMonitorsLoaded
+  short-circuits OR counter hits 10.
+end note
 
 ' ------------ Hotkeys ------------
 GHS --> AOH : Fired event (UI thread)
@@ -80,6 +102,12 @@ AOH --> NLR : ToggleNightLight /\nIncr/Decr NightLight
 SNI --> AOT  : LeftClick / RightClick /\nLeftDoubleClick / Scrolled
 SNI --> RTR  : RefreshNeeded\n(taskbar restart timer)
 SNI --> TIM  : TooltipPopup\n-> SetTooltip (bypasses cooldown)
+TIM --> AUSC : BalloonClicked\n-> OnUpdateBalloonClicked\n-> ShowBrightnessFlyout + RequestUpdatePrompt
+
+' ------------ Auto-update path ------------
+UCS  ..> AUSC : StateChanged -> OnUpdateStateChanged\n-> flyout.NotifyUpdateStateChanged
+UCS  --> TIM  : ShowBalloon (new version available)
+AUSC --> BFL  : NotifyUpdateStateChanged /\nShow + RequestUpdatePrompt
 
 AOT --> BFL : ShowBrightnessFlyout / wheel adjust
 AOT --> SWN : OpenSettings

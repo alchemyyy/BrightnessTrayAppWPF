@@ -1647,24 +1647,6 @@ namespace BrightnessTrayAppWPF.Localization {
         }
         
         /// <summary>
-        ///   Looks up a localized string similar to If sliding the night-light strength does nothing visible until you toggle night light off and back on, enable this. Each strength change is followed by a brief off/on pulse so Windows re-applies the new value. Adds a momentary flicker per change. Applies to whichever backend is selected..
-        /// </summary>
-        public static string Settings_General_NightLightPulseOnStrengthChange_Description {
-            get {
-                return ResourceManager.GetString("Settings_General_NightLightPulseOnStrengthChange_Description", resourceCulture);
-            }
-        }
-        
-        /// <summary>
-        ///   Looks up a localized string similar to Force-apply strength changes.
-        /// </summary>
-        public static string Settings_General_NightLightPulseOnStrengthChange_Title {
-            get {
-                return ResourceManager.GetString("Settings_General_NightLightPulseOnStrengthChange_Title", resourceCulture);
-            }
-        }
-        
-        /// <summary>
         ///   Looks up a localized string similar to Not installed. Will be placed at &quot;{0}&quot;.{1}.
         /// </summary>
         public static string Settings_General_NotInstalled_Format {

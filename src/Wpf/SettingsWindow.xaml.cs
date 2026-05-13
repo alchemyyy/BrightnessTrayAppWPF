@@ -6,6 +6,7 @@ using System.Windows.Interop;
 using BrightnessTrayAppWPF.Interop;
 using BrightnessTrayAppWPF.Models;
 using BrightnessTrayAppWPF.Services;
+using BrightnessTrayAppWPF.Visuals;
 using BrightnessTrayAppWPF.WPF.Settings.Utils;
 using Application = System.Windows.Application;
 using RadioButton = System.Windows.Controls.RadioButton;
@@ -248,15 +249,7 @@ public partial class SettingsWindow : Window, IConfirmDialogService, IThemeHost
         }
     }
 
-    private bool ResolveEffectiveIsLight()
-    {
-        return _settings.ThemeMode switch
-        {
-            Models.ThemeMode.Light => true,
-            Models.ThemeMode.Dark => false,
-            _ => AppServices.Theme?.IsLightTheme ?? false,
-        };
-    }
+    private bool ResolveEffectiveIsLight() => AppTheme.ResolveEffectiveIsLightTheme(_settings);
 
     private void UpdateMaximizeGlyph()
     {

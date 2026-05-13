@@ -5,6 +5,7 @@ using System.Runtime.CompilerServices;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
+using System.Windows.Threading;
 using BrightnessTrayAppWPF.DDCCI;
 using BrightnessTrayAppWPF.Localization;
 using BrightnessTrayAppWPF.Models;
@@ -326,6 +327,15 @@ public partial class MonitorsPage : UserControl
     private readonly ObservableCollection<MonitorListEntry> _monitors = [];
     private SettingsDragController? _monitorDrag;
 
+    // Trailing-edge debounce for per-monitor override spinner commits.
+    // A user clicking the up arrow ten times in two seconds used to fire ten SaveAndNotify
+    // calls (each one a synchronous settings.xml write plus a full reapply fanout across
+    // MonitorService/NightLightProvider/Tray/Hotkeys); the timer coalesces a burst into one
+    // save once the clicking settles. 200ms matches the comfortable double-click cadence -
+    // a long pause means the user is done, so we commit.
+    private const int SpinnerCommitDebounceMs = 200;
+    private DispatcherTimer? _spinnerCommitTimer;
+
     public MonitorsPage()
     {
         InitializeComponent();
@@ -402,6 +412,9 @@ public partial class MonitorsPage : UserControl
 
     private void OnUnloaded(object sender, RoutedEventArgs e)
     {
+        // Flush any in-flight debounced spinner commit so the user's last click
+        // doesn't get dropped when the settings window closes mid-burst.
+        FlushPendingSpinnerCommit();
         DetachMonitorServiceEvents();
         if (_settings != null) _settings.Changed -= OnSettingsChanged;
     }
@@ -423,7 +436,9 @@ public partial class MonitorsPage : UserControl
     {
         if (_settings == null) return;
 
-        _monitors.Clear();
+        // A live drag against the soon-to-be-rebuilt containers would carry stale indices
+        // across the refresh and corrupt MonitorOrder at mouse-up. Cancel before we touch the list.
+        if (_monitorDrag != null && _monitorDrag.IsDragging) _monitorDrag.CancelDrag();
 
         IReadOnlyList<MonitorInfo> liveMonitors = _monitorService?.Monitors
             ?? (IReadOnlyList<MonitorInfo>)[];
@@ -432,8 +447,11 @@ public partial class MonitorsPage : UserControl
             .GroupBy(m => m.ID, StringComparer.Ordinal)
             .ToDictionary(g => g.Key, g => g.Last(), StringComparer.Ordinal);
 
-        // Active monitors first, in MonitorService's already-sorted order (manual pinning + default
-        // sort honored). Track covered EDIDKeys so we can append the dimmed "ever-seen" displays after.
+        // Build the desired sequence of (EDIDKey, MonitorInfo-or-null) up front so we can
+        // diff against the current _monitors list before mutating anything.
+        // Active monitors first, in MonitorService's already-sorted order;
+        // then dimmed inactive entries alphabetised by original label.
+        List<MonitorInfo> activeOrdered = [];
         HashSet<string> seen = new(StringComparer.Ordinal);
         foreach (MonitorInfo m in liveMonitors)
         {
@@ -441,22 +459,131 @@ public partial class MonitorsPage : UserControl
 
             if (!seen.Add(m.EDIDKey)) continue;
 
-            _monitors.Add(BuildLiveEntry(m, ddcOverrides));
+            activeOrdered.Add(m);
         }
 
-        // Inactive (previously-seen, not currently connected) displays at the bottom,
-        // alphabetised by their original label so the order is stable across sessions.
-        IEnumerable<KnownDisplayEntry> inactive = _settings.KnownDisplays
+        // TODO(known-displays): _settings.KnownDisplays is stale after the displays.json
+        // extraction - MonitorService now writes to KnownDisplaysStore (the JSON file)
+        // and no longer updates _settings.KnownDisplays. The newly-extracted store would
+        // need to be exposed via AppServices (or threaded through LoadFromSettings) for
+        // this list to surface freshly-plugged-in displays without a settings reload.
+        // Until the store is reachable from page code, fall back to the legacy field so
+        // the page at least renders something - users still see migration-seeded entries.
+        List<KnownDisplayEntry> inactiveOrdered = [.. _settings.KnownDisplays
             .Where(k => !string.IsNullOrEmpty(k.EDIDKey) && !seen.Contains(k.EDIDKey))
             .OrderBy(
                 k => string.IsNullOrEmpty(k.OriginalName) ? k.EDIDKey : k.OriginalName,
-                StringComparer.OrdinalIgnoreCase);
-        foreach (KnownDisplayEntry k in inactive)
-            _monitors.Add(BuildInactiveEntry(k, ddcOverrides));
+                StringComparer.OrdinalIgnoreCase)];
+
+        // No-structural-change fast path: same EDIDKey sequence, same active/inactive split.
+        // Refresh just the live-data fields (DisplayNumber, IsActive) and any override
+        // changes; do NOT rebuild the ObservableCollection.
+        // Preserves: scroll position, focus, an open NormCurveEditor mid-edit, the WPF
+        // ItemContainer instances the drag controller may have already snapshotted.
+        if (TryUpdateInPlace(activeOrdered, inactiveOrdered, ddcOverrides))
+        {
+            RefreshPlaceholders();
+            return;
+        }
+
+        // Structural change: preserve per-row IsNormCurveEditorOpen so a refresh that does
+        // shuffle rows around doesn't collapse an editor the user is still working in.
+        // The ItemControl will recycle DataTemplates anyway, but persisting the open flag
+        // keeps the visual state consistent for surviving rows.
+        Dictionary<string, bool> openEditors = _monitors
+            .Where(e => !string.IsNullOrEmpty(e.EDIDKey) && e.IsNormCurveEditorOpen)
+            .ToDictionary(e => e.EDIDKey, e => true, StringComparer.Ordinal);
+
+        _monitors.Clear();
+
+        foreach (MonitorInfo m in activeOrdered)
+        {
+            MonitorListEntry entry = BuildLiveEntry(m, ddcOverrides);
+            if (openEditors.ContainsKey(entry.EDIDKey)) entry.IsNormCurveEditorOpen = true;
+            _monitors.Add(entry);
+        }
+
+        foreach (KnownDisplayEntry k in inactiveOrdered)
+        {
+            MonitorListEntry entry = BuildInactiveEntry(k, ddcOverrides);
+            if (openEditors.ContainsKey(entry.EDIDKey)) entry.IsNormCurveEditorOpen = true;
+            _monitors.Add(entry);
+        }
 
         MonitorListPanel.ItemsSource = _monitors;
 
         RefreshPlaceholders();
+    }
+
+    // Returns true when the existing _monitors list already has the same EDIDKey sequence
+    // (and same active/inactive split) as the incoming snapshot. In that case the only
+    // changes possible are live-data updates - DisplayNumber, IsActive transitions, or
+    // override property tweaks - which we apply in-place without disturbing the
+    // ObservableCollection's identity (or the visual containers bound to it).
+    // Returns false when the sets/orders differ; caller falls back to the rebuild path.
+    private bool TryUpdateInPlace(
+        List<MonitorInfo> activeOrdered,
+        List<KnownDisplayEntry> inactiveOrdered,
+        Dictionary<string, MonitorOverrideEntry> ddcOverrides)
+    {
+        int expected = activeOrdered.Count + inactiveOrdered.Count;
+        if (_monitors.Count != expected) return false;
+
+        // Order check: walk both sequences in parallel and require byte-exact EDIDKey match,
+        // plus matching IsActive flag at each slot.
+        for (int i = 0; i < activeOrdered.Count; i++)
+        {
+            MonitorListEntry existing = _monitors[i];
+            if (!existing.IsActive) return false;
+            if (!string.Equals(existing.EDIDKey, activeOrdered[i].EDIDKey, StringComparison.Ordinal))
+                return false;
+        }
+        for (int i = 0; i < inactiveOrdered.Count; i++)
+        {
+            MonitorListEntry existing = _monitors[activeOrdered.Count + i];
+            if (existing.IsActive) return false;
+            if (!string.Equals(existing.EDIDKey, inactiveOrdered[i].EDIDKey, StringComparison.Ordinal))
+                return false;
+        }
+
+        // Sequence + split match: refresh live-data fields without rebuilding the rows.
+        for (int i = 0; i < activeOrdered.Count; i++)
+        {
+            MonitorListEntry existing = _monitors[i];
+            MonitorInfo m = activeOrdered[i];
+            ddcOverrides.TryGetValue(m.EDIDKey, out MonitorOverrideEntry? ov);
+            existing.DisplayNumber = m.DisplayNumber;
+            existing.IsActive = m.DisplayNumber > 0;
+            ApplyOverrideToEntry(existing, ov);
+        }
+        for (int i = 0; i < inactiveOrdered.Count; i++)
+        {
+            MonitorListEntry existing = _monitors[activeOrdered.Count + i];
+            KnownDisplayEntry k = inactiveOrdered[i];
+            ddcOverrides.TryGetValue(k.EDIDKey, out MonitorOverrideEntry? ov);
+            existing.DisplayNumber = 0;
+            existing.IsActive = false;
+            ApplyOverrideToEntry(existing, ov);
+        }
+        return true;
+    }
+
+    // Mutates the entry's override-sourced fields from the (possibly-null) override row.
+    // Property setters guard against no-op writes so PropertyChanged storms don't fire
+    // when the override is unchanged across the refresh.
+    private static void ApplyOverrideToEntry(MonitorListEntry entry, MonitorOverrideEntry? ov)
+    {
+        entry.NameOverride = ov?.Name ?? string.Empty;
+        entry.ValidationDwellOverride = ov?.ValidationDwellMs ?? -1;
+        entry.BrightnessDwellOverride = ov?.BrightnessDwellMs ?? -1;
+        entry.MinBrightnessOverride = ov?.MinBrightness ?? 0;
+        entry.MaxBrightnessOverride = ov?.MaxBrightness ?? 100;
+        entry.PowerOffVcpOverride = ov?.PowerOffVcpOverride ?? string.Empty;
+        entry.BrightnessVcpOverride = ov?.BrightnessVcpOverride ?? string.Empty;
+        // NormCurvePoints is intentionally NOT touched in the in-place path: the editor
+        // mutates entry.NormCurvePoints by reference during drag, and overwriting it from
+        // the persisted override would clobber a live edit. The persist path keeps the
+        // override entry in sync; a structural-change rebuild covers any external clear.
     }
 
     // Pushes the dimmed default-value strings shown inside per-monitor override controls.
@@ -693,6 +820,9 @@ public partial class MonitorsPage : UserControl
     // over by reference so edits land back on the entry, and subscribes a row-scoped handler
     // for persistence. Loaded can fire more than once per element (template recycling), so the
     // editor's Tag stores the previous handler to detach before re-subscribing.
+    // Persistence rides CurveDragCompleted (one fire per drag) instead of CurveChanged
+    // (one fire per MouseMove sample) so a 1-second drag results in a single XML write
+    // and a single MonitorService reconciliation pass.
     private void NormCurveEditor_Loaded(object sender, RoutedEventArgs e)
     {
         if (sender is not NormCurveEditor editor) return;
@@ -701,11 +831,11 @@ public partial class MonitorsPage : UserControl
 
         editor.SetPoints(entry.NormCurvePoints);
 
-        if (editor.Tag is Action previous) editor.CurveChanged -= previous;
+        if (editor.Tag is Action previous) editor.CurveDragCompleted -= previous;
 
         Action handler = () => PersistRowNormCurve(entry);
         editor.Tag = handler;
-        editor.CurveChanged += handler;
+        editor.CurveDragCompleted += handler;
     }
 
     private void PersistRowNormCurve(MonitorListEntry entry)
@@ -714,9 +844,29 @@ public partial class MonitorsPage : UserControl
 
         if (string.IsNullOrEmpty(entry.EDIDKey)) return;
 
-        UpdateMonitorOverride(entry.EDIDKey, o => o.NormCurvePoints =
-            [.. entry.NormCurvePoints.Select(p => new NormCurvePoint { X = p.X, Y = p.Y })]);
+        // Identity fast path: a default-seeded (0,0)+(100,100) curve maps every input
+        // to itself, so persisting it would cost an InterpolateLinear+Round per DDC write
+        // for no behavioural change. Strip the points so UpdateMonitorOverride's "drop empty row"
+        // path can also discard the override entry entirely when nothing else is set.
+        bool identity = IsIdentityCurve(entry.NormCurvePoints);
+        UpdateMonitorOverride(entry.EDIDKey, o => o.NormCurvePoints = identity
+            ? []
+            : [.. entry.NormCurvePoints.Select(p => new NormCurvePoint { X = p.X, Y = p.Y })]);
         SaveAndNotify();
+    }
+
+    // Identity = exactly two points at (0,0) and (100,100) - the editor's default seed.
+    // Tiny epsilon absorbs the floating-point residue a quick drag-back-to-corner can leave.
+    private const double IdentityCurveEpsilon = 0.001;
+    private static bool IsIdentityCurve(List<NormCurvePoint> points)
+    {
+        if (points.Count != 2) return false;
+
+        List<NormCurvePoint> ordered = [.. points.OrderBy(p => p.X)];
+        return Math.Abs(ordered[0].X - 0.0) < IdentityCurveEpsilon
+            && Math.Abs(ordered[0].Y - 0.0) < IdentityCurveEpsilon
+            && Math.Abs(ordered[1].X - 100.0) < IdentityCurveEpsilon
+            && Math.Abs(ordered[1].Y - 100.0) < IdentityCurveEpsilon;
     }
 
     // Raw VCP override textbox commit handler.
@@ -791,6 +941,43 @@ public partial class MonitorsPage : UserControl
             default:
                 return;
         }
+        // The in-memory MonitorOverrides list is already mutated above so a follow-on read
+        // (e.g. UpdateMonitorOverride's "drop empty row" path) sees the latest values immediately.
+        // What we debounce is the disk write + RaiseChanged fanout, which is the expensive
+        // part during a rapid-click burst.
+        ScheduleSpinnerCommit();
+    }
+
+    // (Re)starts the debounce timer.
+    // First tick after a quiet period fires the SaveAndNotify; subsequent ticks
+    // inside the window simply push the deadline forward.
+    private void ScheduleSpinnerCommit()
+    {
+        if (_spinnerCommitTimer == null)
+        {
+            _spinnerCommitTimer = new DispatcherTimer
+            {
+                Interval = TimeSpan.FromMilliseconds(SpinnerCommitDebounceMs),
+            };
+            _spinnerCommitTimer.Tick += OnSpinnerCommitTimerTick;
+        }
+        _spinnerCommitTimer.Stop();
+        _spinnerCommitTimer.Start();
+    }
+
+    private void OnSpinnerCommitTimerTick(object? sender, EventArgs e)
+    {
+        _spinnerCommitTimer?.Stop();
+        SaveAndNotify();
+    }
+
+    // Flushes any pending debounced spinner commit so a focus-change or page-close
+    // doesn't lose the last edit. Cheap no-op when nothing is pending.
+    private void FlushPendingSpinnerCommit()
+    {
+        if (_spinnerCommitTimer == null) return;
+        if (!_spinnerCommitTimer.IsEnabled) return;
+        _spinnerCommitTimer.Stop();
         SaveAndNotify();
     }
 

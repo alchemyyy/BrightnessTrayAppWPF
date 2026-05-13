@@ -1,3 +1,4 @@
+using System.Runtime.CompilerServices;
 using System.Windows.Controls;
 using System.Windows.Input;
 using BrightnessTrayAppWPF.Models;
@@ -42,7 +43,6 @@ public static class SettingsBindings
         ["ShowNightLightKelvinLabel"] = (s, v) => s.ShowNightLightKelvinLabel = v,
         ["InvertNightLightSlider"] = (s, v) => s.InvertNightLightSlider = v,
         ["TurnOffNightLightAtZeroStrength"] = (s, v) => s.TurnOffNightLightAtZeroStrength = v,
-        ["NightLightPulseOnStrengthChange"] = (s, v) => s.NightLightPulseOnStrengthChange = v,
         ["DynamicIconTrackEnabledOnly"] = (s, v) => s.DynamicIconTrackEnabledOnly = v,
         ["EnableRoundedCorners"] = (s, v) => s.EnableRoundedCorners = v,
     };
@@ -142,11 +142,19 @@ public static class SettingsBindings
         if (postActions != null && postActions.TryGetValue(name, out Action<TOwner>? post)) post(owner);
     }
 
+    // Per-spinner handler registry so BindSpinner is safe to re-call (audit_20 MED).
+    // Pages' LoadFromSettings docstrings advertise re-callable seeding; without this, each re-call would
+    // stack another anonymous closure on the spinner's ValueChanged event - growing handler count and firing
+    // saveAndNotify N times per edit.
+    // ConditionalWeakTable so the table never roots the spinner itself; entries evaporate when the spinner is GC'd.
+    private static readonly ConditionalWeakTable<NumericSpinner, EventHandler<int>> SpinnerHandlers = new();
+
     /// <summary>
     /// Seeds a NumericSpinner from <paramref name="read"/>
     /// and wires its ValueChanged event to <paramref name="write"/> + <paramref name="saveAndNotify"/>.
     /// <paramref name="suppress"/> short-circuits the handler while a page is doing a programmatic load,
     /// and a no-op guard skips writes when the new value already matches the underlying setting.
+    /// Safe to call multiple times on the same spinner: any previously attached handler is detached first.
     /// </summary>
     public static void BindSpinner(
         NumericSpinner spinner,
@@ -155,8 +163,18 @@ public static class SettingsBindings
         Func<bool> suppress,
         Action saveAndNotify)
     {
+        // Detach any prior handler attached by an earlier BindSpinner call on the same spinner.
+        // Without this, every re-seed (e.g. SettingsWindow re-navigates to the page) would leave the previous
+        // closure live and double-fire saveAndNotify with stale settings/suppress/read references.
+        if (SpinnerHandlers.TryGetValue(spinner, out EventHandler<int>? existing))
+        {
+            spinner.ValueChanged -= existing;
+            SpinnerHandlers.Remove(spinner);
+        }
+
         spinner.Value = read();
-        spinner.ValueChanged += (_, v) =>
+
+        EventHandler<int> handler = (_, v) =>
         {
             if (suppress()) return;
 
@@ -165,6 +183,9 @@ public static class SettingsBindings
             write(v);
             saveAndNotify();
         };
+
+        spinner.ValueChanged += handler;
+        SpinnerHandlers.Add(spinner, handler);
     }
 
     /// <summary>

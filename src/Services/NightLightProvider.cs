@@ -132,8 +132,12 @@ internal static class NightLightProvider
             && _settings != null
             && _settings.NightLightLastNonZeroStrength != percent)
         {
-            _settings.NightLightLastNonZeroStrength = percent;
-            try { lock (_gate) _settings.Save(); }
+            // Update the property under the gate, then Save outside the gate. AppSettings.Save is a
+            // synchronous XML write on the calling thread (UI thread on slider drags); holding _gate across
+            // it would block backend-cache resolution / settings-changed reentrancy for the full I/O.
+            AppSettings settings = _settings;
+            lock (_gate) settings.NightLightLastNonZeroStrength = percent;
+            try { settings.Save(); }
             catch (Exception ex)
             { WPFLog.Log($"NightLightProvider.SetStrength persist last-strength: {ex.Message}"); }
         }
@@ -142,10 +146,28 @@ internal static class NightLightProvider
         // Runs after the strength write so the backends settle on 0 first, then we flip the on/off bit.
         // EnsureNonZeroStrengthBeforeEnable on the next toggle-on restores the user's last warmth,
         // so this round-trips cleanly.
+        //
+        // Order matters: stop the resend timers BEFORE SetEnabled(false). Both backends arm a delayed
+        // re-fire that assumes on-state semantics; letting one race the off-flip can re-light the filter
+        // moments after we turn it off.
         if (percent == 0
             && _settings is { TurnOffNightLightAtZeroStrength: true }
             && IsEnabled())
+        {
+            CancelBackendResendTimers();
             SetEnabled(false);
+        }
+    }
+
+    /// <summary>
+    /// Cancels any pending resend/settle-write timers on both possible backends so they can't race a
+    /// just-issued off-flip. Cheap and idempotent - the timers are reusable
+    /// <see cref="System.Threading.Timer"/>s that get re-armed on the next gesture.
+    /// </summary>
+    private static void CancelBackendResendTimers()
+    {
+        NightLightRegistry.CancelPendingResend();
+        NightLightSettingsHandler.CancelPendingResend();
     }
 
     /// <summary>
@@ -232,10 +254,14 @@ internal static class NightLightProvider
         if (currentStrength > 0) return;
 
         int restored = _settings?.NightLightLastNonZeroStrength is { } last and > 0 ? last : 50;
+        // Use the spaced/throttled write rather than the bare synchronous SetStrength: the registry path's
+        // bare write triggers the wedged-+36-inflight broker bug and visibly flickers on toggle-on. The
+        // spaced bracket bypasses that gate via the IsDragging false->true edge. SettingsHandler's
+        // SetStrength is already the throttled CloudStore-bracket entry point.
         switch (backend)
         {
             case Backend.Registry:
-                NightLightRegistry.SetStrength(restored);
+                NightLightRegistry.EnqueueSetStrengthSpaced(restored);
                 break;
             case Backend.SettingsHandler:
                 NightLightSettingsHandler.SetStrength(restored);

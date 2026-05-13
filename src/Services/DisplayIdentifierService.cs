@@ -36,6 +36,12 @@ public static class DisplayIdentifierService
     {
         TimeSpan visibleFor = duration ?? TimeSpan.FromMilliseconds(TimeConstants.DisplayIdentifierDefaultDurationMs);
 
+        // Tear down any prior pass before opening a new one. Without stopping the old timer, its
+        // closure captures the static _timer field by name - when it eventually ticks it would stop
+        // the NEW timer, null the field, and CloseAll() the NEW overlays mid-flash. CloseAll() also
+        // disposes the old overlay windows; new ones are built fresh below.
+        _timer?.Stop();
+        _timer = null;
         CloseAll();
 
         foreach ((int number, int x, int y, int w, int h) in EnumerateMonitors())

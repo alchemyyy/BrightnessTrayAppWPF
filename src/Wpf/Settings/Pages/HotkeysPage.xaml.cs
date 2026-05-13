@@ -359,6 +359,12 @@ public partial class HotkeysPage : UserControl
         }
 
         // Group B - by EDID, from persistent history
+        // TODO(known-displays): _settings.KnownDisplays is stale after the displays.json
+        // extraction - MonitorService no longer writes to it; the fresh registry lives in
+        // KnownDisplaysStore. The store would need to be exposed via AppServices (or
+        // injected via LoadFromSettings) for newly-plugged displays to show up here
+        // without a settings reload. Falling back to the legacy field keeps migration-seeded
+        // entries visible until the plumbing lands.
         foreach (KnownDisplayEntry kd in _settings.KnownDisplays)
         {
             if (string.IsNullOrEmpty(kd.EDIDKey)) continue;

@@ -1,5 +1,6 @@
 @startuml settings_propagation
 !include dark-theme.puml
+' Revised 2026-05-13: applied audit_23/Wave-1-fix amendments
 title Settings change propagation - who reacts to AppSettings.Changed
 
 actor User
@@ -16,6 +17,7 @@ participant "TAWPFColorPicker\n.OnAppSettingsChanged" as CP
 participant "TrayIconManager" as TIM
 participant "GlobalHotkeyService" as GHS
 participant "PDBSymbolResolver" as PDB
+participant "UpdateCheckService\n(GitHub poller; cf410f7)" as UCS
 
 == Edit on a settings page ==
 
@@ -50,6 +52,7 @@ AOC -> MS  : WriteCooldownMs (= BrightnessUpdateRateMs)\nValidationDwellMs
 AOC -> PDB : ApplyPDBDownloadTimeout\n  (NightLightPDBDownloadTimeoutSeconds)
 AOC -> GHS : Apply(_appSettings.Hotkeys)\n  (re-register WM_HOTKEY bindings)
 AOC -> AOC : _contextMenu = CreateContextMenu()\n  (rebuild tray right-click menu)
+AOC -> BF  : _activeFlyout.NotifyUpdateStateChanged()\n  (pull live ShowUpdateNotificationsEnabled +\n   CheckForUpdatesEnabled)
 
 == MonitorService side reactions ==
 
@@ -76,6 +79,11 @@ BF -> BF : Redock() if AllowFlyoutUndock turned off
 BF -> BF : raise PropertyChanged for\nShowFlyout*, AllowFlyoutUndock,\nShowMaster/IndividualSliders,\nShowNightLightKelvinLabel,\nInvertNightLightSlider,\nIsCurveAbsoluteMode, ...
 BF -> ECS : _curveService.Start() + Evaluate()\n  (pull EnvironmentalCurveTickIntervalMs,\n   EnvironmentalOffsetMode, smoothness, location)
 
+== UpdateCheckService side reactions ==
+
+AS  -> UCS : Changed
+UCS -> UCS : if AutoCheckForUpdates flipped\n  -> Start / Stop loop;\n  if UpdateCheckIntervalMinutes changed\n  -> Restart (cancel current Delay);\n  if UpdateChannel changed\n  -> next poll uses new feed
+
 == SettingsWindow / color picker chrome ==
 
 SW -> SW : ApplyOuterCornerRadius\n  (EnableRoundedCorners)
@@ -98,6 +106,34 @@ note over AS $TINT_BLUE
   Heavy lists (KnownDisplays, MonitorOrder) still ride
   on AppSettings, so a MonitorService.Refresh that
   rewrites them costs one XML write.
+
+  AppSettings.Save now uses atomic temp+rename
+  (M-04 fix). IOExceptions are logged rather than
+  swallowed silently.
+end note
+
+note over ECS $TINT_AMBER
+  ECS does NOT subscribe to AppSettings.Changed.
+  Setting edits made during a closed-flyout window
+  (e.g. EnvironmentalCurveTickIntervalMs, smoothness,
+  lat/lon) won't take effect on the curve service
+  until the flyout reopens and OnAppSettingsChanged
+  there pulls the live values into the service via
+  Start() + Evaluate().
+
+  ECS DOES subscribe to SystemEvents.TimeChanged
+  for DST / clock changes - those reset the curve's
+  date-keyed cache (_cachedShifted*) so the next
+  Evaluate observes the new wall-clock anchor.
+end note
+
+note over BF $TINT_AMBER
+  BrightnessFlyout.OnAppSettingsChanged does NOT
+  re-read the curve enable flags from AppSettings.
+  The flyout setter is the canonical writer (steps
+  1..9 sync on UI dispatcher). Any out-of-band
+  AppSettings writer (none today) would not
+  propagate to the service / flyout mirrors.
 end note
 
 note over AOC $TINT_RESOLVED

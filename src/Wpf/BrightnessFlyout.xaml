@@ -737,6 +737,7 @@
                                         <MultiBinding Converter="{StaticResource NightLightKelvinLabel}">
                                             <Binding Path="RoundedBrightness"/>
                                             <Binding Path="InvertNightLightSlider" RelativeSource="{RelativeSource AncestorType=Window}"/>
+                                            <Binding Path="TurnOffNightLightAtZeroStrength" RelativeSource="{RelativeSource AncestorType=Window}"/>
                                         </MultiBinding>
                                     </TextBlock.Text>
                                     <TextBlock.Style>
@@ -899,6 +900,8 @@
                                         PreviewMouseMove="Slider_PreviewMouseMove"
                                         MouseLeave="Slider_MouseLeave"
                                         PreviewKeyDown="Slider_PreviewKeyDown"
+                                        Thumb.DragStarted="Slider_ThumbDragStarted"
+                                        Thumb.DragCompleted="Slider_ThumbDragCompleted"
                                         Tag="{Binding}"/>
 
                                 <!-- Value label: shows the actual current brightness applied to the hardware,

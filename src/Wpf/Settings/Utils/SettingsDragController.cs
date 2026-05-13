@@ -54,6 +54,29 @@ internal sealed class SettingsDragController(
     private DragGhostAdorner? _ghost;
     private UIElement? _activeCover;
 
+    /// <summary>
+    /// True while a drag gesture is mid-flight
+    /// (between the threshold-crossing inside <see cref="Begin"/> and either mouse-up or a teardown).
+    /// Hosts use this to detect mid-drag racing against a list-rebuild
+    /// (e.g. <see cref="Services.MonitorService.MonitorsRefreshed"/>);
+    /// if true, call <see cref="CancelDrag"/> before mutating the bound collection
+    /// so the snapshotted indices don't become stale.
+    /// </summary>
+    public bool IsDragging => _active;
+
+    /// <summary>
+    /// Aborts an in-flight drag without committing the reorder.
+    /// Releases mouse capture, unhooks the per-drag window handlers, and resets every
+    /// transform/Z-index/cover to the pre-drag state. Safe to call when no drag is active
+    /// (no-op). Used by hosts when an external event (hot-plug refresh) is about to invalidate
+    /// the controller's snapshotted container/transform arrays.
+    /// </summary>
+    public void CancelDrag()
+    {
+        if (!_active) return;
+        Teardown();
+    }
+
     public void OnGripperMouseDown(object sender, MouseButtonEventArgs e)
     {
         if (_active) return;

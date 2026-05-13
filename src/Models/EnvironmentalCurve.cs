@@ -69,6 +69,18 @@ public class EnvironmentalCurve
     [XmlAttribute] public double NightLightOffsetMin { get; set; } = 0.0;
     [XmlAttribute] public double NightLightOffsetMax { get; set; } = 100.0;
 
+    // Monotonically increasing token bumped whenever the curve's shape is mutated in place
+    // (point edits / period drags / FollowTheSun toggle / etc.).
+    // Used by <see cref="Services.EnvironmentalCurveService"/> as a second cache key
+    // alongside <c>ReferenceEquals(stored)</c>:
+    // the reference check catches "different curve object" (profile switch / promote-on-edit),
+    // and the version check catches "same reference, mutated points" (settings editor in-place edit).
+    // <see cref="Services.EnvironmentalCurveService.RequestEvaluation"/> and
+    // <see cref="Services.EnvironmentalCurveService.InvalidateCurveCache"/> bump this on every cache nuke
+    // so future direct callers don't need to remember a parallel invalidation call.
+    // [XmlIgnore] because this is a runtime-only token; persisted curves restart at 0 on load.
+    [XmlIgnore] public int Version { get; set; }
+
     // "Follow the sun" reanchors curve points from one set of sun events to another's
     // whenever the editor or runtime catches up.
     // Each point keeps its proportional position within a sun-segment (e.g. "midway between civil dawn and sunrise"),

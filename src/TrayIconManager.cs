@@ -38,6 +38,10 @@ public sealed class TrayIconManager : IDisposable
     /// <summary>
     /// Icon rendering style.
     /// Static locks the eclipse at 50% regardless of brightness.
+    /// The setter invalidates the renderer cache but does NOT push a fresh icon -
+    /// callers (App.OnSettingsChanged, App.CreateTrayIcon) already trail with a RequestTrayRefresh,
+    /// so the next Update() picks up the change through the normal cooldown path.
+    /// This avoids the up-to-3 NIM_MODIFY storm per settings save (audit_11 F3).
     /// </summary>
     public TrayIconStyle IconStyle
     {
@@ -48,11 +52,6 @@ public sealed class TrayIconManager : IDisposable
             {
                 _iconStyle = value;
                 _renderer.InvalidateCache();
-                if (_getValues != null)
-                {
-                    (int brightness, string tooltip) = _getValues();
-                    ApplyUpdate(brightness, tooltip);
-                }
             }
         }
     }
@@ -132,16 +131,16 @@ public sealed class TrayIconManager : IDisposable
         set => SetRendererColor(_renderer.DimColor, value, c => _renderer.DimColor = c);
     }
 
-    private void SetRendererColor(Color? current, Color? next, Action<Color?> apply)
+    // Color writes flip the renderer's _lastBrightness sentinel via the renderer setters,
+    // so the next Update() will re-render. We deliberately do NOT push an immediate ApplyUpdate here:
+    // every real call site (App.ApplyTrayIconColors -> followed by RequestTrayRefresh in both
+    // OnSettingsChanged and CreateTrayIcon) trails with a refresh, and routing through that single funnel
+    // gives the cooldown a chance to coalesce instead of issuing back-to-back NIM_MODIFYs (audit_11 F3).
+    private static void SetRendererColor(Color? current, Color? next, Action<Color?> apply)
     {
         if (current == next) return;
 
         apply(next);
-        if (_getValues != null)
-        {
-            (int brightness, string tooltip) = _getValues();
-            ApplyUpdate(brightness, tooltip);
-        }
     }
 
     /// <summary>
@@ -223,6 +222,11 @@ public sealed class TrayIconManager : IDisposable
     /// Safe to call from any thread; off-thread calls are marshaled onto the dispatcher so Shell_NotifyIconW
     /// and the throttle flags stay single-owner.
     /// </summary>
+    // TODO(audit_11 F2): the callback (App.GetBrightnessAndTooltip) returns brightness=100 when Monitors is empty
+    // (e.g. internal-panel-only laptops with no DDC). The icon then paints "100% bright" for the whole session.
+    // The right fix lives in App.xaml.cs - either fall back to the night-light slider when NL is enabled,
+    // or surface a "no monitors detected" tooltip with no percentage. Tracked here so the integrator sees it
+    // at the consumer surface.
     public void Update(Func<(int brightness, string tooltip)> getValues)
     {
         if (!_dispatcher.CheckAccess())
@@ -255,6 +259,11 @@ public sealed class TrayIconManager : IDisposable
 
     private void ApplyUpdate(int brightnessPercent, string tooltip)
     {
+        // Belt-and-braces guard: callers that dodge the dispatcher (e.g. the pending-update path of StartCooldown)
+        // can still race a concurrent Dispose. Renderer.CreateIcon also guards _disposed, but bailing here avoids
+        // touching the shell icon at all.
+        if (_disposed) return;
+
         // Lock display brightness to 50% in static mode (tooltip still reflects real brightness).
         int displayBrightness = _iconStyle == TrayIconStyle.Static ? 50 : brightnessPercent;
 
@@ -272,6 +281,11 @@ public sealed class TrayIconManager : IDisposable
         {
             _isOnCooldown = true;
             await Task.Delay(UpdateCooldownMs);
+
+            // If Dispose ran during the delay, bail before touching the renderer or shell icon.
+            // CreateIcon would otherwise allocate and leak a GDI handle through the disposed pipeline (audit_11 F4).
+            if (_disposed) return;
+
             _isOnCooldown = false;
 
             // If updates came in during cooldown, get fresh values now.

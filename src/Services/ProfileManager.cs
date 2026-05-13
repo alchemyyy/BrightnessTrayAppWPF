@@ -619,10 +619,12 @@ public sealed class ProfileManager
                 NewLineHandling = NewLineHandling.Replace
             };
 
-            using FileStream stream = new(_profilesPath, FileMode.Create);
-            using XmlWriter writer = XmlWriter.Create(stream, writerSettings);
-            XmlSerializer serializer = new(typeof(ProfileCollection));
-            serializer.Serialize(writer, Profiles, namespaces);
+            WriteAtomic(_profilesPath, stream =>
+            {
+                using XmlWriter writer = XmlWriter.Create(stream, writerSettings);
+                XmlSerializer serializer = new(typeof(ProfileCollection));
+                serializer.Serialize(writer, Profiles, namespaces);
+            });
         }
         catch (Exception ex)
         {
@@ -631,6 +633,53 @@ public sealed class ProfileManager
             WPFLog.Log($"ProfileManager.Save: {ex.Message}");
         }
     }
+
+    /// <summary>
+    /// Writes <paramref name="finalPath"/> atomically by streaming <paramref name="writeContent"/> into
+    /// <c><paramref name="finalPath"/>.tmp</c> (exclusive lock, FileShare.None) and then moving the tmp file
+    /// over the destination via <see cref="File.Move(string, string, bool)"/> with overwrite.
+    /// Defeats the FileMode.Create truncate-then-write window where a crash or concurrent writer
+    /// could otherwise leave a zero-byte profiles.xml that the next load silently replaces with defaults.
+    /// On failure the tmp file is best-effort deleted and the exception is rethrown
+    /// to the caller's outer try so it can be logged through the existing path.
+    /// Duplicated rather than extracted to a shared helper because <see cref="AppSettings"/> lives in
+    /// a different namespace and the audit calls for the minimal localised change.
+    /// </summary>
+    private static void WriteAtomic(string finalPath, Action<Stream> writeContent)
+    {
+        string tmpPath = finalPath + ".tmp";
+        try
+        {
+            using (FileStream stream = new(tmpPath, FileMode.Create, FileAccess.Write, FileShare.None))
+            {
+                writeContent(stream);
+                stream.Flush();
+            }
+            File.Move(tmpPath, finalPath, overwrite: true);
+        }
+        catch
+        {
+            try { if (File.Exists(tmpPath)) File.Delete(tmpPath); }
+            catch
+            {
+                // ignored - the next save attempt will overwrite the tmp file anyway
+            }
+            throw;
+        }
+    }
+
+    /// <summary>
+    /// Persists current in-memory profile state on app shutdown.
+    /// Curve edits update <see cref="BrightnessProfile.EnvironmentalCurve"/> in place and rely on the
+    /// Environmental tab's UI-side debounce timer to call <see cref="Save"/>;
+    /// SessionEnding can fire while that debounce is still pending, bypassing the
+    /// <c>SettingsWindow.OnClosing</c> flush.
+    /// This method forces a synchronous final save so the latest in-memory state hits disk regardless of
+    /// debounce state.
+    /// Idempotent: <see cref="Save"/> just rewrites whatever is currently in memory, so multiple calls
+    /// are harmless (and a no-op effectively, when nothing has changed since the last save).
+    /// </summary>
+    public void SaveOnShutdown() => Save();
 
     /// <summary>
     /// Gets the default profiles file path.

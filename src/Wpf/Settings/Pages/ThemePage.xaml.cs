@@ -46,6 +46,10 @@ public partial class ThemePage : UserControl
         {
             p._themeHost?.ApplyDwmDarkMode();
             p.UpdateColorSwatchVisibility();
+            // A picker opened against the old mode keeps its captured title token + Default fallback,
+            // so a dirty close would write to the previously-active side under the new mode's chrome.
+            // Close any open pickers; the user re-opens fresh against the now-current side.
+            p.CloseAllOpenPickers();
         },
         ["TrayIconStyle"] = p => p.UpdateTrayIconColorVisibility(),
     };
@@ -117,19 +121,10 @@ public partial class ThemePage : UserControl
         }
     }
 
-    // Effective light/dark side under the user's ThemeMode override - mirrors the resolution in
-    // SettingsWindow.ResolveEffectiveIsLight / App.ResolveEffectiveIsLightTheme so the visible swatch
-    // pair matches the theme that's actually painted everywhere else in the app.
-    private bool ResolveEffectiveIsLight()
-    {
-        if (_settings == null) return Theme?.IsLightTheme ?? false;
-        return _settings.ThemeMode switch
-        {
-            Models.ThemeMode.Light => true,
-            Models.ThemeMode.Dark => false,
-            _ => Theme?.IsLightTheme ?? false,
-        };
-    }
+    // Effective light/dark side under the user's ThemeMode override - delegates to the canonical
+    // resolver on AppTheme so the visible swatch pair matches the theme that's actually painted
+    // everywhere else in the app.
+    private bool ResolveEffectiveIsLight() => AppTheme.ResolveEffectiveIsLightTheme(_settings);
 
     private void BoolToggle_Changed(object sender, RoutedEventArgs e)
     {
@@ -310,6 +305,23 @@ public partial class ThemePage : UserControl
 
         _openPickers[(target, isLight)] = picker;
         picker.Show();
+    }
+
+    // Closes every picker the page has open and lets each picker's own Closed handler run its
+    // dirty-on-close persistence + _openPickers removal. Iterating a snapshot because Close()
+    // mutates _openPickers via the Closed handler wired in ColorSwatch_Click.
+    private void CloseAllOpenPickers()
+    {
+        if (_openPickers.Count == 0) return;
+        List<TAWPFColorPicker> snapshot = [.. _openPickers.Values];
+        foreach (TAWPFColorPicker picker in snapshot)
+        {
+            try { picker.Close(); }
+            catch
+            {
+                // ignored - a picker already mid-close still triggers its own removal
+            }
+        }
     }
 
     private void ColorReset_Click(object sender, RoutedEventArgs e)

@@ -317,7 +317,7 @@
                                         <StackPanel Grid.Column="1" Style="{StaticResource MonitorOverrideFieldColumnStyle}">
                                             <TextBlock Text="{loc:Loc Settings_Monitors_PowerOffVcpOverride_Label}" Style="{StaticResource MonitorOverrideLabelStyle}"/>
                                             <TextBox Style="{StaticResource SettingsTextBoxStyle}"
-                                                     Text="{Binding PowerOffVcpOverride, UpdateSourceTrigger=LostFocus}"
+                                                     Text="{Binding PowerOffVcpOverride, Mode=OneWay}"
                                                      Tag="PowerOffVcp"
                                                      LostFocus="MonitorVcpOverride_LostFocus"
                                                      utils1:WatermarkBehavior.Text="{Binding PowerOffVcpPlaceholder}"/>
@@ -326,7 +326,7 @@
                                         <StackPanel Grid.Column="2" Style="{StaticResource MonitorOverrideFieldColumnStyle}">
                                             <TextBlock Text="{loc:Loc Settings_Monitors_BrightnessVcpOverride_Label}" Style="{StaticResource MonitorOverrideLabelStyle}"/>
                                             <TextBox Style="{StaticResource SettingsTextBoxStyle}"
-                                                     Text="{Binding BrightnessVcpOverride, UpdateSourceTrigger=LostFocus}"
+                                                     Text="{Binding BrightnessVcpOverride, Mode=OneWay}"
                                                      Tag="BrightnessVcp"
                                                      LostFocus="MonitorVcpOverride_LostFocus"
                                                      utils1:WatermarkBehavior.Text="{Binding BrightnessVcpPlaceholder}"/>

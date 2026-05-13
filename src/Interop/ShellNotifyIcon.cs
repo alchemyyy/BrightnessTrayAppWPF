@@ -355,6 +355,13 @@ internal sealed class ShellNotifyIcon : IDisposable
         return inBounds;
     }
 
+    // Settle-delay counter for the taskbar-recreate sequence.
+    // The synchronous Update() inside ScheduleTaskbarRecreate is what actually re-issues NIM_ADD and restores
+    // the icon. The 10-tick countdown (10 x TaskbarRecreateCheckIntervalMs ~= 5s) exists purely to delay the
+    // RefreshNeeded raise so the App pushes fresh brightness/tooltip values only AFTER the shell has fully
+    // re-settled. Looks like dead work per-tick but the role is "phase-shift the trailing refresh callback"
+    // (audit_11 F9). Removing the countdown would either fire RefreshNeeded immediately (racing the shell)
+    // or never (icon would re-register but tooltip would stay stale until the next external trigger).
     private int _remainingTicks;
 
     private void ScheduleTaskbarRecreate()

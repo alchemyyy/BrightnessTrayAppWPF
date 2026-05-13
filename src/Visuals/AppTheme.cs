@@ -197,7 +197,7 @@ public sealed class AppTheme : IDisposable
     public ThemeColor ButtonPressed { get; set; } = new("CACACA", "4A4A4A");
 
     /// <summary>Icon foreground color.</summary>
-    public ThemeColor IconForeground { get; set; } = new("222222", "DDDDDD");
+    public ThemeColor IconForeground { get; set; } = new("222222", "DDDDDD"); 
 
     /// <summary>Win11 Settings card background (slightly lighter than body).</summary>
     public ThemeColor CardBackground { get; set; } = new("FBFBFB", "2B2B2B");
@@ -421,6 +421,27 @@ public sealed class AppTheme : IDisposable
         {
             return false;
         }
+    }
+
+    /// <summary>
+    /// Canonical "is the app currently painting light?" resolver.
+    /// Collapses the user's <see cref="AppSettings.ThemeMode"/> override and the live
+    /// <see cref="IsLightTheme"/> on the app-wide <see cref="AppServices.Theme"/> instance
+    /// into the single bool the rest of the app paints against.
+    /// Light/Dark force their respective value; System falls through to the runtime-detected system theme.
+    /// Falls back to dark when neither settings nor the theme service have been wired yet
+    /// - matches the pre-consolidation behavior in App, SettingsWindow, and ThemePage.
+    /// </summary>
+    public static bool ResolveEffectiveIsLightTheme(AppSettings? settings)
+    {
+        bool systemIsLight = AppServices.Theme?.IsLightTheme ?? false;
+        if (settings == null) return systemIsLight;
+        return settings.ThemeMode switch
+        {
+            ThemeMode.Light => true,
+            ThemeMode.Dark => false,
+            _ => systemIsLight,
+        };
     }
 
     // ===========================================================================

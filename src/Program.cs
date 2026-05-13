@@ -17,6 +17,13 @@ internal static class Program
     /// </summary>
     public static int? WatcherPID { get; private set; }
 
+    /// <summary>
+    /// Single-instance coordinator owned by THIS process when running without an external watcher
+    /// (F5 from VS, BTAWPF_NO_WATCHER=1, or any direct --monitored launch). Null when a real watcher
+    /// has already claimed ownership above us. Held for the process lifetime; disposed by ProcessExit.
+    /// </summary>
+    private static SingleInstanceCoordinator? _selfInstanceCoordinator;
+
     public const string ApplicationName = "BrightnessTrayAppWPF";
 
     /// <summary>
@@ -64,7 +71,15 @@ internal static class Program
             return CrashHandler.RunWatcher();
         }
 
-        if (!isMonitored && !Debugger.IsAttached)
+        // Env-var escape hatch for any launch scenario where Debugger.IsAttached races (VS
+        // managed-on-launch sometimes attaches AFTER Main starts, in which case this Main runs
+        // with IsAttached=false, spawns the watcher, and exits before VS can break on a crash
+        // in the real child). Setting BTAWPF_NO_WATCHER=1 in the launch environment skips the
+        // watcher fork entirely so VS attaches to the actual WPF process.
+        bool watcherDisabled =
+            string.Equals(Environment.GetEnvironmentVariable("BTAWPF_NO_WATCHER"), "1", StringComparison.Ordinal);
+
+        if (!isMonitored && !Debugger.IsAttached && !watcherDisabled)
         {
             // First launch without flags - spawn watcher and exit.
             // The watcher will launch the app with --monitored.
@@ -75,6 +90,29 @@ internal static class Program
 
         // Parse watcher PID if provided
         WatcherPID = ParseWatcherPID(args);
+
+        // No real watcher above us (F5 / BTAWPF_NO_WATCHER / direct --monitored)? Then THIS process
+        // owns the single-instance mutex. AcquireOrTakeover() kills any existing watcher / monitored
+        // tree before claiming the mutex, so launching a fresh Debug build automatically replaces
+        // the installed Release exe in the tray. Held for the lifetime of the process; released by
+        // ProcessExit to keep the next launch unblocked.
+        if (WatcherPID == null)
+        {
+            try
+            {
+                _selfInstanceCoordinator = SingleInstanceCoordinator.AcquireOrTakeover();
+                _selfInstanceCoordinator.RecordMonitoredPID(Environment.ProcessId);
+                AppDomain.CurrentDomain.ProcessExit += (_, _) =>
+                {
+                    try { _selfInstanceCoordinator?.Dispose(); }
+                    catch { /* best-effort during shutdown */ }
+                };
+            }
+            catch (Exception ex)
+            {
+                WPFLog.Log($"Program.Main: SingleInstanceCoordinator.AcquireOrTakeover failed: {ex.Message}");
+            }
+        }
 
 #if DEBUG
         // Regenerate app.ico from the current renderer on every Debug run.
