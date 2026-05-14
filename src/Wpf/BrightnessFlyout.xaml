@@ -374,7 +374,7 @@
         <Style x:Key="PowerButtonStyle" TargetType="Button">
             <Setter Property="Background" Value="Transparent"/>
             <Setter Property="BorderThickness" Value="0"/>
-            <Setter Property="Padding" Value="10,4"/>
+            <Setter Property="Padding" Value="8,6"/>
             <Setter Property="Cursor" Value="Hand"/>
             <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
             <Setter Property="utils:KeyboardFocusBehavior.ShowKeyboardFocus" Value="True"/>
@@ -875,11 +875,11 @@
                                     Click="CurveToggle_Click"
                                     Tag="{Binding}"
                                     VerticalAlignment="Center"
-                                    Padding="8,0">
+                                    Padding="2,1">
                                 <Button.Style>
                                     <Style TargetType="Button" BasedOn="{StaticResource PowerButtonStyle}">
                                         <Setter Property="Visibility" Value="Collapsed"/>
-                                        <Setter Property="Margin" Value="0,-4,47,0"/>
+                                        <Setter Property="Margin" Value="0,-4,50,-2"/>
                                         <Style.Triggers>
                                             <DataTrigger Binding="{Binding IsMaster}" Value="True">
                                                 <Setter Property="Visibility" Value="Visible"/>
@@ -895,8 +895,8 @@
                                         </Style.Triggers>
                                     </Style>
                                 </Button.Style>
-                                <Grid Width="28"
-                                      Height="28"
+                                <Grid Width="32"
+                                      Height="32"
                                       VerticalAlignment="Center">
                                     <Grid.Style>
                                         <Style TargetType="Grid">
@@ -948,8 +948,8 @@
                                         </Style>
                                     </Grid.Style>
 
-                                    <Rectangle Width="28"
-                                               Height="28"
+                                    <Rectangle Width="26"
+                                               Height="26"
                                                Fill="{DynamicResource ThemeIconForeground}"
                                                OpacityMask="{StaticResource CurveIconBrush}">
                                         <Rectangle.Style>
