@@ -4,6 +4,7 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:models="clr-namespace:BrightnessTrayAppWPF.Models"
     xmlns:local="clr-namespace:BrightnessTrayAppWPF"
+    xmlns:wpf="clr-namespace:BrightnessTrayAppWPF.WPF"
     xmlns:utils="clr-namespace:BrightnessTrayAppWPF.WPF.Utils"
     xmlns:loc="clr-namespace:BrightnessTrayAppWPF.Localization"
     utils:KeyboardFocusBehavior.EnableKeyboardOnlyFocus="True"
@@ -34,6 +35,10 @@
              Bitmap source is assigned in code-behind so the brush stays themed via DynamicResource on the Rectangle Fill.
              Defined at Window scope so the DataTemplate's nightlight row can resolve it. -->
         <ImageBrush x:Key="NightLightSliderIconBrush" Stretch="Uniform"/>
+
+        <!-- Environmental-curve footer icon mask.
+             Bitmap source is assigned in code-behind so the brush stays themed via DynamicResource on the Rectangle Fill. -->
+        <ImageBrush x:Key="CurveIconBrush" Stretch="Uniform"/>
 
         <!-- Monitor Icon Toggle Button Style -->
         <Style x:Key="MonitorIconToggleStyle" TargetType="Button">
@@ -397,7 +402,7 @@
         <Style x:Key="HeaderIconButtonStyle" TargetType="Button">
             <Setter Property="Background" Value="Transparent"/>
             <Setter Property="BorderThickness" Value="0"/>
-            <Setter Property="Width" Value="40"/>
+            <Setter Property="Width" Value="32"/>
             <Setter Property="Height" Value="32"/>
             <Setter Property="Cursor" Value="Hand"/>
             <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
@@ -573,6 +578,7 @@
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="Auto"/>
                                 <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
                                 <ColumnDefinition Width="Auto"/>
                             </Grid.ColumnDefinitions>
                             <Grid.RowDefinitions>
@@ -759,7 +765,7 @@
 
                             <!-- Power Button.
                                  Hidden on master row — master icon-toggle is the group power button. -->
-                            <Button Grid.Row="0" Grid.Column="2"
+                            <Button Grid.Row="0" Grid.Column="3"
                                     Click="PowerButton_Click"
                                     Tag="{Binding}"
                                     VerticalAlignment="Center"
@@ -795,17 +801,85 @@
                                  the master row's instance toggles the brightness curve,
                                  the nightlight row's instance toggles the night-light curve.
                                  Click routes through CurveToggle_Click which dispatches by row type.
-                                 Glyph opacity tracks whichever curve flag this row owns (full when its curve is on, dimmed when off).
+                                 Icon opacity tracks whichever curve flag this row owns (full when its curve is on, dimmed when off).
                                  Padding overrides PowerButtonStyle's default to grow the hit area to match the larger glyph. -->
-                            <Button Grid.Row="0" Grid.Column="2"
+                            <StackPanel Grid.Row="0" Grid.Column="2"
+                                        Orientation="Horizontal"
+                                        HorizontalAlignment="Right"
+                                        VerticalAlignment="Center"
+                                        Margin="0,-4,4,0">
+                                <StackPanel.Style>
+                                    <Style TargetType="StackPanel">
+                                        <Setter Property="Visibility" Value="Collapsed"/>
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding IsCurveStopwatchVisible}" Value="True">
+                                                <Setter Property="Visibility" Value="Visible"/>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </StackPanel.Style>
+                                <wpf:NumericSpinner Width="58"
+                                                    Height="{Binding ActualHeight, ElementName=CurveStopwatchButton, FallbackValue=32}"
+                                                    VerticalAlignment="Center"
+                                                    Minimum="1"
+                                                    Maximum="1440"
+                                                    Step="5"
+                                                    WheelStep="5"
+                                                    LargeStep="30"
+                                                    ExtraLargeStep="60"
+                                                    Suffix="m"
+                                                    HandleMouseWheelWhenMouseOver="True"
+                                                    Value="{Binding CurveStopwatchMinutes, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                                    ValueChanged="CurveStopwatchMinutes_ValueChanged">
+                                    <wpf:NumericSpinner.Style>
+                                        <Style TargetType="{x:Type wpf:NumericSpinner}">
+                                            <Setter Property="Visibility" Value="Collapsed"/>
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding IsCurveStopwatchSpinnerVisible}" Value="True">
+                                                    <Setter Property="Visibility" Value="Visible"/>
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </wpf:NumericSpinner.Style>
+                                </wpf:NumericSpinner>
+                                <Button x:Name="CurveStopwatchButton"
+                                        Click="CurveStopwatchButton_Click"
+                                        Tag="{Binding}"
+                                        Padding="6,0"
+                                        Margin="4,0,0,0"
+                                        ToolTip="{Binding CurveStopwatchToolTip}"
+                                        ToolTipService.ShowDuration="{x:Static local:TimeConstants.HardPowerOffTooltipShowDurationMs}">
+                                    <Button.Style>
+                                        <Style TargetType="Button" BasedOn="{StaticResource PowerButtonStyle}"/>
+                                    </Button.Style>
+                                    <TextBlock Text="&#xE916;"
+                                               FontFamily="Segoe MDL2 Assets"
+                                               FontSize="18"
+                                               Foreground="{DynamicResource ThemeIconForeground}"
+                                               VerticalAlignment="Center">
+                                        <TextBlock.Style>
+                                            <Style TargetType="TextBlock">
+                                                <Setter Property="Opacity" Value="0.4"/>
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding IsCurveStopwatchEnabled}" Value="True">
+                                                        <Setter Property="Opacity" Value="1.0"/>
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </TextBlock.Style>
+                                    </TextBlock>
+                                </Button>
+                            </StackPanel>
+
+                            <Button Grid.Row="0" Grid.Column="3"
                                     Click="CurveToggle_Click"
                                     Tag="{Binding}"
                                     VerticalAlignment="Center"
-                                    Margin="0,-4,47,0"
                                     Padding="8,0">
                                 <Button.Style>
                                     <Style TargetType="Button" BasedOn="{StaticResource PowerButtonStyle}">
                                         <Setter Property="Visibility" Value="Collapsed"/>
+                                        <Setter Property="Margin" Value="0,-4,47,0"/>
                                         <Style.Triggers>
                                             <DataTrigger Binding="{Binding IsMaster}" Value="True">
                                                 <Setter Property="Visibility" Value="Visible"/>
@@ -815,20 +889,17 @@
                                                 <Setter Property="Visibility" Value="Visible"/>
                                                 <Setter Property="ToolTip" Value="{loc:Loc Flyout_CurveToggle_NightLightTooltip}"/>
                                             </DataTrigger>
+                                            <DataTrigger Binding="{Binding IsCurveStopwatchEnabled}" Value="True">
+                                                <Setter Property="Margin" Value="0,-4,0,0"/>
+                                            </DataTrigger>
                                         </Style.Triggers>
                                     </Style>
                                 </Button.Style>
-                                <TextBlock FontFamily="Segoe MDL2 Assets"
-                                           FontSize="28"
-                                           Foreground="{DynamicResource ThemeIconForeground}"
-                                           VerticalAlignment="Center">
-                                    <TextBlock.Style>
-                                        <Style TargetType="TextBlock">
-                                            <!-- Default Text lives in a Setter (not a local attribute) so the
-                                                 disabled-period DataTrigger below can override it. WPF property
-                                                 precedence: local value beats style triggers, so a local Text=
-                                                 attribute would have shadowed the trigger's Text setter. -->
-                                            <Setter Property="Text" Value="&#xED3A;"/>
+                                <Grid Width="28"
+                                      Height="28"
+                                      VerticalAlignment="Center">
+                                    <Grid.Style>
+                                        <Style TargetType="Grid">
                                             <Setter Property="Opacity" Value="0.4"/>
                                             <Style.Triggers>
                                                 <!-- Master row: lit when the brightness curve is engaged. -->
@@ -848,14 +919,13 @@
                                                     <Setter Property="Opacity" Value="1.0"/>
                                                 </MultiDataTrigger>
                                                 <!-- Disabled-period: swap to crescent moon. Default to dim opacity so the
-                                                     glyph reads as informational ("the period is passing through")
+                                                     icon reads as informational ("the period is passing through")
                                                      when nothing is actually being suppressed, e.g. the user has the
                                                      row's curve toggled off. Active-suppression triggers below bump
                                                      opacity back to 1.0 only when this row's curve is actually engaged
                                                      and being held back by the period. Triggers apply in declaration
                                                      order with last-wins for the same property. -->
                                                 <DataTrigger Binding="{Binding IsInCurveDisabledPeriod, RelativeSource={RelativeSource AncestorType=Window}}" Value="True">
-                                                    <Setter Property="Text" Value="{DynamicResource GlyphCurveDisabledPeriod}"/>
                                                     <Setter Property="Opacity" Value="0.4"/>
                                                 </DataTrigger>
                                                 <MultiDataTrigger>
@@ -876,15 +946,49 @@
                                                 </MultiDataTrigger>
                                             </Style.Triggers>
                                         </Style>
-                                    </TextBlock.Style>
-                                </TextBlock>
+                                    </Grid.Style>
+
+                                    <Rectangle Width="28"
+                                               Height="28"
+                                               Fill="{DynamicResource ThemeIconForeground}"
+                                               OpacityMask="{StaticResource CurveIconBrush}">
+                                        <Rectangle.Style>
+                                            <Style TargetType="Rectangle">
+                                                <Setter Property="Visibility" Value="Visible"/>
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding IsInCurveDisabledPeriod, RelativeSource={RelativeSource AncestorType=Window}}" Value="True">
+                                                        <Setter Property="Visibility" Value="Collapsed"/>
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </Rectangle.Style>
+                                    </Rectangle>
+
+                                    <TextBlock Text="{DynamicResource GlyphCurveDisabledPeriod}"
+                                               FontFamily="Segoe MDL2 Assets"
+                                               FontSize="28"
+                                               Foreground="{DynamicResource ThemeIconForeground}"
+                                               HorizontalAlignment="Center"
+                                               VerticalAlignment="Center">
+                                        <TextBlock.Style>
+                                            <Style TargetType="TextBlock">
+                                                <Setter Property="Visibility" Value="Collapsed"/>
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding IsInCurveDisabledPeriod, RelativeSource={RelativeSource AncestorType=Window}}" Value="True">
+                                                        <Setter Property="Visibility" Value="Visible"/>
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </TextBlock.Style>
+                                    </TextBlock>
+                                </Grid>
                             </Button>
 
                             <!-- Brightness Slider Row.
                                  IsEnabled tracks IsParticipatingInMaster so both Failed (hardware unreachable)
                                  and Disabled (user-excluded from group) lock the slider entirely - drag, keyboard,
                                  and the row's wheel handler all gate on the same flag. -->
-                            <Grid Grid.Row="1" Grid.Column="0" Grid.ColumnSpan="3">
+                            <Grid Grid.Row="1" Grid.Column="0" Grid.ColumnSpan="4">
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="*"/>
                                     <ColumnDefinition Width="Auto"/>
@@ -1048,18 +1152,18 @@
                     <!-- Environmental Curves Toggle.
                          Lit when either the brightness curve or the night-light curve is engaged (OR);
                          a press flips both flags to the same target: any-on -> both off, all-off -> both on.
-                         Glyph matches the per-row curve toggles (Equalizer ED3A). -->
+                         Icon is a custom composite rendered by CurveIconRenderer. -->
                     <Button Style="{StaticResource FooterIconButtonStyle}"
                             Click="EnvironmentalCurvesToggle_Click"
                             ToolTip="{loc:Loc Flyout_EnvironmentalCurvesToggle_Tooltip}"
                             Visibility="{Binding ShowEnvironmentalCurvesButton, Converter={StaticResource BoolToVisibility}, RelativeSource={RelativeSource AncestorType=Window}}">
-                        <TextBlock Text="&#xED3A;"
-                                   FontFamily="Segoe MDL2 Assets"
-                                   FontSize="23"
-                                   Foreground="{DynamicResource ThemeIconForeground}">
-                            <TextBlock.Style>
-                                <Style TargetType="TextBlock">
-                                    <!-- Footer button stays the equalizer glyph through every state; it does not
+                        <Rectangle Width="22"
+                                   Height="22"
+                                   Fill="{DynamicResource ThemeIconForeground}"
+                                   OpacityMask="{StaticResource CurveIconBrush}">
+                            <Rectangle.Style>
+                                <Style TargetType="Rectangle">
+                                    <!-- Footer button stays the curve composite through every state; it does not
                                          swap to the disabled-period crescent like the per-row toggles do. Opacity
                                          is 1.0 whenever any curve is engaged, 0.4 otherwise — and that holds
                                          through a disabled-period window too, so the footer reads as "curves are
@@ -1074,8 +1178,8 @@
                                         </DataTrigger>
                                     </Style.Triggers>
                                 </Style>
-                            </TextBlock.Style>
-                        </TextBlock>
+                            </Rectangle.Style>
+                        </Rectangle>
                     </Button>
 
                     <!-- Footer Power Button (dummy) -->

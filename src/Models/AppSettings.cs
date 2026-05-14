@@ -344,6 +344,24 @@ public class MonitorOverrideEntry
     public List<NormCurvePoint> NormCurvePoints { get; set; } = [];
 }
 
+public class CurveStopwatchEntry
+{
+    [XmlAttribute]
+    public string SliderKey { get; set; } = string.Empty;
+
+    [XmlAttribute]
+    public int Minutes { get; set; } = 60;
+
+    [XmlAttribute]
+    public bool IsEnabled { get; set; }
+
+    [XmlAttribute]
+    public DateTime EngagedAtUtc { get; set; }
+
+    [XmlAttribute]
+    public DateTime ReenableAtUtc { get; set; }
+}
+
 /// <summary>
 /// Persistent record of every unique display the app has ever enumerated,
 /// keyed by the same EDID-first identifier used by the "Display order &amp; overrides" section.
@@ -615,6 +633,10 @@ public class AppSettings
     // instead of resetting each session.
     public bool EnvironmentalBrightnessCurveEnabled { get; set; } = false;
     public bool EnvironmentalNightLightCurveEnabled { get; set; } = false;
+
+    [XmlArray("CurveStopwatches")]
+    [XmlArrayItem("Stopwatch")]
+    public List<CurveStopwatchEntry> CurveStopwatches { get; set; } = [];
 
     // Offset mode: when on, the editor exposes the per-profile *Offset curves
     // (additive/subtractive deltas, -100..+100 Y axis) plus draggable min/max clamp lines.

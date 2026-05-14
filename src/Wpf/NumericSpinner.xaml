@@ -3,14 +3,18 @@
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     Height="{StaticResource DwellBoxHeight}"
-    FocusVisualStyle="{x:Null}">
+    FocusVisualStyle="{x:Null}"
+    PreviewMouseWheel="OnPreviewMouseWheel">
     <Grid>
         <Grid.ColumnDefinitions>
             <ColumnDefinition Width="*"/>
-            <ColumnDefinition Width="{StaticResource SpinnerColumnWidth}"/>
+            <ColumnDefinition x:Name="PART_SpinnerColumn" Width="{StaticResource SpinnerColumnWidth}"/>
         </Grid.ColumnDefinitions>
 
-        <Border Grid.Column="0" Style="{StaticResource DwellBoxBorderStyle}">
+        <Border x:Name="PART_ValueBorder"
+                Grid.Column="0"
+                Height="{Binding ActualHeight, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                Style="{StaticResource DwellBoxBorderStyle}">
             <Grid>
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*"/>
@@ -24,7 +28,8 @@
                          PreviewKeyDown="OnPreviewKeyDown"
                          GotKeyboardFocus="OnTextBoxFocusChanged"
                          LostKeyboardFocus="OnTextBoxFocusChanged"
-                         LostFocus="OnTextBoxLostFocus"/>
+                         LostFocus="OnTextBoxLostFocus"
+                         TextChanged="OnTextBoxTextChanged"/>
                 <TextBlock Grid.Column="1"
                            x:Name="PART_Suffix"
                            Style="{StaticResource DwellNumberBoxSuffixStyle}"/>

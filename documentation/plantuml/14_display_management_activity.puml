@@ -194,6 +194,22 @@ partition "CollectionChanged attach path" {
   end note
 }
 
+partition "Initial async enrollment rebaseline" {
+  if (Flyout was constructed with Monitors.Count == 0\nand first MonitorsRefreshed arrives?) then (yes)
+    :UpdateMasterFromEnabledIndividuals();
+    :CaptureOffsetsFromMaster();
+    note right $TINT_GREEN
+      Startup-only rebaseline.
+      Runs before EnvironmentalCurveService handles the same
+      MonitorsRefreshed event, so absolute curve targets consume
+      offsets based on the final startup monitor set instead of
+      the rolling/persisted master used during per-row attach.
+
+      Does not run for later topology changes.
+    end note
+  endif
+}
+
 partition "Curve evaluator" {
   :Drivers: periodic timer,\nMonitorsRefreshed,\nprofile switch,\nsettings RequestEvaluation throttle,\npreview ApplyAt(t);
   :Resolve stored profile curve;

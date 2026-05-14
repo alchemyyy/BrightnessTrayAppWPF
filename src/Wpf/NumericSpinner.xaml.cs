@@ -1,8 +1,10 @@
 using System.Globalization;
 using System.Windows;
+using System.Windows.Controls;
 using System.Windows.Input;
 using BrightnessTrayAppWPF.WPF.Utils;
 using KeyEventArgs = System.Windows.Input.KeyEventArgs;
+using Media = System.Windows.Media;
 using UserControl = System.Windows.Controls.UserControl;
 
 namespace BrightnessTrayAppWPF.WPF;
@@ -59,6 +61,10 @@ public partial class NumericSpinner : UserControl
     public static readonly DependencyProperty PlaceholderTextProperty = DependencyProperty.Register(
         nameof(PlaceholderText), typeof(string), typeof(NumericSpinner),
         new PropertyMetadata(string.Empty, OnPlaceholderTextChanged));
+
+    public static readonly DependencyProperty HandleMouseWheelWhenMouseOverProperty = DependencyProperty.Register(
+        nameof(HandleMouseWheelWhenMouseOver), typeof(bool), typeof(NumericSpinner),
+        new PropertyMetadata(false));
 
     public int Value
     {
@@ -141,9 +147,19 @@ public partial class NumericSpinner : UserControl
         set => SetValue(PlaceholderTextProperty, value);
     }
 
+    public bool HandleMouseWheelWhenMouseOver
+    {
+        get => (bool)GetValue(HandleMouseWheelWhenMouseOverProperty);
+        set => SetValue(HandleMouseWheelWhenMouseOverProperty, value);
+    }
+
     private bool _suppressValuePush;
 
-    public NumericSpinner() => InitializeComponent();
+    public NumericSpinner()
+    {
+        InitializeComponent();
+        Loaded += (_, _) => UpdateAutoWidth();
+    }
 
     /// <summary>Fired after <see cref="Value"/> changes (typed entry, wheel, key, button, or external set).</summary>
     public event EventHandler<int>? ValueChanged;
@@ -153,6 +169,7 @@ public partial class NumericSpinner : UserControl
         if (d is not NumericSpinner s) return;
 
         s.SyncTextFromValue();
+        s.UpdateAutoWidth();
         s.ValueChanged?.Invoke(s, (int)e.NewValue);
     }
 
@@ -161,6 +178,7 @@ public partial class NumericSpinner : UserControl
         if (d is not NumericSpinner s) return;
 
         s.PART_Suffix.Text = (e.NewValue as string) ?? string.Empty;
+        s.UpdateAutoWidth();
     }
 
     private static void OnPlaceholderTextChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
@@ -169,6 +187,7 @@ public partial class NumericSpinner : UserControl
 
         WatermarkBehavior.SetText(s.PART_TextBox, (e.NewValue as string) ?? string.Empty);
         s.UpdateSuffixOpacity();
+        s.UpdateAutoWidth();
     }
 
     // AllowInherit / InheritValue can land after the binding has already pushed Value, so the
@@ -180,6 +199,7 @@ public partial class NumericSpinner : UserControl
         if (d is not NumericSpinner s) return;
 
         s.SyncTextFromValue();
+        s.UpdateAutoWidth();
     }
 
     // Matches the suffix label's opacity to the watermark's so a row showing the placeholder
@@ -204,6 +224,80 @@ public partial class NumericSpinner : UserControl
 
         int clamped = Math.Clamp(s.Value, s.Minimum, s.Maximum);
         if (clamped != s.Value) s.Value = clamped;
+        else s.UpdateAutoWidth();
+    }
+
+    private void UpdateAutoWidth()
+    {
+        string valueText = PART_TextBox.Text;
+        if (string.IsNullOrEmpty(valueText))
+            valueText = PlaceholderText;
+        if (string.IsNullOrEmpty(valueText) && !(AllowInherit && Value == InheritValue))
+            valueText = Value.ToString(CultureInfo.InvariantCulture);
+        if (string.IsNullOrEmpty(valueText))
+            valueText = "0";
+
+        double valueWidth = MeasureText(
+            valueText,
+            PART_TextBox.FontFamily,
+            PART_TextBox.FontStyle,
+            PART_TextBox.FontWeight,
+            PART_TextBox.FontStretch,
+            PART_TextBox.FontSize);
+
+        string suffixText = PART_Suffix.Text;
+        double suffixWidth = string.IsNullOrEmpty(suffixText)
+            ? 0
+            : MeasureText(
+                suffixText,
+                PART_Suffix.FontFamily,
+                PART_Suffix.FontStyle,
+                PART_Suffix.FontWeight,
+                PART_Suffix.FontStretch,
+                PART_Suffix.FontSize)
+              + PART_Suffix.Margin.Left
+              + PART_Suffix.Margin.Right;
+
+        Thickness textPadding = PART_TextBox.Padding;
+        Thickness borderPadding = PART_ValueBorder.Padding;
+        Thickness borderThickness = PART_ValueBorder.BorderThickness;
+        double spinnerWidth = PART_SpinnerColumn.Width.IsAbsolute
+            ? PART_SpinnerColumn.Width.Value
+            : PART_SpinnerColumn.ActualWidth;
+
+        MinWidth = Math.Ceiling(
+            valueWidth
+            + textPadding.Left
+            + textPadding.Right
+            + suffixWidth
+            + borderPadding.Left
+            + borderPadding.Right
+            + borderThickness.Left
+            + borderThickness.Right
+            + spinnerWidth
+            + 2);
+    }
+
+    private double MeasureText(
+        string text,
+        Media.FontFamily fontFamily,
+        System.Windows.FontStyle fontStyle,
+        System.Windows.FontWeight fontWeight,
+        System.Windows.FontStretch fontStretch,
+        double fontSize)
+    {
+        var typeface = new Media.Typeface(fontFamily, fontStyle, fontWeight, fontStretch);
+        double pixelsPerDip = Media.VisualTreeHelper.GetDpi(this).PixelsPerDip;
+        var formattedText = new Media.FormattedText(
+            text,
+            CultureInfo.CurrentUICulture,
+            System.Windows.FlowDirection.LeftToRight,
+            typeface,
+            fontSize,
+            Media.Brushes.Black,
+            pixelsPerDip);
+
+        return formattedText.WidthIncludingTrailingWhitespace;
     }
 
     private void SyncTextFromValue()
@@ -300,7 +394,7 @@ public partial class NumericSpinner : UserControl
     private void OnPreviewMouseWheel(object sender, MouseWheelEventArgs e)
     {
         // Only steal the wheel when focused; otherwise let it bubble up to a parent ScrollViewer.
-        if (!PART_TextBox.IsKeyboardFocused) return;
+        if (!PART_TextBox.IsKeyboardFocused && !HandleMouseWheelWhenMouseOver) return;
 
         // Mirror ArrowStepFromModifiers: Ctrl+Shift -> ExtraLargeStep, Ctrl -> LargeStep, else WheelStep.
         ModifierKeys mods = Keyboard.Modifiers;
@@ -338,6 +432,8 @@ public partial class NumericSpinner : UserControl
     private void OnTextBoxLostFocus(object sender, RoutedEventArgs e) => Commit();
 
     private void OnTextBoxFocusChanged(object sender, RoutedEventArgs e) => UpdateSuffixOpacity();
+
+    private void OnTextBoxTextChanged(object sender, TextChangedEventArgs e) => UpdateAutoWidth();
 
     private void OnSpinUpClick(object sender, RoutedEventArgs e) => Adjust(Step);
 

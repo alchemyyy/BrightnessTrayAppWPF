@@ -18,6 +18,7 @@ internal static class GlyphCatalog
     public const string CRESCENT_SUN = "\uF08C";  // Blue Light
     public const string CRESCENT_MOON_OLD = "\uE708";  // Quiet Hours
     public const string CRESCENT_MOON = "\uEC46";  // Mob Quiet Hours
+    public const string CRESCENT_MOON_BOLD = "\uF0CE";  // Quiet Hours Badge 12
 
     public const string EMPTY_CIRCLE_0 = "\uEDAF";  // Inking Color Outline
     public const string EMPTY_CIRCLE_3 = "\uEA3A";  // Circle Ring
@@ -28,6 +29,7 @@ internal static class GlyphCatalog
     public const string FILLED_CIRCLE_4 = "\uF0B6";  // status circle 7
     public const string FILLED_CIRCLE_LARGE = "\uE91F";  // filled circle mask
 
+    public const string FILLED_SQUARE = "\uE978";  // Presence Chicklet
     // ===========================================================================
     // NIGHT-LIGHT ICON GLYPHS
     // ===========================================================================

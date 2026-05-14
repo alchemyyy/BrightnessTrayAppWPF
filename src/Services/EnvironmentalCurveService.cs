@@ -383,7 +383,8 @@ public sealed class EnvironmentalCurveService : IDisposable
     private void HarmonizeBrightnessCurveStates(bool inDisabled)
     {
         HarmonizeRow(_masterMonitor, inDisabled);
-        foreach (MonitorInfo monitor in _monitors) HarmonizeRow(monitor, inDisabled);
+        bool holdIndividuals = inDisabled || _masterMonitor.SliderState == SliderState.CurveReleased;
+        foreach (MonitorInfo monitor in _monitors) HarmonizeRow(monitor, holdIndividuals);
     }
 
     /// <summary>

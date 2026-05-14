@@ -10,8 +10,8 @@ namespace BrightnessTrayAppWPF.Models;
 /// and impossible flag combinations are unrepresentable.
 /// Transition logic lives on <see cref="SliderStateMachine"/>; this enum is just the value.
 /// Master and night-light rows use a subset of the values:
-/// master never enters <see cref="Disabled"/> or <see cref="CurveReleased"/>;
-/// night-light never enters <see cref="Disabled"/> or <see cref="CurveReleased"/> either.
+/// master and night-light never enter <see cref="Disabled"/>, but can enter
+/// <see cref="CurveReleased"/> for temporary manual curve overrides.
 /// </summary>
 public enum SliderState
 {
@@ -132,6 +132,11 @@ public class MonitorInfo : INotifyPropertyChanged
     private SliderState _sliderState = SliderState.Enabled;
     private SliderState _preFailureSliderState = SliderState.Enabled;
     private bool _isDragging;
+    private bool _isCurveStopwatchVisible;
+    private bool _isCurveStopwatchEnabled;
+    private int _curveStopwatchMinutes = 60;
+    private DateTime _curveStopwatchEngagedAtUtc;
+    private DateTime _curveStopwatchReenableAtUtc;
 
     /// <summary>
     /// Unique identifier for the monitor.
@@ -449,6 +454,85 @@ public class MonitorInfo : INotifyPropertyChanged
 
     /// <summary>True when the user excluded this row from master-driven changes.</summary>
     public bool IsDisabled => _sliderState == SliderState.Disabled;
+
+    public bool IsCurveStopwatchVisible
+    {
+        get => _isCurveStopwatchVisible;
+        set
+        {
+            if (_isCurveStopwatchVisible == value) return;
+            _isCurveStopwatchVisible = value;
+            OnPropertyChanged();
+            OnPropertyChanged(nameof(IsCurveStopwatchSpinnerVisible));
+        }
+    }
+
+    public bool IsCurveStopwatchEnabled
+    {
+        get => _isCurveStopwatchEnabled;
+        set
+        {
+            if (_isCurveStopwatchEnabled == value) return;
+            _isCurveStopwatchEnabled = value;
+            OnPropertyChanged();
+            OnPropertyChanged(nameof(IsCurveStopwatchSpinnerVisible));
+            OnPropertyChanged(nameof(CurveStopwatchToolTip));
+        }
+    }
+
+    public bool IsCurveStopwatchSpinnerVisible => _isCurveStopwatchVisible && _isCurveStopwatchEnabled;
+
+    public int CurveStopwatchMinutes
+    {
+        get => _curveStopwatchMinutes;
+        set
+        {
+            int clamped = Math.Max(1, value);
+            if (_curveStopwatchMinutes == clamped) return;
+            _curveStopwatchMinutes = clamped;
+            OnPropertyChanged();
+        }
+    }
+
+    public DateTime CurveStopwatchEngagedAtUtc
+    {
+        get => _curveStopwatchEngagedAtUtc;
+        set
+        {
+            if (_curveStopwatchEngagedAtUtc == value) return;
+            _curveStopwatchEngagedAtUtc = value;
+            OnPropertyChanged();
+        }
+    }
+
+    public DateTime CurveStopwatchReenableAtUtc
+    {
+        get => _curveStopwatchReenableAtUtc;
+        set
+        {
+            if (_curveStopwatchReenableAtUtc == value) return;
+            _curveStopwatchReenableAtUtc = value;
+            OnPropertyChanged();
+            OnPropertyChanged(nameof(CurveStopwatchToolTip));
+        }
+    }
+
+    public string CurveStopwatchToolTip => _isCurveStopwatchEnabled
+        ? $"Current time left: {FormatCurveStopwatchTimeLeft(_curveStopwatchReenableAtUtc)}{Environment.NewLine}click to disable time delayed automatic curve mode reinitialization."
+        : "click to enable time delayed automatic curve mode reinitialization.";
+
+    public void RefreshCurveStopwatchToolTip() => OnPropertyChanged(nameof(CurveStopwatchToolTip));
+
+    private static string FormatCurveStopwatchTimeLeft(DateTime endUtc)
+    {
+        TimeSpan remaining = endUtc - DateTime.UtcNow;
+        if (remaining < TimeSpan.Zero) remaining = TimeSpan.Zero;
+
+        int totalMinutes = (int)Math.Ceiling(remaining.TotalMinutes);
+        int hours = totalMinutes / 60;
+        int minutes = totalMinutes % 60;
+        return $"{hours}h:{minutes:00}m";
+    }
 
     /// <summary>
     /// Brightness offset captured relative to the master at drag-start.

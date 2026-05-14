@@ -140,6 +140,12 @@ note over MS, BFL $TINT_GREEN
   Brightness property writes) against the persisted
   EnvironmentalBrightnessCurveEnabled flag until the
   flyout-owned curve service can harmonize rows.
+
+  When the flyout started with an empty monitor collection,
+  BrightnessFlyout performs one startup-only rebaseline on
+  the first MonitorsRefreshed before EnvironmentalCurveService
+  evaluates. That removes offsets created against the rolling
+  persisted master during staggered per-row attach.
 end note
 
 == Phase B: immediate cold start or deferred topology ==
@@ -153,6 +159,7 @@ MS -> MS  : ResortMonitors -> per-row Move events
 MS -> BFL : (each Move re-enters OnMonitorsCollectionChanged)
 MS -> APP : MonitorsRefreshed fan-out
 MS -> APP : OnMonitorsRefreshedForHotkeys\n(reapply per-monitor bindings)
+MS -> BFL : OnInitialMonitorEnrollmentRefreshed\n(startup-only master/offset rebaseline)
 MS -> ECS : OnMonitorsRefreshed -> Evaluate()
 ECS -> ECS : HarmonizeRow per monitor\n(Enabled -> CurveActive / CurveSleeping)
 ECS -> MS : EnqueueDirectBrightness per row\n(curve targets)

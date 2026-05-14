@@ -307,7 +307,8 @@ internal static class NightLightCloudStore
         (int InitializeRva, int SInstanceRva, int SetTargetColorTemperatureRva, int SetPreviewRva)>
         BuildDefaultKnownRvas() => new()
         {
-             ["10.0.26100.8117"] = (0x26564, 0x68D50, 0x27EE8, 0x27E20),
+            //need to update this to check guid too????
+             //["10.0.26100.8117"] = (0x26564, 0x68D50, 0x27EE8, 0x27E20),
         };
 
     /// <summary>

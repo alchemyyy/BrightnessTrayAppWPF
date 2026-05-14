@@ -267,7 +267,11 @@ public partial class App
         try { RequestTrayRefresh(); }
         catch (Exception ex) { WPFLog.Log($"App.OnStartup: RequestTrayRefresh failed: {ex.Message}"); }
 
-        try { PreWarmFlyout(); }
+        try
+        {
+            PreWarmFlyout();
+            RestoreStartupUndockedFlyoutIfRequested();
+        }
         catch (Exception ex) { WPFLog.Log($"App.OnStartup: PreWarmFlyout failed: {ex.Message}"); }
 
         // Live (min, max) brightness across the active monitor set;
@@ -763,6 +767,26 @@ public partial class App
         _contextMenu = CreateContextMenu();
     }
 
+    private void RestoreStartupUndockedFlyoutIfRequested()
+    {
+        if (_activeFlyout == null) return;
+
+        if (_appSettings is not
+            {
+                RestoreFlyoutUndockedOnStartup: true,
+                FlyoutUndocked: true,
+                FlyoutHasSavedPosition: true,
+                AllowFlyoutUndock: true
+            })
+            return;
+
+        // Startup restore is the one path that intentionally bypasses ShowBrightnessFlyout:
+        // explicit user opens redock by design, but a persisted undocked flyout should come
+        // back as a visible free-floating window as soon as the app launches.
+        _activeFlyout.Show();
+        _activeFlyout.Activate();
+    }
+
     private void OnFlyoutDeactivated()
     {
         // Suppress the tray click that caused this deactivation;
@@ -1044,7 +1068,7 @@ public partial class App
             AppServices.BrightnessFlyout = _activeFlyout;
         }
 
-        // Tray-icon click always redocks.
+        // Explicit flyout opens always redock.
         // If the flyout was already undocked, this both restores the OS-anchored position
         // and persists the new docked state so the next session honors the user's most recent intent.
         _activeFlyout.Redock();

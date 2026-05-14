@@ -1775,8 +1775,7 @@ public sealed class MonitorService : IDisposable
         // that assigns MonitorInfo.Brightness without SuspendHardwareWrites. The user's intent
         // wins, and CurveReleased prevents the curve's next tick from immediately overwriting it.
         // Mirrors the slider-drag release at BrightnessFlyout.PreviewMouseLeftButtonDown.
-        // Master/night-light are excluded:
-        // master never enters CurveReleased per the SliderState design,
+        // Master/night-light are excluded: the flyout owns their manual curve-release transitions,
         // and night-light isn't subscribed to OnMonitorPropertyChanged anyway.
         if (!monitor.IsMaster && !monitor.IsNightLight)
             monitor.SliderState = SliderStateMachine.OnUserRelease(monitor.SliderState);
