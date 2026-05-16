@@ -27,7 +27,6 @@ package "Message-only HWNDs (3)" $TINT_BLUE {
 package "App + Services" $TINT_AMBER {
   [App.OnDisplayTopologyChanged]                                        as AOD
   [MonitorService.Refresh()]                                            as MSR
-  [MonitorService.ReapplySliderState()]                                 as MSRA
   [App.OnHotkeyFired\n(switch over HotkeyAction)]                       as AOH
   [App.OnTrayLeftClick / RightClick / Scrolled / LeftDoubleClick]       as AOT
   [App.OnThemeChanged]                                                  as ATC
@@ -67,13 +66,13 @@ DEM --> MSR  : Refresh() from slow-path\nScanAndReconcile (gated by\nAllProfileM
 BFL ..> DEM  : RunSingleGatedScan()\n(trigger B from flyout Show)
 
 AOD --> MSR  : Refresh()
-AOD --> MSRA : ReapplySliderState()
 AOD --> NLR  : NightLightProvider.Reapply()
 AOD --> RTR
 
+MSR ..> BFL  : MonitorsAcquired(acquired rows)\n(manual mode may write only acquired rows)
 MSR ..> AOMRH : MonitorsRefreshed event\n(fan-out: DEM short-circuit, DRS candidate refresh,\nECS immediate Evaluate, MBR resubscribe)
 AOMRH --> GHS : Apply(_appSettings.Hotkeys)\n(re-register per-monitor bindings)
-MSR ..> ECS  : MonitorsRefreshed -> OnMonitorsRefreshed\n(immediate Evaluate so freshly-promoted rows\nharmonize before ReapplySliderState)
+MSR ..> ECS  : MonitorsRefreshed -> OnMonitorsRefreshed\n(immediate Evaluate after read-only acquisition)
 MSR ..> DRS  : MonitorsRefreshed -> re-check\nrecovery candidates
 MSR ..> MBR  : MonitorsRefreshed -> Resubscribe
 DRS ..> MBR  : MonitorAbandoned event\n(per-monitor settle stamps)

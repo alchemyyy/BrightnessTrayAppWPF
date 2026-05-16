@@ -67,7 +67,7 @@ internal static class NightLightCloudStore
     // Verified RVAs for known builds. Falls through to PDBSymbolResolver on miss; the resolver caches its
     // result so the symbol-server hit is a one-time cost per Windows update.
     //
-    // Defaults are mirrored to %LocalAppData%\BrightnessTrayAppWPF\nightlight\nightlight_known_rvas.xml on
+    // Defaults are mirrored to %LocalAppData%\TrayAppWPF\BrightnessTrayAppWPF\nightlight\nightlight_known_rvas.xml on
     // first run so users can add entries for new Windows builds without recompiling. If the file matches the
     // canonical default serialization byte-for-byte we keep the in-memory defaults; if it has been
     // hand-edited we discard defaults and load the file. See LoadKnownRvas for the full reconciliation logic.
@@ -313,7 +313,7 @@ internal static class NightLightCloudStore
 
     /// <summary>
     /// Reconciles the in-source defaults from <see cref="BuildDefaultKnownRvas"/> with a user-editable XML
-    /// mirror at <c>%LocalAppData%\BrightnessTrayAppWPF\nightlight_known_rvas.xml</c>. First run writes the
+    /// mirror at <c>%LocalAppData%\TrayAppWPF\BrightnessTrayAppWPF\nightlight_known_rvas.xml</c>. First run writes the
     /// defaults; subsequent runs use byte-equality against the canonical default serialization to decide
     /// whether the file is unmodified (keep defaults) or has been hand-edited (clear defaults, load file).
     /// Any IO/parse failure logs and falls back to in-memory defaults so init never blocks on filesystem

@@ -104,7 +104,7 @@ end note
 
 TH -> MS  : DoBrightnessWriteAsync(entry, pct, ctx)
 loop write attempts (ValidationAttempts, ScaledRetryDwellMs)
-  MS -> DS  : TrySetVCPFeature(VCPConstants.Brightness, raw)\nWithDDCLockAsync(per-monitor lock)
+  MS -> DS  : TrySetVCPFeature(entry.DDC.BrightnessCode, raw)\nWithDDCLockAsync(per-monitor lock)
   DS -> DXV : SetVCPFeature
   DXV --> DS : ok / Win32 error
   DS  --> MS
@@ -117,13 +117,13 @@ end
 alt write succeeded and no replacement queued
   MS -> MS : VerifyAppliedAsync(entry, expectedRaw, ctx)
   loop verify attempts (ValidationAttempts)
-    MS -> DS  : TryGetVCPFeature(VCPConstants.Brightness)\nWithDDCLockAsync
+    MS -> DS  : TryGetVCPFeature(entry.DDC.BrightnessCode)\nWithDDCLockAsync
     DS -> DXV : GetVCPFeatureAndVCPFeatureReply
     DXV --> DS
     DS  --> MS
     alt match (within +/- 1 raw unit)
     else mismatch -> RefreshHandle once + re-apply
-      MS -> DS : TrySetVCPFeature(0x10, raw)
+      MS -> DS : TrySetVCPFeature(entry.DDC.BrightnessCode, raw)
     end
   end
 else write retries exhausted, no replacement queued
@@ -132,9 +132,10 @@ end
 
 note over MS
   After every successful bus write, MonitorService stamps
-  KnownDisplaysStore.LastBusBrightness so a Failed-recovered
-  or fully-re-enumerated panel rebinds to the visible-on-screen
-  value, not the EEPROM default (cf2e77e).
+  KnownDisplaysStore.LastBusBrightness for diagnostics/history.
+  Acquisition no longer hydrates sliders from this value; it reads
+  current DDC first, then profile/manual UI state is restored by
+  BrightnessFlyout without implicit hardware replay.
 end note
 MS -> KDS : stamp LastBusBrightness
 
@@ -161,8 +162,8 @@ end note
 alt read OK
   MS -> MS : PromoteRecovered\n(clears IsReadDegraded; passes\nIsBrightnessCurveEnabledQuery + IsInDisabledPeriodQuery\nto OnHardwareRecovered - fixed H-03)
 else read FAIL, TryDDCWriteProbe succeeds
-  MS -> DS : TryDDCWriteProbe writes\nconst uint ProbeRaw = 50 directly\n(fixed H-11: was percent-as-raw,\nnow a fixed safe in-range raw value\nthat bypasses pct/100 * entry.Max scaling)
-  MS -> MS : PromoteReadDegraded\n(IsReadDegraded=true, slider operable)
+  MS -> DS : TryDDCWriteProbe writes\ncurrent manual slider value scaled by\nLastKnownBrightnessMax\n(gated: explicit user/profile value,\nnot curve-owned, not disabled-before-failure)
+  MS -> MS : PromoteReadDegraded\n(IsReadDegraded=true, slider operable)\n+ MonitorsAcquired
 else both halves fail
   MS -> MS : SliderState stays Failed (sticky);\nrefresh LastDDCError
 end

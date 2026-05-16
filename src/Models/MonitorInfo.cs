@@ -120,6 +120,7 @@ public class MonitorInfo : INotifyPropertyChanged
     private double _brightness;
     private double _lastUserBrightness;
     private double _virtualBrightness;
+    private bool _hasUserBrightness;
     private bool _isPoweredOn = true;
     private bool _showPreview;
     private double _previewBrightness;
@@ -195,6 +196,13 @@ public class MonitorInfo : INotifyPropertyChanged
     public int ArrangementY { get; set; }
 
     /// <summary>
+    /// Last successful raw VCP maximum for the monitor's brightness feature.
+    /// Preserved while the row is Failed/ReadDegraded so write-only recovery can keep scaling
+    /// percentage targets against the monitor's real range instead of falling back to raw 0-100.
+    /// </summary>
+    public uint LastKnownBrightnessMax { get; set; } = 100;
+
+    /// <summary>
     /// Current brightness level (0-100).
     /// Always stores the raw double so the TwoWay binding stays in sync with Slider.Value
     /// (otherwise WPF would pull the stale source value back onto the slider thumb each tick,
@@ -227,6 +235,7 @@ public class MonitorInfo : INotifyPropertyChanged
             // Unconditional even when _brightness == value: LastUserBrightness can legitimately
             // diverge from Brightness post-recovery, so a user-drag back to the current Brightness
             // still has to reclaim the baseline.
+            _hasUserBrightness = true;
             _lastUserBrightness = value;
             // exact-primitive comparison is intentional
             if (_brightness == value) return;
@@ -278,16 +287,37 @@ public class MonitorInfo : INotifyPropertyChanged
     }
 
     /// <summary>
+    /// True after a user/profile/manual path has supplied an explicit slider value.
+    /// Hardware acquisition reads initialize the slider baseline but do not set this flag,
+    /// so later recovery reads can keep using the bus value until the user actually expresses intent.
+    /// </summary>
+    public bool HasUserBrightness => _hasUserBrightness;
+
+    /// <summary>
+    /// Initial DDC acquisition seed. Sets the slider and baseline to the hardware value without
+    /// marking it as explicit user intent and without raising notifications before binding is attached.
+    /// </summary>
+    public void InitializeBrightnessFromHardware(double value)
+    {
+        _brightness = value;
+        _virtualBrightness = value;
+        _lastUserBrightness = value;
+        _hasUserBrightness = false;
+    }
+
+    /// <summary>
     /// Hardware-sync setter that mutates <see cref="Brightness"/> without claiming user intent
     /// (i.e. without touching <see cref="LastUserBrightness"/>).
     /// Mirrors the public Brightness setter's notification gating; the only difference is
-    /// LastUserBrightness is preserved.
+    /// LastUserBrightness is preserved once a user/profile value exists; before that, hardware reads
+    /// are allowed to define the baseline.
     /// Called by MonitorService when a recovered or freshly-promoted monitor's bus value is
     /// authoritative for the slider thumb but does not represent a fresh user choice.
     /// </summary>
     public void SyncBrightnessFromHardware(double value)
     {
         _virtualBrightness = value;
+        if (!_hasUserBrightness) _lastUserBrightness = value;
         if (_brightness == value) return;
 
         int oldRounded = (int)Math.Round(_brightness);
@@ -430,6 +460,9 @@ public class MonitorInfo : INotifyPropertyChanged
         _preFailureSliderState is SliderState.CurveActive
             or SliderState.CurveSleeping
             or SliderState.CurveReleased;
+
+    /// <summary>True when the row was user-disabled from master writes before it failed.</summary>
+    public bool WasDisabledBeforeFailure => _preFailureSliderState == SliderState.Disabled;
 
     /// <summary>True when this row participates in master-driven changes (not Disabled, not Failed).</summary>
     public bool IsParticipatingInMaster => _sliderState is not (SliderState.Disabled or SliderState.Failed);

@@ -46,9 +46,10 @@ end note
 
 note bottom of ReadDegraded
   ReadDegraded monitors STAY candidates so probes continue to test reads.
-  TryDDCWriteProbe (MonitorService.cs:1332-1350) writes const ProbeRaw=50
-  (an in-range raw VCP value, no scaling dependency on entry.Max).
-  Safe across Max=100 and Max=255 panels.
+  TryDDCWriteProbe writes the current manual/profile slider target only
+  when that target is explicit, not curve-owned, and not disabled-before-failure.
+  The target is scaled by LastKnownBrightnessMax, so Max=255 panels do not
+  receive a raw 0-100 fallback while reads are degraded.
 end note
 
 ' Primitives explicitly NOT present (verified absent at commit 4b5600b)

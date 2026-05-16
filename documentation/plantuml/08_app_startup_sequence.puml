@@ -135,11 +135,11 @@ note over MS, BFL $TINT_GREEN
   ApplyBrightnessOnStartup, and initializes only the
   newly attached row's Offset.
 
-  MonitorService also gates automatic slider-value replays
-  (bounds/norm projection, ReapplySliderState, unsuspended
-  Brightness property writes) against the persisted
-  EnvironmentalBrightnessCurveEnabled flag until the
-  flyout-owned curve service can harmonize rows.
+  MonitorService acquisition is read-only: bounds/norm
+  projection installs metadata without replaying hardware,
+  and hardware-read hydration uses write suspension.
+  Mode-specific writes happen later through MonitorsAcquired
+  (manual rows only) or EnvironmentalCurveService.
 
   When the flyout started with an empty monitor collection,
   BrightnessFlyout performs one startup-only rebaseline on
@@ -157,6 +157,7 @@ loop per enumerated monitor
 end
 MS -> MS  : ResortMonitors -> per-row Move events
 MS -> BFL : (each Move re-enters OnMonitorsCollectionChanged)
+MS -> BFL : MonitorsAcquired(acquired rows)\n(manual mode writes only explicit\nuser/profile values on acquired rows)
 MS -> APP : MonitorsRefreshed fan-out
 MS -> APP : OnMonitorsRefreshedForHotkeys\n(reapply per-monitor bindings)
 MS -> BFL : OnInitialMonitorEnrollmentRefreshed\n(startup-only master/offset rebaseline)

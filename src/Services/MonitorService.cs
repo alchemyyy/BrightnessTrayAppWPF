@@ -1,5 +1,6 @@
 using System.Collections.ObjectModel;
 using System.ComponentModel;
+using System.Globalization;
 using System.Windows.Threading;
 using BrightnessTrayAppWPF.DDCCI;
 using BrightnessTrayAppWPF.Models;
@@ -93,10 +94,16 @@ public sealed class MonitorService : IDisposable
     public event Action? MonitorsRefreshed;
 
     /// <summary>
+    /// Raised for monitors whose DDC channel was newly acquired or recovered during a refresh.
+    /// Acquisition itself is read-only; subscribers decide whether a mode-specific write is warranted.
+    /// Always fires on the UI thread before <see cref="MonitorsRefreshed"/>.
+    /// </summary>
+    public event Action<IReadOnlyList<MonitorInfo>>? MonitorsAcquired;
+
+    /// <summary>
     /// Optional caller-supplied predicate: returns true when the brightness environmental curve is
-    /// currently engaged. Used as the fallback gate for the physical brightness Failed-recovered paths
-    /// when no persisted LastBusBrightness is available - keeps the legacy "skip sync when curve is
-    /// engaged" behaviour for first-ever-recoveries. Null query -> false.
+    /// currently engaged. Used by physical brightness acquisition/recovery so hardware reads do not
+    /// overwrite curve-owned slider intent. Null query -> false.
     /// </summary>
     public Func<bool>? IsBrightnessCurveEnabledQuery { get; set; }
 
@@ -111,14 +118,6 @@ public sealed class MonitorService : IDisposable
     public Func<bool>? IsInDisabledPeriodQuery { get; set; }
 
     /// <summary>
-    /// Optional caller-supplied getter for the master row's current brightness. Used on
-    /// Failed-recovered paths to recompute <see cref="MonitorInfo.Offset"/> when Brightness is
-    /// restored from the persisted bus value, mirroring the formula BrightnessFlyout.AttachMonitor
-    /// uses (Offset = Brightness - master). Null -> Offset is left unchanged. Wired from the flyout
-    /// after MasterMonitor is constructed, so MonitorService stays free of master-row knowledge.
-    /// </summary>
-    public Func<double>? MasterBrightnessQuery { get; set; }
-
     public MonitorService(IDisplayService display, AppSettings settings, KnownDisplaysStore? knownDisplays = null)
     {
         _display = display;
@@ -178,8 +177,13 @@ public sealed class MonitorService : IDisposable
         }
 
         ApplyNameOverridesToExisting();
-        ApplyBrightnessBoundOverridesToExisting();
-        ApplyNormCurveOverridesToExisting();
+        if (ApplyBrightnessVcpOverridesToExisting())
+        {
+            Refresh();
+            return;
+        }
+        ApplyBrightnessBoundOverridesToExisting(replayHardware: true);
+        ApplyNormCurveOverridesToExisting(replayHardware: true);
         ResortMonitors();
     }
 
@@ -195,6 +199,28 @@ public sealed class MonitorService : IDisposable
         foreach (MonitorInfo info in Monitors) info.Name = ResolveDisplayName(info, overrides);
     }
 
+    private bool ApplyBrightnessVcpOverridesToExisting()
+    {
+        Dictionary<string, MonitorOverrideEntry> map = BuildMonitorOverrideEntryMap();
+        bool changed = false;
+
+        foreach (MonitorEntry entry in _entries.Values)
+        {
+            byte before = entry.DDC.BrightnessCode;
+            entry.DDC.BrightnessCode = VCPConstants.Brightness;
+            DDCMonitorDatabase.ApplyProfile(entry.DDC);
+            ApplyBrightnessVcpOverride(entry.DDC, entry.EDIDKey, map);
+            if (entry.DDC.BrightnessCode == before) continue;
+
+            changed = true;
+            entry.LastEnqueuedPercentage = -1;
+            MonitorInfo? info = Monitors.FirstOrDefault(m => m.ID == entry.ID);
+            if (info != null) info.LastKnownBrightnessMax = 100;
+        }
+
+        return changed;
+    }
+
     /// <summary>
     /// Pushes the per-monitor min/max brightness overrides
     /// (<see cref="MonitorOverrideEntry.MinBrightness"/> / <see cref="MonitorOverrideEntry.MaxBrightness"/>)
@@ -205,10 +231,10 @@ public sealed class MonitorService : IDisposable
     /// so a freshly-tightened floor snaps the panel up to the new minimum
     /// without waiting for the user's next slider drag.
     /// </summary>
-    private void ApplyBrightnessBoundOverridesToExisting()
+    private void ApplyBrightnessBoundOverridesToExisting(bool replayHardware)
     {
         Dictionary<string, MonitorOverrideEntry> map = BuildBrightnessBoundOverrideMap();
-        foreach (MonitorInfo info in Monitors) ApplyBrightnessBoundsTo(info, map);
+        foreach (MonitorInfo info in Monitors) ApplyBrightnessBoundsTo(info, map, replayHardware);
     }
 
     private Dictionary<string, string> BuildNameOverrideMap() =>
@@ -216,6 +242,34 @@ public sealed class MonitorService : IDisposable
             .Where(m => !string.IsNullOrWhiteSpace(m.Name))
             .GroupBy(m => m.ID, StringComparer.Ordinal)
             .ToDictionary(g => g.Key, g => g.Last().Name, StringComparer.Ordinal);
+
+    private Dictionary<string, MonitorOverrideEntry> BuildMonitorOverrideEntryMap() =>
+        _settings.MonitorOverrides
+            .GroupBy(m => m.ID, StringComparer.Ordinal)
+            .ToDictionary(g => g.Key, g => g.Last(), StringComparer.Ordinal);
+
+    private static void ApplyBrightnessVcpOverride(
+        DDCMonitor ddc,
+        string edidKey,
+        Dictionary<string, MonitorOverrideEntry> map)
+    {
+        if (string.IsNullOrEmpty(edidKey)) return;
+        if (!map.TryGetValue(edidKey, out MonitorOverrideEntry? ov)) return;
+        if (TryParseVcpCode(ov.BrightnessVcpOverride, out byte code)) ddc.BrightnessCode = code;
+    }
+
+    private static bool TryParseVcpCode(string? text, out byte code)
+    {
+        code = 0;
+        if (string.IsNullOrWhiteSpace(text)) return false;
+
+        string firstToken = text.Split([' ', '\t', ','], StringSplitOptions.RemoveEmptyEntries)[0];
+        if (firstToken.StartsWith("0x", StringComparison.OrdinalIgnoreCase))
+            return byte.TryParse(firstToken[2..], NumberStyles.HexNumber, CultureInfo.InvariantCulture, out code);
+
+        return byte.TryParse(firstToken, NumberStyles.Integer, CultureInfo.InvariantCulture, out code)
+               || byte.TryParse(firstToken, NumberStyles.HexNumber, CultureInfo.InvariantCulture, out code);
+    }
 
     /// <summary>
     /// Builds a lookup of MonitorOverrideEntry rows that carry an active min or max brightness override,
@@ -249,10 +303,10 @@ public sealed class MonitorService : IDisposable
     /// so a freshly-edited curve takes effect on hardware now,
     /// not when the user happens to touch the slider next.
     /// </summary>
-    private void ApplyNormCurveOverridesToExisting()
+    private void ApplyNormCurveOverridesToExisting(bool replayHardware)
     {
         Dictionary<string, MonitorOverrideEntry> map = BuildNormCurveOverrideMap();
-        foreach (MonitorInfo info in Monitors) ApplyNormCurveTo(info, map);
+        foreach (MonitorInfo info in Monitors) ApplyNormCurveTo(info, map, replayHardware);
     }
 
     /// <summary>
@@ -265,7 +319,8 @@ public sealed class MonitorService : IDisposable
     /// </summary>
     private void ApplyNormCurveTo(
         MonitorInfo info,
-        Dictionary<string, MonitorOverrideEntry> map)
+        Dictionary<string, MonitorOverrideEntry> map,
+        bool replayHardware)
     {
         if (!_entries.TryGetValue(info.ID, out MonitorEntry? entry)) return;
 
@@ -295,6 +350,10 @@ public sealed class MonitorService : IDisposable
         // Drop the dedupe sentinel: a previously-curved enqueue may have left LastEnqueuedPercentage
         // sitting at the old shaped value, which would short-circuit the upcoming re-push.
         entry.LastEnqueuedPercentage = -1;
+
+        // Acquisition/probe paths are read-only. They install the curve projection for the next explicit
+        // writer but never replay a slider value as a side effect of discovering DDC support.
+        if (!replayHardware) return;
 
         // Don't clobber a curve-owned row with the slider value; the curve owns the bus there
         // and will pick up the new norm-curve shape on its next tick (EnqueueDirectBrightness
@@ -328,7 +387,8 @@ public sealed class MonitorService : IDisposable
     /// </summary>
     private void ApplyBrightnessBoundsTo(
         MonitorInfo info,
-        Dictionary<string, MonitorOverrideEntry> map)
+        Dictionary<string, MonitorOverrideEntry> map,
+        bool replayHardware)
     {
         if (!_entries.TryGetValue(info.ID, out MonitorEntry? entry)) return;
 
@@ -354,6 +414,10 @@ public sealed class MonitorService : IDisposable
         // Drop the dedupe sentinel: a previously-clamped enqueue may have left LastEnqueuedPercentage
         // sitting at the old floor/ceiling, which would short-circuit the upcoming re-push.
         entry.LastEnqueuedPercentage = -1;
+
+        // Acquisition/probe paths are read-only. They install the floor/ceiling projection for the next explicit
+        // writer but never replay a slider value as a side effect of discovering DDC support.
+        if (!replayHardware) return;
 
         // Don't clobber a curve-owned row with the slider value; the curve owns the bus there
         // and the curve service applies the same floor/ceiling clamp on its own writes.
@@ -471,14 +535,17 @@ public sealed class MonitorService : IDisposable
         // this map the row would look dropped in Phase A and would be destroyed+recreated under the new
         // edid: key, losing SliderState / Offset / LastUserBrightness / subscriptions.
         Dictionary<string, DDCMonitor> latestByPortForm = new(StringComparer.Ordinal);
+        Dictionary<string, MonitorOverrideEntry> monitorOverridesByEDID = BuildMonitorOverrideEntryMap();
         foreach (DDCMonitor ddc in enumerated)
         {
+            string edidKey = ComputeEDIDKey(ddc);
+            ApplyBrightnessVcpOverride(ddc, edidKey, monitorOverridesByEDID);
+
             string id = ComputeMonitorId(ddc, _activeStrategy);
             if (string.IsNullOrEmpty(id)) continue;
 
             // Later HMONITORs win if there are duplicates
             latestByID[id] = ddc;
-            string edidKey = ComputeEDIDKey(ddc);
             edidKeyByID[id] = edidKey;
             if (!string.IsNullOrEmpty(edidKey)) latestByEdidKey[edidKey] = ddc;
             string portForm = ComputePortFormKey(ddc);
@@ -544,10 +611,10 @@ public sealed class MonitorService : IDisposable
                 existing.LastDDCError = "Monitor not currently enumerated.";
                 if (_entries.Remove(existing.ID, out MonitorEntry? droppedEntry))
                 {
+                    existing.LastKnownBrightnessMax = NormalizeBrightnessMax(droppedEntry.Max);
                     // In-flight write payload owns the (now-stale) DDC handle and will release cleanly;
                     // queued writes can't usefully target a missing panel, drop them.
                     _writeThrottler.Drop(existing.ID);
-                    _ = droppedEntry;
                 }
                 WPFLog.Log(
                     $"MonitorService: '{existing.Name}' dropped from enumeration; parking as Failed "
@@ -635,6 +702,8 @@ public sealed class MonitorService : IDisposable
     {
         if (!IsRefreshProbePhaseCurrent(phaseGen)) return;
 
+        List<MonitorInfo> acquired = [];
+
         foreach ((string id, DDCMonitor ddc) in latestByID)
         {
             string edidKey = edidKeyByID[id];
@@ -718,6 +787,7 @@ public sealed class MonitorService : IDisposable
                     entry.DDC.Y = ddc.Y;
                     entry.DDC.EDIDSerial = ddc.EDIDSerial;
                     entry.DDC.FriendlyName = ddc.FriendlyName;
+                    entry.DDC.BrightnessCode = ddc.BrightnessCode;
 
                     // Use the full retry mechanism (80/160/480 backoff + final-attempt RefreshHandle) so
                     // a single transient read failure (INVALID_DEVICE / INVALID_MESSAGE_CHECKSUM) doesn't
@@ -728,12 +798,17 @@ public sealed class MonitorService : IDisposable
                     if (!IsRefreshProbePhaseCurrent(phaseGen)) return;
 
                     if (probe.Ok)
+                    {
+                        entry.Max = NormalizeBrightnessMax(probe.Max);
+                        existingInfo.LastKnownBrightnessMax = entry.Max;
                         existingInfo.LastDDCError = null;
+                    }
                     else
                     {
                         existingInfo.SliderState = SliderStateMachine.OnHardwareFailed();
                         existingInfo.LastDDCError = probe.Error;
-                        _entries.Remove(existingInfo.ID);
+                        if (_entries.Remove(existingInfo.ID, out MonitorEntry? failedEntry))
+                            existingInfo.LastKnownBrightnessMax = NormalizeBrightnessMax(failedEntry.Max);
                         // Drop any queued write for this monitor - a fresh value applied to a now-demoted entry would
                         // only generate a doomed retry. An in-flight payload is left to drain on its own (it
                         // captured the entry's DDC handle and will release cleanly).
@@ -753,37 +828,28 @@ public sealed class MonitorService : IDisposable
                         int percent = promote.Max == 0
                             ? 0
                             : (int)Math.Round(promote.Current * 100.0 / promote.Max);
+                        uint promotedBrightnessMax = NormalizeBrightnessMax(promote.Max);
+                        existingInfo.LastKnownBrightnessMax = promotedBrightnessMax;
                         LogProfileIfMatched(ddc);
                         _entries[existingInfo.ID] = new MonitorEntry
                         {
                             ID = existingInfo.ID,
                             EDIDKey = edidKey,
                             DDC = ddc,
-                            Max = promote.Max > 0 ? promote.Max : 100,
+                            Max = promotedBrightnessMax,
                         };
-                        // Restore Brightness from the persisted last-bus value if we have one; otherwise
-                        // fall back to the legacy hardware-read sync (gated on curve state). Going through
-                        // the Brightness setter intentionally updates LastUserBrightness too so the slider's
-                        // value of record matches the bus value, and we recompute Offset off the same baseline.
-                        // See PromoteRecovered for the full rationale.
+                        // Acquisition is read-only for slider intent: a hardware read may initialize rows
+                        // that have no explicit manual/profile value yet, but it must not overwrite a
+                        // user-owned slider baseline or enqueue a write through the public Brightness setter.
                         // Snapshot the curve-state flags once and reuse them for both the bus-sync gate
                         // and the SliderState transition below - same call cost, single source of truth.
                         bool curveEngagedAtPromote = IsBrightnessCurveEnabledForHardware();
                         bool inDisabledAtPromote = IsBrightnessCurveDisabledPeriodActive();
 
-                        KnownDisplayEntry? recoverKnown =
-                            !string.IsNullOrEmpty(edidKey) ? _knownDisplays.Find(edidKey) : null;
-                        if (recoverKnown?.LastBusBrightness is int recoverBus)
-                        {
-                            existingInfo.Brightness = Math.Clamp(recoverBus, 0, 100);
-                            if (MasterBrightnessQuery is { } masterQuery)
-                                existingInfo.Offset = existingInfo.Brightness - masterQuery();
-                        }
-                        else
-                        {
-                            if (!existingInfo.WasCurveDrivenBeforeFailure && !curveEngagedAtPromote)
-                                existingInfo.SyncBrightnessFromHardware(Math.Clamp(percent, 0, 100));
-                        }
+                        if (!existingInfo.HasUserBrightness
+                            && !existingInfo.WasCurveDrivenBeforeFailure
+                            && !curveEngagedAtPromote)
+                            SyncBrightnessReadOnly(existingInfo, Math.Clamp(percent, 0, 100));
                         // Recovery transitions Failed -> the right curve-aware state in ONE PropertyChanged fan-out.
                         // Plumbing the live curve flags here lets the row land directly in CurveActive / CurveSleeping
                         // when curves are engaged, instead of going Enabled first and getting harmonized after by the
@@ -792,6 +858,7 @@ public sealed class MonitorService : IDisposable
                         existingInfo.SliderState = SliderStateMachine.OnHardwareRecovered(
                             existingInfo.SliderState, curveEngagedAtPromote, inDisabledAtPromote);
                         existingInfo.LastDDCError = null;
+                        acquired.Add(existingInfo);
                         WPFLog.Log($"MonitorService: promoted '{ddc.Name}' to DDC/CI-supported");
                     }
                     else
@@ -809,22 +876,11 @@ public sealed class MonitorService : IDisposable
             int newPct = supported && newRead.Max > 0
                 ? (int)Math.Round(newRead.Current * 100.0 / newRead.Max)
                 : 0;
+            uint newBrightnessMax = supported ? NormalizeBrightnessMax(newRead.Max) : 100;
 
-            // Restore the last-known bus value from displays.json. When the user power-cycles a monitor
-            // that drops off OS enumeration entirely, this is the only path that re-creates its
-            // MonitorInfo - so without this seed, Brightness would fall back to whatever hardware
-            // happens to report at enumeration instant (typically a leftover or factory default).
-            // Persisting the bus value (not LastUserBrightness) is what matters: under curve mode the
-            // two diverge - the curve drives the bus while LastUserBrightness sits at the user's last
-            // manual drag. Seeding from the bus value gives the user "monitor comes back where I left
-            // it visually."
-            // Offset is intentionally NOT seeded here - BrightnessFlyout.AttachMonitor recomputes it
-            // from Brightness - master on every CollectionChanged add, so any seeded value is overwritten.
-            // First-ever-sight monitors have no stored entry; fall back to the hardware reading.
-            KnownDisplayEntry? known = _knownDisplays.Find(edidKey);
-            int seededBrightness = known?.LastBusBrightness is int storedBus
-                ? Math.Clamp(storedBus, 0, 100)
-                : Math.Clamp(newPct, 0, 100);
+            // New rows start from the current DDC read. Saved/profile manual values are restored by
+            // BrightnessFlyout as UI state; LastBusBrightness is deliberately not an acquisition source.
+            int seededBrightness = Math.Clamp(newPct, 0, 100);
 
             SliderState initialSliderState = supported
                 ? InitialHardwareFunctionalSliderState()
@@ -842,12 +898,13 @@ public sealed class MonitorService : IDisposable
                 DisplayNumber = ddc.DisplayNumber,
                 ArrangementX = ddc.X,
                 ArrangementY = ddc.Y,
-                Brightness = seededBrightness,
+                LastKnownBrightnessMax = newBrightnessMax,
                 IsPoweredOn = true,
                 LastDDCError = supported ? null : newRead.Error,
                 IconGlyph = "\uE7F4",
                 SliderState = initialSliderState,
             };
+            info.InitializeBrightnessFromHardware(seededBrightness);
 
             if (supported)
             {
@@ -857,7 +914,7 @@ public sealed class MonitorService : IDisposable
                     ID = id,
                     EDIDKey = edidKey,
                     DDC = ddc,
-                    Max = newRead.Max > 0 ? newRead.Max : 100,
+                    Max = newBrightnessMax,
                 };
             }
             else
@@ -868,6 +925,7 @@ public sealed class MonitorService : IDisposable
             // and a later promotion doesn't need to re-wire the handler.
             info.PropertyChanged += OnMonitorPropertyChanged;
             Monitors.Add(info);
+            if (supported) acquired.Add(info);
         }
 
         ResortMonitors();
@@ -878,12 +936,12 @@ public sealed class MonitorService : IDisposable
         // which the OnMonitorPropertyChanged subscription (attached above) picks up
         // and pushes to hardware - so a hot-plugged panel sitting outside the override window
         // is squeezed back in without an explicit replay call here.
-        ApplyBrightnessBoundOverridesToExisting();
+        ApplyBrightnessBoundOverridesToExisting(replayHardware: false);
 
         // Same idea for the per-monitor norm curve: project the persisted points into pre-sorted
         // xs/ys arrays on each MonitorEntry so EnqueueDirectBrightness can sample without re-sorting
         // per write. Hot-plugged panels with a saved curve get re-shaped on their first write.
-        ApplyNormCurveOverridesToExisting();
+        ApplyNormCurveOverridesToExisting(replayHardware: false);
 
         // Record "DDC was observed" facts onto KnownDisplays before notifying listeners.
         // The flag is sticky (never cleared) and drives DDCRecoveryService's candidate selection -
@@ -898,11 +956,17 @@ public sealed class MonitorService : IDisposable
         // reflects reality without each row having to look the entry up itself.
         ProjectWasEverDDCCapableToMonitors();
 
+        if (acquired.Count > 0) MonitorsAcquired?.Invoke(acquired);
         MonitorsRefreshed?.Invoke();
     }
 
     private bool IsRefreshProbePhaseCurrent(int phaseGen) =>
         !_disposed && !_draining && Volatile.Read(ref _refreshGen) == phaseGen;
+
+    private static uint NormalizeBrightnessMax(uint max) => max > 0 ? max : 100;
+
+    private static uint ScaleBrightnessPercentToRaw(int percent, uint max) =>
+        (uint)Math.Round(Math.Clamp(percent, 0, 100) / 100.0 * NormalizeBrightnessMax(max));
 
     private Task<(bool Ok, uint Current, uint Max, string? Error)> TryReadBrightnessWithRetryAsync(DDCMonitor ddc) =>
         Task.Run(() =>
@@ -1054,7 +1118,7 @@ public sealed class MonitorService : IDisposable
         (bool ok, uint cur, uint mx, string? readErr) = WithDDCLock(ddc, () =>
         {
             bool callOk =
-                _display.TryGetVCPFeature(ddc, VCPConstants.Brightness, out uint c, out uint m, out string? e);
+                _display.TryGetVCPFeature(ddc, ddc.BrightnessCode, out uint c, out uint m, out string? e);
             return (callOk, c, m, e);
         });
         current = cur;
@@ -1423,6 +1487,10 @@ public sealed class MonitorService : IDisposable
                 return;
             }
 
+            Dictionary<string, MonitorOverrideEntry> monitorOverridesByEDID = BuildMonitorOverrideEntryMap();
+            foreach (DDCMonitor liveMonitor in live)
+                ApplyBrightnessVcpOverride(liveMonitor, ComputeEDIDKey(liveMonitor), monitorOverridesByEDID);
+
             ddc = live.FirstOrDefault(d => ComputeMonitorId(d, _activeStrategy) == monitorID);
 
             // EDID fallback: if the live monitor's computed ID has drifted from the MonitorInfo's persisted ID
@@ -1465,7 +1533,8 @@ public sealed class MonitorService : IDisposable
             // If the write probe lands, the slider is still usable and we surface that asymmetric state
             // via IsReadDegraded rather than locking the row behind the warning glyph.
             string capturedReadError = readError ?? "Monitor did not respond to DDC/CI.";
-            bool writeProbeOk = TryDDCWriteProbe(info, ddc, out string? writeProbeError);
+            bool writeProbeOk = ShouldAttemptReadDegradedWriteProbe(info)
+                && TryDDCWriteProbe(info, ddc, out _);
             if (writeProbeOk)
             {
                 DDCMonitor capturedDDCForDegraded = ddc;
@@ -1480,7 +1549,6 @@ public sealed class MonitorService : IDisposable
             // info isn't null here (checked above), but the assignment must marshal to the dispatcher
             // because MonitorInfo property changes drive WPF bindings.
             MonitorInfo failedInfo = info;
-            _ = writeProbeError;
             _dispatcher.BeginInvoke(new Action(() =>
             {
                 if (_disposed) return;
@@ -1489,7 +1557,8 @@ public sealed class MonitorService : IDisposable
                 // warning glyph should appear with the normal locked-row treatment.
                 if (failedInfo.IsReadDegraded)
                 {
-                    _entries.Remove(failedInfo.ID, out _);
+                    if (_entries.Remove(failedInfo.ID, out MonitorEntry? droppedEntry))
+                        failedInfo.LastKnownBrightnessMax = NormalizeBrightnessMax(droppedEntry.Max);
                     _writeThrottler.Drop(failedInfo.ID);
                     failedInfo.SliderState = SliderStateMachine.OnHardwareFailed();
                     WPFLog.Log(
@@ -1511,33 +1580,35 @@ public sealed class MonitorService : IDisposable
     }
 
     /// <summary>
-    /// Sends a fixed in-range brightness write to verify the monitor's write half is alive when reads fail.
+    /// Sends the row's current manual brightness to verify the monitor's write half is alive when reads fail.
     /// Used to distinguish full DDC failure (both halves dead) from asymmetric read-degraded state
     /// (writes still land - slider remains usable, no warning glyph required).
-    /// The probe only validates that the I2C write-half responds, not that the value is meaningful -
-    /// so any in-range raw VCP value suffices, regardless of the panel's actual max.
-    /// We don't consult _entries.Max here because the Failed -> ReadDegraded transition removes the
-    /// MonitorEntry before this runs, and we can't read capabilities (reads are the half we know is failing).
+    /// The probe doubles as the write that restores the row's current manual/profile target.
+    /// This is only attempted for manual rows that already have an explicit user/profile value; acquisition
+    /// never sends an arbitrary probe brightness and never probes write-side DDC for curve or disabled rows.
+    /// Uses <see cref="MonitorInfo.LastKnownBrightnessMax"/> because the Failed -> ReadDegraded transition
+    /// removes the MonitorEntry before this runs, and we can't read capabilities while reads are failing.
     /// Goes through WithDDCLock to serialize against any in-flight user write on the same panel.
     /// </summary>
     private bool TryDDCWriteProbe(MonitorInfo info, DDCMonitor ddc, out string? error)
     {
-        // 50 is safe for every DDC brightness range we've ever observed:
-        // - VESA Luminance (0x10) max is at least 100 by spec, often 255 - 50 is mid-range or low end.
-        // - The handful of older panels with max=100 see a ~50% step, which is acceptable for a
-        //   write-half-alive probe on a monitor that's already failing reads.
-        // info parameter retained so the recovery path can pass MonitorInfo context to future probe
-        // strategies (e.g. an entry-aware variant when capability discovery is wired up).
-        _ = info;
-        const uint ProbeRaw = 50;
+        uint probeRaw = ScaleBrightnessPercentToRaw(info.RoundedBrightness, info.LastKnownBrightnessMax);
 
         (bool ok, string? writeErr) = WithDDCLock(ddc, () =>
         {
-            bool wrote = _display.TrySetVCPFeature(ddc, ddc.BrightnessCode, ProbeRaw, out string? e);
+            bool wrote = _display.TrySetVCPFeature(ddc, ddc.BrightnessCode, probeRaw, out string? e);
             return (wrote, e);
         });
         error = writeErr;
         return ok;
+    }
+
+    private bool ShouldAttemptReadDegradedWriteProbe(MonitorInfo info)
+    {
+        if (!info.HasUserBrightness) return false;
+        if (info.WasDisabledBeforeFailure) return false;
+        if (IsBrightnessCurveEnabledForHardware() && !IsBrightnessCurveDisabledPeriodActive()) return false;
+        return true;
     }
 
     /// <summary>
@@ -1546,8 +1617,8 @@ public sealed class MonitorService : IDisposable
     /// so the flyout shows the informational glyph without locking the slider. Keeps LastDDCError set
     /// because reads are still broken - the recovery loop will keep retrying so that a future read
     /// success can fully promote via <see cref="PromoteRecovered"/>.
-    /// Installs a MonitorEntry with Max=100 default (no successful read to give us the real value);
-    /// a later PromoteRecovered will overwrite it with the real Max.
+    /// Installs a MonitorEntry with the last successful VCP max when available; a later
+    /// PromoteRecovered will overwrite it with a fresh max.
     /// </summary>
     private void PromoteReadDegraded(MonitorInfo info, DDCMonitor ddc, string readError)
     {
@@ -1557,9 +1628,9 @@ public sealed class MonitorService : IDisposable
         if (info.IsHardwareFunctional && !info.IsReadDegraded) return;
 
         // Install a minimal entry so the throttler / curve service can route writes to this monitor.
-        // Max=100 is the most-common monitor brightness range; the slider's 0-100 will map raw-equal
-        // to the bus for those, and be off by the monitor's true-max ratio for the rest - acceptable
-        // drift for an already-degraded panel until a real read recovers via PromoteRecovered.
+        // Reads are still degraded, so reuse the last known max range captured before failure.
+        uint brightnessMax = NormalizeBrightnessMax(info.LastKnownBrightnessMax);
+        info.LastKnownBrightnessMax = brightnessMax;
         if (!_entries.ContainsKey(info.ID))
         {
             _entries[info.ID] = new MonitorEntry
@@ -1567,7 +1638,7 @@ public sealed class MonitorService : IDisposable
                 ID = info.ID,
                 EDIDKey = info.EDIDKey,
                 DDC = ddc,
-                Max = 100,
+                Max = brightnessMax,
             };
         }
 
@@ -1581,6 +1652,8 @@ public sealed class MonitorService : IDisposable
         info.LastDDCError = readError;
         info.WasEverDDCCapable = true;
         WPFLog.Log($"MonitorService: '{ddc.Name}' is read-degraded (write probe landed, reads failing)");
+        MonitorsAcquired?.Invoke([info]);
+        MonitorsRefreshed?.Invoke();
     }
 
     /// <summary>
@@ -1664,39 +1737,28 @@ public sealed class MonitorService : IDisposable
         if (info.IsHardwareFunctional) return;
 
         int pct = max == 0 ? 0 : (int)Math.Round(current * 100.0 / max);
+        uint brightnessMax = NormalizeBrightnessMax(max);
+        info.LastKnownBrightnessMax = brightnessMax;
         LogProfileIfMatched(ddc);
         _entries[info.ID] = new MonitorEntry
         {
             ID = info.ID,
             EDIDKey = info.EDIDKey,
             DDC = ddc,
-            Max = max > 0 ? max : 100,
+            Max = brightnessMax,
         };
-        // Restore Brightness from the persisted last-bus value if we have one; otherwise fall back to the
-        // legacy hardware-read sync (gated on curve state). Restoring from the bus value is what gives
-        // the user "monitor comes back where I left it visually" - the in-memory Brightness can be stale
-        // (curve writes via EnqueueDirectBrightness bypass the setter), so preserving it isn't enough.
-        // Going through the Brightness setter intentionally also updates LastUserBrightness so the
-        // slider's value of record matches the bus value, and we recompute Offset off the same baseline
-        // (mirrors AttachMonitor's "freshly-attached monitor gets Offset = Brightness - master").
+        // Acquisition is read-only for slider intent: a hardware read may initialize rows that have
+        // no explicit manual/profile value yet, but it must not overwrite a user-owned slider baseline
+        // or enqueue a write through the public Brightness setter.
         // Snapshot the curve-state flags once and reuse them for both the bus-sync gate
         // and the SliderState transition below - same call cost, single source of truth.
         bool curveEngagedAtPromote = IsBrightnessCurveEnabledForHardware();
         bool inDisabledAtPromote = IsBrightnessCurveDisabledPeriodActive();
 
-        KnownDisplayEntry? promoteKnown =
-            !string.IsNullOrEmpty(info.EDIDKey) ? _knownDisplays.Find(info.EDIDKey) : null;
-        if (promoteKnown?.LastBusBrightness is int promoteBus)
-        {
-            info.Brightness = Math.Clamp(promoteBus, 0, 100);
-            if (MasterBrightnessQuery is { } masterQuery)
-                info.Offset = info.Brightness - masterQuery();
-        }
-        else
-        {
-            if (!info.WasCurveDrivenBeforeFailure && !curveEngagedAtPromote)
-                info.SyncBrightnessFromHardware(Math.Clamp(pct, 0, 100));
-        }
+        if (!info.HasUserBrightness
+            && !info.WasCurveDrivenBeforeFailure
+            && !curveEngagedAtPromote)
+            SyncBrightnessReadOnly(info, Math.Clamp(pct, 0, 100));
         // Same Failed -> right-curve-state transition the Refresh-promotion path uses, plumbed with the live
         // curve flags so the row lands in one PropertyChanged fan-out instead of two (see Refresh inline block
         // comment for the master-jitter rationale).
@@ -1713,6 +1775,7 @@ public sealed class MonitorService : IDisposable
         string edidKey = ComputeEDIDKey(ddc);
         if (!string.IsNullOrEmpty(edidKey)) _knownDisplays.MarkDDCCapable(edidKey);
 
+        MonitorsAcquired?.Invoke([info]);
         MonitorsRefreshed?.Invoke();
     }
 
@@ -1803,6 +1866,12 @@ public sealed class MonitorService : IDisposable
     {
         Interlocked.Increment(ref _hardwareWritesSuspendCount);
         return new HardwareWriteSuspension(this);
+    }
+
+    private void SyncBrightnessReadOnly(MonitorInfo monitor, double value)
+    {
+        using IDisposable _ = SuspendHardwareWrites();
+        monitor.SyncBrightnessFromHardware(value);
     }
 
     private sealed class HardwareWriteSuspension(MonitorService owner) : IDisposable
@@ -1911,7 +1980,7 @@ public sealed class MonitorService : IDisposable
     {
         if (_disposed || _draining) return;
 
-        uint raw = (uint)Math.Round(pct / 100.0 * entry.Max);
+        uint raw = ScaleBrightnessPercentToRaw(pct, entry.Max);
 
         // Retry transient write failures (most commonly the I2C-transmit-error class of Win32Exception,
         // which the bus throws at us when a packet collides or the monitor is mid-OSD / mid-DPMS-wake).

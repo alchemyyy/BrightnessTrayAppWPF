@@ -1285,12 +1285,9 @@ public partial class App
         _monitorService?.NotifyTopologyEvent();
         _monitorService?.Refresh();
 
-        // Push the slider/profile state back to the panels.
-        // External replug tools (e.g. hdmi-relink, which compensates for HDMI cached-handshake failures)
-        // reset monitor settings on every reconnect,
-        // so a Refresh() that re-handshakes handles is not enough -
-        // without this re-apply, sliders stay put while the panels return to their factory/last-flash state.
-        _monitorService?.ReapplySliderState();
+        // Refresh's probe/acquire phase is asynchronous and may be intentionally delayed by the
+        // post-topology settle window. Manual/curve writes are issued after DDC acquisition by the
+        // flyout/curve services, so this handler must not replay stale handles immediately.
         NightLightProvider.Reapply();
 
         RequestTrayRefresh();
@@ -1523,7 +1520,7 @@ public partial class App
     }
 
     /// <summary>
-    /// Writes a single fatal-crash record to <c>%LOCALAPPDATA%\BrightnessTrayAppWPF\fatal-crash.log</c>
+    /// Writes a single fatal-crash record to <c>%LOCALAPPDATA%\TrayAppWPF\BrightnessTrayAppWPF\fatal-crash.log</c>
     /// SYNCHRONOUSLY, bypassing WPFLog's buffer + flush timer. Survives even when the host has
     /// milliseconds left to live (e.g. UnhandledException -> Environment.Exit, where WPFLog's
     /// buffered flush might race the process death).
@@ -1534,8 +1531,7 @@ public partial class App
     {
         try
         {
-            string appData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
-            string folder = System.IO.Path.Combine(appData, Program.ApplicationName);
+            string folder = Program.AppLocalAppDataDirectory;
             System.IO.Directory.CreateDirectory(folder);
             string path = System.IO.Path.Combine(folder, "fatal-crash.log");
             string timestamp = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss.fff");

@@ -25,6 +25,13 @@ internal static class Program
     private static SingleInstanceCoordinator? _selfInstanceCoordinator;
 
     public const string ApplicationName = "BrightnessTrayAppWPF";
+    public const string SharedRootFolderName = "TrayAppWPF";
+
+    public static string LocalAppDataRoot =>
+        Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), SharedRootFolderName);
+
+    public static string AppLocalAppDataDirectory =>
+        Path.Combine(LocalAppDataRoot, ApplicationName);
 
     /// <summary>
     /// True when this process was started with <c>--uninstall</c>.

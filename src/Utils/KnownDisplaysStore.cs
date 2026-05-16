@@ -60,12 +60,11 @@ public sealed class KnownDisplaysStore : IDisposable
     }
 
     /// <summary>
-    /// Path of the JSON file. Sits next to settings.xml under %LocalAppData%\&lt;app&gt;\.
+    /// Path of the JSON file. Sits next to settings.xml under %LocalAppData%\TrayAppWPF\&lt;app&gt;\.
     /// </summary>
     public static string GetDefaultPath()
     {
-        string appData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
-        string appFolder = Path.Combine(appData, Program.ApplicationName);
+        string appFolder = Program.AppLocalAppDataDirectory;
         Directory.CreateDirectory(appFolder);
         return Path.Combine(appFolder, "displays.json");
     }

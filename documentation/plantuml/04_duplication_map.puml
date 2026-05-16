@@ -162,11 +162,13 @@ package "DUP-16  Recovery promotion paths" $TINT_OPEN {
   D16A -[#red]- D16B : Refresh inline does not\neagerly stamp DDC-capability.\nLatent: monitor recovers\nbut DDCRecoveryService loses\nthe candidate.
 }
 
-' ----- DUP-18 RESOLVED: TryDDCWriteProbe writes const ProbeRaw=50 -----
+' ----- DUP-18 RESOLVED: brightness percent -> raw VCP scaling -----
 package "DUP-18  Brightness percent -> raw VCP scaling" $TINT_RESOLVED {
-  [MonitorService.DoBrightnessWriteAsync\nraw = round(pct/100 * entry.Max)] as D18A
-  [MonitorService.TryDDCWriteProbe\nwrites const ProbeRaw = 50\n(any in-range raw value;\nno scaling needed)] as D18B
-  D18A -[#green]- D18B : Wave-1 fix (H-11):\ndarkening-flash on Max=255 panels\nduring read-degraded probe is gone.\nProbe is now scale-agnostic.
+  [MonitorService.ScaleBrightnessPercentToRaw\nsingle pct -> raw helper] as D18X
+  [MonitorService.DoBrightnessWriteAsync\nuses entry.Max] as D18A
+  [MonitorService.TryDDCWriteProbe\nuses LastKnownBrightnessMax\nand current manual/profile target] as D18B
+  D18X -[#green]- D18A : shared scaling
+  D18X -[#green]- D18B : read-degraded probe no longer\nwrites an arbitrary raw value
 }
 
 ' ----- DUP-19 RESOLVED: night-light spaced write discipline -----

@@ -4016,7 +4016,7 @@ namespace BrightnessTrayAppWPF.Localization {
         }
         
         /// <summary>
-        ///   Looks up a localized string similar to Also remove the BrightnessTrayAppWPF folder under %LOCALAPPDATA%, including settings.xml..
+        ///   Looks up a localized string similar to Also remove %LOCALAPPDATA%\TrayAppWPF\BrightnessTrayAppWPF, including settings.xml..
         /// </summary>
         public static string Uninstaller_DeleteSettings_DefaultDescription {
             get {

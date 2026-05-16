@@ -48,14 +48,13 @@ public static class InstallationService
     public const string InstalledExeFileName = "BrightnessTrayAppWPF.exe";
 
     public static string LocalAppDataInstallDir =>
-        Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), Program.ApplicationName);
+        Program.LocalAppDataRoot;
 
     public static string LocalAppDataInstallExe =>
         Path.Combine(LocalAppDataInstallDir, InstalledExeFileName);
 
     public static string ProgramFilesInstallDir =>
-        Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), Program.ApplicationName);
+        Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), Program.SharedRootFolderName);
 
     public static string ProgramFilesInstallExe =>
         Path.Combine(ProgramFilesInstallDir, InstalledExeFileName);

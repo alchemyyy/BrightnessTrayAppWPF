@@ -9,7 +9,7 @@ namespace BrightnessTrayAppWPF;
 /// that is flushed to disk every ~2 seconds, so logging stays cheap on hot paths
 /// (DDC retries, event-storm coalescers, etc.) and a process kill loses at most ~2s.
 ///
-/// Two files live alongside settings.xml at <c>%LOCALAPPDATA%\BrightnessTrayAppWPF\</c>:
+/// Two files live alongside settings.xml at <c>%LOCALAPPDATA%\TrayAppWPF\BrightnessTrayAppWPF\</c>:
 ///   * <c>btawpf-active.log</c>: current.
 ///   * <c>btawpf-old.log</c>: previous rollover.
 /// Either trigger rotates - active file at or above 10 MB, or active file at least 7 days old.
@@ -45,8 +45,7 @@ internal static class WPFLog
             if (_initialized) return;
             try
             {
-                string appData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
-                string folder = Path.Combine(appData, Program.ApplicationName);
+                string folder = Program.AppLocalAppDataDirectory;
                 Directory.CreateDirectory(folder);
                 _activePath = Path.Combine(folder, ActiveName);
                 _oldPath = Path.Combine(folder, OldName);

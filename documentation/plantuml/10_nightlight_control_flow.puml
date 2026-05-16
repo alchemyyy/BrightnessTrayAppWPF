@@ -296,7 +296,7 @@ note left of SH_INIT
   * Per-build RVAs sourced from
     KnownSettingsHandlersRvas table or
     PDBSymbolResolver, mirrored to
-    %LocalAppData%\BrightnessTrayAppWPF\
+    %LocalAppData%\TrayAppWPF\BrightnessTrayAppWPF\
     nightlight_known_rvas.xml.
 end note
 

@@ -451,8 +451,7 @@ public partial class BrightnessFlyout : Window, INotifyPropertyChanged
             }
         }
 
-        // Master is always derived. Seed it from the (possibly profile-loaded, possibly live) individual values
-        // via whichever tracking mode the profile just activated.
+        // Master is always derived. Seed it from connected individual values using the configured tracking mode.
         if (Monitors.Count > 0) MasterMonitor.Brightness = ComputeMasterFromEnabledIndividuals();
 
         // Seed per-monitor offsets so the first master drag preserves each monitor's current position
@@ -474,11 +473,11 @@ public partial class BrightnessFlyout : Window, INotifyPropertyChanged
         // Dirty-tracking compares against the saved profile's NightLight.
         NightLightMonitor.PropertyChanged += OnNightLightPropertyChanged;
 
-        // Re-apply master tracking when the mode setting changes,
-        // so the master slider updates live without needing a flyout reopen.
+        // Settings changes can affect visible rows, night-light backend, and connected-monitor averaging.
         if (_appSettings != null) _appSettings.Changed += OnAppSettingsChanged;
 
         Monitors.CollectionChanged += OnMonitorsCollectionChanged;
+        _monitorService.MonitorsAcquired += OnMonitorsAcquired;
         _monitorService.MonitorsRefreshed += OnInitialMonitorEnrollmentRefreshed;
 
         _profileManager.SelectedProfileChanged += OnSelectedProfileChanged;
@@ -502,14 +501,11 @@ public partial class BrightnessFlyout : Window, INotifyPropertyChanged
         };
 
         // Let MonitorService's physical-brightness recovery paths consult the brightness curve's
-        // engaged state and the master row's current brightness. The curve query is the fallback
-        // gate when no persisted bus value is available; the master query is used to recompute Offset
-        // when Brightness is restored from the persisted bus value
-        // (mirrors AttachMonitor's "Offset = Brightness - master" formula).
-        // Closures capture _curveService and MasterMonitor; null queries before this point preserve prior behaviour.
+        // engaged state. Acquisition reads stay read-only; mode-specific writes are handled by
+        // OnMonitorsAcquired below or by the curve evaluator.
+        // Closure captures _curveService; null query before this point preserves prior behaviour.
         _monitorService.IsBrightnessCurveEnabledQuery =
             () => _curveService?.IsBrightnessCurveEnabled == true;
-        _monitorService.MasterBrightnessQuery = () => MasterMonitor.Brightness;
         // Disabled-period gate query: lets MonitorService distinguish "curve engaged AND currently writing"
         // from "curve engaged but window is parked" - the auto-release CurveActive->CurveReleased transition
         // must not fire during a disabled-period master drag, since hardware is owned by the slider path then.
@@ -610,6 +606,7 @@ public partial class BrightnessFlyout : Window, INotifyPropertyChanged
         NightLightMonitor.PropertyChanged -= OnNightLightPropertyChanged;
         if (_appSettings != null) _appSettings.Changed -= OnAppSettingsChanged;
         Monitors.CollectionChanged -= OnMonitorsCollectionChanged;
+        _monitorService.MonitorsAcquired -= OnMonitorsAcquired;
         _monitorService.MonitorsRefreshed -= OnInitialMonitorEnrollmentRefreshed;
         _profileManager.SelectedProfileChanged -= OnSelectedProfileChanged;
         _profileManager.UnsavedChangesStatusChanged -= UpdateSaveButtonState;
@@ -622,7 +619,6 @@ public partial class BrightnessFlyout : Window, INotifyPropertyChanged
         // MonitorService queries hold closures over _curveService and _isInCurveDisabledPeriod;
         // null them out so the service doesn't keep this flyout alive after Close() either.
         _monitorService.IsBrightnessCurveEnabledQuery = null;
-        _monitorService.MasterBrightnessQuery = null;
         _monitorService.IsInDisabledPeriodQuery = null;
 
         // Persist the current Master brightness so the next launch can seed MasterMonitor with a
@@ -728,9 +724,9 @@ public partial class BrightnessFlyout : Window, INotifyPropertyChanged
 
         // The flyout was constructed before Phase B added any monitor rows. In that startup-only
         // shape, AttachMonitor had to seed each row against a rolling/persisted master value.
-        // Once Phase B finishes, all startup rows are present and their saved manual slider values
-        // have been restored, so take one final baseline before EnvironmentalCurveService handles
-        // the same MonitorsRefreshed event and evaluates the curve. This does not run for later
+        // Once Phase B finishes, all startup rows are present and their slider baselines have settled,
+        // so take one final baseline before EnvironmentalCurveService handles the same
+        // MonitorsRefreshed event and evaluates the curve. This does not run for later
         // hot-plug/topology changes, where existing rows' offsets must stay untouched.
         _suppressPropagation = true;
         try
@@ -741,6 +737,25 @@ public partial class BrightnessFlyout : Window, INotifyPropertyChanged
         finally
         {
             _suppressPropagation = false;
+        }
+    }
+
+    private void OnMonitorsAcquired(IReadOnlyList<MonitorInfo> acquired)
+    {
+        if (acquired.Count == 0) return;
+
+        // DDC acquisition itself only reads. Once a row is acquired, write only when the current mode
+        // says the manual slider owns hardware and the row already has an explicit user/profile value.
+        // Curve modes write through EnvironmentalCurveService; disabled rows intentionally write nothing.
+        if (IsBrightnessCurveEnabled) return;
+
+        foreach (MonitorInfo monitor in acquired)
+        {
+            if (!monitor.IsHardwareFunctional) continue;
+            if (monitor.SliderState == SliderState.Disabled) continue;
+            if (!monitor.HasUserBrightness) continue;
+
+            _monitorService.EnqueueDirectBrightness(monitor, monitor.RoundedBrightness);
         }
     }
 
@@ -889,7 +904,8 @@ public partial class BrightnessFlyout : Window, INotifyPropertyChanged
         _previewedProfileIndex = profileIndex;
 
         MasterMonitor.PreviewBrightness = ComputeMasterPreviewForProfile(profile);
-        // Master's IsSliderEnabled is no longer user-facing - never flag an enablement diff on the master preview.
+        // The master tracks connected display values; enablement only controls
+        // whether a row is driven by master writes.
         MasterMonitor.PreviewEnablementDiffers = false;
         MasterMonitor.ShowPreview = true;
 
@@ -916,7 +932,7 @@ public partial class BrightnessFlyout : Window, INotifyPropertyChanged
     /// <summary>
     /// Derives what the master slider would read if <paramref name="profile"/> were applied.
     /// Mirrors the post-apply path in <see cref="ComputeMasterFromEnabledIndividuals"/>:
-    /// reduces the profile's enabled per-monitor brightnesses using the profile's stored tracking mode.
+    /// reduces connected per-monitor brightnesses using the profile's saved tracking mode.
     /// Falls back to the live master if the profile has nothing enabled to reduce over
     /// (matches the runtime no-op for an empty pool).
     /// </summary>
@@ -927,14 +943,14 @@ public partial class BrightnessFlyout : Window, INotifyPropertyChanged
         {
             MonitorState? state = ProfileManager.FindStateForMonitor(profile.MonitorStates, monitor);
             // Monitors without a saved state are left untouched by ApplyProfile,
-            // so they contribute their current live brightness to the preview reduction when they're currently enabled.
+            // so they contribute their current live brightness to the preview reduction.
             if (state == null)
             {
-                if (monitor.IsParticipatingInMaster) pool.Add((int)Math.Round(monitor.Brightness));
+                if (monitor.IsHardwareFunctional) pool.Add((int)Math.Round(monitor.Brightness));
 
                 continue;
             }
-            if (state.IsSliderEnabled) pool.Add(state.Brightness);
+            if (monitor.IsHardwareFunctional) pool.Add(state.Brightness);
         }
         if (pool.Count == 0) return MasterMonitor.Brightness;
 
@@ -1057,7 +1073,7 @@ public partial class BrightnessFlyout : Window, INotifyPropertyChanged
             // so this gate doesn't block the un-toggle path.
             // Offset-mode exception: the slider thumbs ARE the user's intent and the curve adds an offset on top
             // each tick, so propagation must still flow normally - a master drag should reposition individuals via
-            // their stored offsets, and an individual drag should re-derive master per the configured tracking mode.
+            // their stored offsets, and an individual drag should re-derive master using the configured tracking mode.
             // The next tick's curve re-eval (requested a few lines down on every Brightness change) restacks
             // the offset on the new slider values without fighting them.
             // Disabled-period exception (any mode):
@@ -1087,8 +1103,7 @@ public partial class BrightnessFlyout : Window, INotifyPropertyChanged
                     // which would otherwise overwrite the master value with the tracking computation mid-drag.
                     ApplyMasterToEnabledMonitors();
                 else
-                    // An individual slider moved directly. Re-sync master per the configured tracking mode
-                    // against the enabled-monitor subset.
+                    // An individual slider moved directly. Re-sync master using the configured tracking mode.
                     // The guard blocks the master's resulting PropertyChanged from propagating back to individuals
                     // via ApplyMasterToEnabledMonitors, which would clobber the monitor the user just dragged.
                     UpdateMasterFromEnabledIndividuals();
@@ -1199,8 +1214,7 @@ public partial class BrightnessFlyout : Window, INotifyPropertyChanged
     /// <summary>
     /// Pushes the currently selected profile's tracking mode into <see cref="AppSettings"/>, persisting if it changed.
     /// Called before a profile apply so the post-apply dirty-check compares like-for-like
-    /// (app-mode matches profile-mode)
-    /// and the subsequent master recompute uses the profile's mode.
+    /// (app-mode matches profile-mode) and the subsequent master recompute uses the profile's mode.
     /// </summary>
     private void SyncAppSettingsToSelectedProfileMode()
     {
@@ -1218,9 +1232,8 @@ public partial class BrightnessFlyout : Window, INotifyPropertyChanged
 
     /// <summary>
     /// Full profile-selection path.
-    /// Mirrors the profile's tracking mode into app settings before the index flips
-    /// (so the inline dirty-check during <see cref="ProfileManager.SelectProfile"/> sees matching state),
-    /// applies the profile, then derives the master slider from the now-loaded individuals.
+    /// Mirrors the profile's tracking mode into app settings, applies the profile,
+    /// then derives the master slider from the now-loaded individuals.
     /// </summary>
     private void SelectProfileApplyingMode(int index)
     {
@@ -1300,35 +1313,33 @@ public partial class BrightnessFlyout : Window, INotifyPropertyChanged
     }
 
     /// <summary>
-    /// Recomputes the master slider value from the currently enabled individual monitors
+    /// Recomputes the master slider value from the currently connected individual monitors
     /// using the configured tracking mode.
-    /// No-op if no monitors are enabled.
+    /// No-op if no monitors are connected.
     /// </summary>
     private void UpdateMasterFromEnabledIndividuals()
     {
-        List<MonitorInfo> enabled = [.. Monitors.Where(m => m.IsParticipatingInMaster)];
-        if (enabled.Count == 0) return;
+        List<MonitorInfo> connected = [.. Monitors.Where(m => m.IsHardwareFunctional)];
+        if (connected.Count == 0) return;
 
-        MasterSliderMode mode = _appSettings?.MasterSliderMode ?? MasterSliderMode.Average;
-        MasterMonitor.Brightness = mode switch
+        MasterMonitor.Brightness = CurrentMasterSliderMode switch
         {
-            MasterSliderMode.Lowest => enabled.Min(m => m.Brightness),
-            MasterSliderMode.Highest => enabled.Max(m => m.Brightness),
-            _ => enabled.Average(m => m.Brightness),
+            MasterSliderMode.Lowest => connected.Min(m => m.Brightness),
+            MasterSliderMode.Highest => connected.Max(m => m.Brightness),
+            _ => connected.Average(m => m.Brightness),
         };
     }
 
     private double ComputeMasterFromEnabledIndividuals()
     {
-        List<MonitorInfo> enabled = [.. Monitors.Where(m => m.IsParticipatingInMaster)];
-        if (enabled.Count == 0) return MasterMonitor.Brightness;
+        List<MonitorInfo> connected = [.. Monitors.Where(m => m.IsHardwareFunctional)];
+        if (connected.Count == 0) return MasterMonitor.Brightness;
 
-        MasterSliderMode mode = _appSettings?.MasterSliderMode ?? MasterSliderMode.Average;
-        return mode switch
+        return CurrentMasterSliderMode switch
         {
-            MasterSliderMode.Lowest => enabled.Min(m => m.Brightness),
-            MasterSliderMode.Highest => enabled.Max(m => m.Brightness),
-            _ => enabled.Average(m => m.Brightness),
+            MasterSliderMode.Lowest => connected.Min(m => m.Brightness),
+            MasterSliderMode.Highest => connected.Max(m => m.Brightness),
+            _ => connected.Average(m => m.Brightness),
         };
     }
 
@@ -1387,7 +1398,7 @@ public partial class BrightnessFlyout : Window, INotifyPropertyChanged
         Dispatcher.BeginInvoke(() =>
         {
             // Tracking-mode setting may have changed.
-            // Re-derive master from enabled individuals so the displayed value reflects the new mode immediately.
+            // Re-derive master from connected individuals so display-affecting settings settle immediately.
             UpdateMasterFromEnabledIndividuals();
 
             // Night-light backend may have flipped (Registry <-> SettingsHandler).

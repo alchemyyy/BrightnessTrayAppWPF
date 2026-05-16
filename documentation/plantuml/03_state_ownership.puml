@@ -154,13 +154,12 @@ end note
 
 note as N_SEED $TINT_AMBER
   **MasterMonitor.Brightness seed:**
-  Literal 50 in BrightnessFlyout ctor.
-  Reseeded after deferred Phase B completes
-  (UpdateMasterFromEnabledIndividuals fires
-  inside the _suppressPropagation scope as
-  monitors attach). Offset-mode baseline is
-  50 for ~1.5 s during the cold-start window
-  if a curve was persisted on.
+  BrightnessFlyout ctor seeds from
+  AppSettings.LastMasterBrightness ?? 100.
+  After acquisition, the master is recomputed from
+  connected hardware-functional display values using
+  AppSettings.MasterSliderMode (lowest / average / highest).
+  This recompute is UI-only and does not replay DDC writes.
 end note
 
 note as N1
