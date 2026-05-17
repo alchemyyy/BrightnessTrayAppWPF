@@ -100,7 +100,7 @@ note right of DEM
   + slow-path SetupAPI burst
 end note
 
-APP -> DRS : new DDCRecoveryService(_monitorService, _appSettings) + Start()\n(threadpool tick, no-op when no candidates)
+APP -> DRS : new DDCRecoveryService(_monitorService) + Start()\n(subscribe to MonitorsRefreshed;\nno worker unless candidates exist)
 
 APP -> PM  : new ProfileManager\nProperties[ProfileManager] = pm
 

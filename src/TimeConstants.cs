@@ -23,8 +23,8 @@ public static class TimeConstants
     public const int SingleInstanceMutexAcquireTimeoutMs = 5_000;
 
     // DDC recovery
-    public const int DDCRecoveryTickIntervalMs = 1_000;
-    public const int DDCRecoveryFullRefreshIntervalMs = 30_000;
+    public const int DDCRecoveryRetryIntervalMs = 2_000;
+    public const int DDCRecoveryAcquisitionPassTimeoutMs = 15_000;
     // Settle window before the first VCP read on any monitor after a topology event.
     // Covers cold hot-plug, monitor power-on, and cascade refreshes triggered when an unrelated
     // monitor changes power state. Most panels are DDC-ready inside ~500 ms, but some MCUs need

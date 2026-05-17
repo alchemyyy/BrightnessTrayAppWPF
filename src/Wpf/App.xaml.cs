@@ -219,14 +219,14 @@ public partial class App
             }
         }
 
-        // Continuous recovery loop for monitors that get stuck "DDC unavailable"
+        // Event-triggered final fallback for monitors that get stuck "DDC unavailable"
         // despite being known DDC-capable on previous runs.
-        // Runs every second on the threadpool; no-op when no candidates exist (idle CPU at zero).
-        if (_monitorService != null && _appSettings != null)
+        // Starts one global worker only while candidates exist; retries acquisition every 2 seconds.
+        if (_monitorService != null)
         {
             try
             {
-                _ddcRecoveryService = new DDCRecoveryService(_monitorService, _appSettings);
+                _ddcRecoveryService = new DDCRecoveryService(_monitorService);
                 _ddcRecoveryService.Start();
                 AppServices.DDCRecoveryService = _ddcRecoveryService;
             }

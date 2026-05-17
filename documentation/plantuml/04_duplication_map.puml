@@ -84,7 +84,7 @@ package "DUP-10  Timer inventory" $TINT_PARTIAL {
   [DisplayEventManager._coalesce\n(DispatcherTimer, 250 ms)] as D10A
   [DisplayEventManager._burstTimer\n(System.Threading.Timer, 1 s x 10)] as D10B
   [EnvironmentalCurveService._curveTimer\n+ _curveEventThrottleTimer\n(both DispatcherTimer)] as D10C
-  [DDCRecoveryService._timer\n(System.Threading.Timer, retry tick)] as D10D
+  [DDCRecoveryService fallback worker\n(Task.Delay loop only while\nDDC candidates exist)] as D10D
   [NightLightRegistry._resendTimer\n(System.Threading.Timer, debounced resend)] as D10E
   [DisplayIdentifierService._timer\n(DispatcherTimer, overlay auto-hide)] as D10F
   [WPFLog._timer\n(System.Threading.Timer, async flush)] as D10G
@@ -155,11 +155,11 @@ package "DUP-13  Hotkey vs tray-scroll Notify discipline" $TINT_RESOLVED {
   end note
 }
 
-' ----- DUP-16 OPEN: Refresh inline promotion vs PromoteRecovered -----
-package "DUP-16  Recovery promotion paths" $TINT_OPEN {
+' ----- DUP-16 RESOLVED: Refresh inline promotion vs PromoteRecovered -----
+package "DUP-16  Recovery promotion paths" $TINT_RESOLVED {
   [MonitorService.Refresh\ninline promotion arm\nrelies on post-Refresh\nRecordDDCCapableObservations sweep] as D16A
   [MonitorService.PromoteRecovered /\nPromoteReadDegraded\neagerly MarkDDCCapable +\nfires MonitorsRefreshed] as D16B
-  D16A -[#red]- D16B : Refresh inline does not\neagerly stamp DDC-capability.\nLatent: monitor recovers\nbut DDCRecoveryService loses\nthe candidate.
+  D16A -[#green]- D16B : Refresh now participates in\nthe same acquisition outcome flow.\nDDCRecoveryService keeps retrying\nuntil candidates clear.
 }
 
 ' ----- DUP-18 RESOLVED: brightness percent -> raw VCP scaling -----

@@ -27,7 +27,7 @@ APP -> UI  : OnFlyoutClosed -> release 7 ctor subscriptions\n+ CancelPreviewSwee
 APP -> ECS : Dispose (called from OnFlyoutClosed; post-H-14 fix)
 APP -> MS  : Dispose -> _writeThrottler drain, _entries clear
 MS  -> KDS : Flush() then Dispose -> _stampDebounceTimer disposed\n(post-H-15 fix)
-APP -> DRS : Dispose -> _timer.Dispose (in-flight callback race tracked as M-12)
+APP -> DRS : Dispose -> cancel fallback worker\nunsubscribe MonitorsRefreshed
 APP -> TIM : Dispose -> _renderer cleanup
 APP -> SNI : Dispose -> NIM_DELETE
 APP -> APS : Save (atomic temp+rename, post-M-04 fix)

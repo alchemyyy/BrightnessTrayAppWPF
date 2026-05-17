@@ -670,7 +670,7 @@ public class MonitorInfo : INotifyPropertyChanged
     /// Independent of <see cref="IsFailed"/> - the slider stays operable in this state because
     /// brightness writes will still land; the UI just shows an informational glyph and routes
     /// power-off to Ctrl+click instead of plain click. Cleared by <see cref="PromoteRecovered"/>
-    /// when reads come back, and only set when the recovery loop's write probe positively
+    /// when reads come back, and only set when targeted recovery's write probe positively
     /// confirms the write half.
     /// </summary>
     public bool IsReadDegraded

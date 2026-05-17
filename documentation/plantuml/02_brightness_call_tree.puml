@@ -11,7 +11,7 @@ participant "EnvironmentalCurveService\n(DispatcherTimer)" as ECS
 participant "MonitorInfo\n(model)"                  as MI
 participant "MonitorService"                        as MS
 participant "AsyncThrottler<string>\n(latest-wins)" as TH
-participant "DDCRecoveryService\n(threadpool 1 s tick;\ncandidates via\nGetStuckRecoveryCandidateIds)" as DRS
+participant "DDCRecoveryService\n(event-triggered fallback worker;\ncandidates via\nGetStuckRecoveryCandidateIds)" as DRS
 participant "KnownDisplaysStore\n(displays.json)"   as KDS
 participant "DisplayService\n(IDisplayService)"     as DS
 participant "Dxva2\n(P/Invoke)"                     as DXV
@@ -146,27 +146,33 @@ note over MS
       (immediate on cold start; after the 1500 ms settle for recent topology events).
    2. Verify-after-write via VerifyAppliedAsync.
    3. Refresh re-probe of an existing row.
-   4. Recovery-loop probe via DDCRecoveryService.TryRecoverMonitor.
+   4. Fallback acquisition pass via DDCRecoveryService calling MonitorService.Refresh.
 end note
 
-== Recovery loop ==
-DRS -> DRS : OnTick (1 s)\nPickAction:\n  attempts 1..3 Probe\n  attempts 4..6 RefreshHandle\n  attempts 7..  alternate (H-30)
-DRS -> MS  : TryRecoverMonitor(id, action)
-note right of DRS
-  Read-after-write race (H-12): the throttler.IsBusy() check
-  runs on the dispatcher while the read runs on the threadpool;
-  a write can land between check and read.
-  Asymmetric write probe is heuristic only - TrySetVCPFeature
-  is fire-and-forget at the OS level.
-end note
-alt read OK
-  MS -> MS : PromoteRecovered\n(clears IsReadDegraded; passes\nIsBrightnessCurveEnabledQuery + IsInDisabledPeriodQuery\nto OnHardwareRecovered - fixed H-03)
-else read FAIL, TryDDCWriteProbe succeeds
-  MS -> DS : TryDDCWriteProbe writes\ncurrent manual slider value scaled by\nLastKnownBrightnessMax\n(gated: explicit user/profile value,\nnot curve-owned, not disabled-before-failure)
-  MS -> MS : PromoteReadDegraded\n(IsReadDegraded=true, slider operable)\n+ MonitorsAcquired
-else both halves fail
-  MS -> MS : SliderState stays Failed (sticky);\nrefresh LastDDCError
+== DDC fallback acquisition ==
+MS -> DRS : MonitorsRefreshed\ncandidate snapshot
+alt failed/read-degraded known-DDC candidates exist
+  DRS -> DRS : SignalDDCRecoveryNeeded()\n(single global flag)
+  DRS -> DRS : start one worker if idle
+  loop every 2 seconds while candidates remain
+    DRS -> MS : Refresh()\nread-only acquisition path
+    MS -> DS : TryGetVCPFeature(entry.DDC.BrightnessCode)\nvia RefreshProbePhaseAsync
+    alt acquisition succeeds
+      MS -> MS : PromoteRecovered / refresh promotion\nclears IsReadDegraded
+      MS -> BFL : MonitorsAcquired(acquired rows)
+    else acquisition still fails
+      MS -> MS : keep Failed / ReadDegraded\nrefresh LastDDCError
+    end
+  end
+else no candidates
+  DRS -> DRS : ClearDDCRecoveryNeeded()\nworker exits
 end
+
+note right of DRS
+  No per-monitor workers, no MaxRecoveryAttempts terminal state.
+  Acquisition stays read-only; writes remain owned by
+  MonitorsAcquired, curve, manual, and explicit user paths.
+end note
 
 note over MS
   Per-op timeouts inside WithDDCLockAsync.

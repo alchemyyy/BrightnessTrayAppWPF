@@ -70,12 +70,11 @@ AOD --> NLR  : NightLightProvider.Reapply()
 AOD --> RTR
 
 MSR ..> BFL  : MonitorsAcquired(acquired rows)\n(manual mode may write only acquired rows)
-MSR ..> AOMRH : MonitorsRefreshed event\n(fan-out: DEM short-circuit, DRS candidate refresh,\nECS immediate Evaluate, MBR resubscribe)
+MSR ..> AOMRH : MonitorsRefreshed event\n(fan-out: DEM short-circuit, DRS signal/clear fallback,\nECS immediate Evaluate, MBR resubscribe)
 AOMRH --> GHS : Apply(_appSettings.Hotkeys)\n(re-register per-monitor bindings)
 MSR ..> ECS  : MonitorsRefreshed -> OnMonitorsRefreshed\n(immediate Evaluate after read-only acquisition)
-MSR ..> DRS  : MonitorsRefreshed -> re-check\nrecovery candidates
+MSR ..> DRS  : MonitorsRefreshed -> SignalDDCRecoveryNeeded\nwhen failed/read-degraded candidates exist
 MSR ..> MBR  : MonitorsRefreshed -> Resubscribe
-DRS ..> MBR  : MonitorAbandoned event\n(per-monitor settle stamps)
 
 note right of MSR
   fixed (H-01): Refresh has a _refreshGen

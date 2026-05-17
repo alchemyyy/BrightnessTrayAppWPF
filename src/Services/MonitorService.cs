@@ -9,9 +9,9 @@ using BrightnessTrayAppWPF.Utils;
 namespace BrightnessTrayAppWPF.Services;
 
 /// <summary>
-/// Recovery rungs the <see cref="DDCRecoveryService"/> can ask <see cref="MonitorService.TryRecoverMonitor"/> to apply
-/// on a stuck monitor. Each rung is progressively more invasive than the previous one.
-/// The probe (a brightness VCP read) runs after every rung's prep step.
+/// Legacy per-monitor recovery actions retained for explicit targeted probes.
+/// The normal DDC fallback path now calls <see cref="MonitorService.Refresh"/> so it matches
+/// startup/topology acquisition.
 /// </summary>
 public enum DDCRecoveryAction
 {
@@ -481,7 +481,7 @@ public sealed class MonitorService : IDisposable
     /// Refresh, to indicate that a real monitor arrival / departure / wake just fired. The next Refresh's
     /// Phase B uses this timestamp to gate the post-detection settle: monitors that JUST changed state need
     /// the LG-checksum settle window before being probed; monitors that have been stable since boot do not.
-    /// Cold-start, startup recovery sweep, and DDC recovery rung-3 Refreshes leave this untouched so Phase B
+    /// Cold-start, startup recovery sweep, and DDC fallback Refreshes leave this untouched so Phase B
     /// runs synchronously - no unconditional wait on the user's launch path.
     /// </summary>
     public void NotifyTopologyEvent() => _lastTopologyEventUtc = DateTime.UtcNow;
@@ -574,7 +574,7 @@ public sealed class MonitorService : IDisposable
         //       user hits the power button, and a forced removal + re-add would lose Brightness,
         //       LastUserBrightness, Offset, and the curve baseline, so the panel returns at whatever
         //       hardware default the EEPROM happens to report (often 100). Keep the MonitorInfo, mark
-        //       Failed, drop the bus entry; the recovery loop / next Refresh re-promotes the panel in
+        //       Failed, drop the bus entry; the DDC fallback worker / next Refresh re-promotes the panel in
         //       place when it returns to enumeration, and the curve-driven gate on Brightness sync
         //       preserves the slider value through the cycle.
         //    b) Never DDC-capable (or no EDID at all). Genuinely gone, or never useful - drop normally.
@@ -645,7 +645,7 @@ public sealed class MonitorService : IDisposable
         _ = latestByPortForm;
 
         // Event-gated settle: only delay Phase B if a topology event actually fired within the settle
-        // window (LG-checksum protection). Cold-start, startup-sweep, and recovery-rung-3 Refreshes
+        // window (LG-checksum protection). Cold-start, startup-sweep, and DDC fallback Refreshes
         // never call NotifyTopologyEvent so _lastTopologyEventUtc is MinValue (or stale by much more
         // than the settle window), and Phase B starts immediately below. No unconditional 1.5 s wait
         // on the user's launch path.
@@ -778,7 +778,7 @@ public sealed class MonitorService : IDisposable
                     // Already supported - refresh the live DDC handles, then re-probe to catch monitors whose DDC
                     // link died while the app wasn't writing to them (no SetVCPFeature failure to trigger demotion).
                     // Without this re-probe, a monitor that silently dropped DDC stays stuck IsDDCCISupported=true
-                    // forever and the warning UI / recovery loop never fire.
+                    // forever and the warning UI / DDC fallback worker never fire.
                     entry.DDC.Handle = ddc.Handle;
                     entry.DDC.HDC = ddc.HDC;
                     entry.DDC.Name = ddc.Name;
@@ -791,8 +791,8 @@ public sealed class MonitorService : IDisposable
 
                     // Use the full retry mechanism (80/160/480 backoff + final-attempt RefreshHandle) so
                     // a single transient read failure (INVALID_DEVICE / INVALID_MESSAGE_CHECKSUM) doesn't
-                    // demote a healthy monitor and produce a ~1-2s warning-glyph blink before the recovery
-                    // loop probes it back. Single-shot reads here were responsible for the curve-toggle
+                    // demote a healthy monitor and produce a ~1-2s warning-glyph blink before the DDC
+                    // fallback probes it back. Single-shot reads here were responsible for the curve-toggle
                     // and topology-event flicker observed in the field.
                     var probe = await TryReadBrightnessWithRetryAsync(ddc);
                     if (!IsRefreshProbePhaseCurrent(phaseGen)) return;
@@ -801,6 +801,7 @@ public sealed class MonitorService : IDisposable
                     {
                         entry.Max = NormalizeBrightnessMax(probe.Max);
                         existingInfo.LastKnownBrightnessMax = entry.Max;
+                        existingInfo.IsReadDegraded = false;
                         existingInfo.LastDDCError = null;
                     }
                     else
@@ -1130,7 +1131,7 @@ public sealed class MonitorService : IDisposable
     }
 
     /// <summary>
-    /// Configurable-attempt recovery loop for DDC/CI brightness reads.
+    /// Configurable-attempt retry helper for DDC/CI brightness reads.
     /// Each attempt past the first waits one <see cref="AppSettings.ValidationDwellMs"/> before re-reading,
     /// addressing the usual transient failure modes
     /// - mid-OSD, DPMS-wake races, dropped first VCP packet on a busy I2C bus.
@@ -1323,7 +1324,7 @@ public sealed class MonitorService : IDisposable
     /// This sweep gives the panels a couple of seconds to catch up,
     /// then re-Refreshes - the second pass reads a populated registry EDID, reconciles the
     /// port-keyed MonitorInfo to its proper edid-keyed identity, and either lands DDC support
-    /// directly or qualifies the entry for the recovery loop.
+    /// directly or qualifies the entry for the DDC fallback worker.
     /// Self-terminates as soon as every <see cref="KnownDisplayEntry.WasEverDDCCapable"/> panel
     /// is currently DDC-supported, so warm-start launches don't pay anything beyond the gate check.
     /// </summary>
@@ -1384,7 +1385,7 @@ public sealed class MonitorService : IDisposable
     }
 
     /// <summary>
-    /// Returns the <see cref="MonitorInfo.ID"/> of every monitor that's a candidate for the recovery loop:
+    /// Returns the <see cref="MonitorInfo.ID"/> of every monitor that's a candidate for the DDC fallback worker:
     /// currently DDC-unavailable, last-known powered on,
     /// and whose hardware was previously observed to support DDC/CI
     /// (per <see cref="KnownDisplayEntry.WasEverDDCCapable"/>).
@@ -1409,7 +1410,7 @@ public sealed class MonitorService : IDisposable
             List<string> result = [];
             foreach (MonitorInfo m in Monitors)
             {
-                // Recovery loop probes any monitor whose read half is failing - includes the asymmetric
+                // DDC fallback probes any monitor whose read half is failing - includes the asymmetric
                 // IsReadDegraded state where writes work but reads don't, so we can detect when reads come
                 // back and full-promote via PromoteRecovered.
                 if (m.IsHardwareFunctional && !m.IsReadDegraded) continue;
@@ -1427,13 +1428,13 @@ public sealed class MonitorService : IDisposable
     }
 
     /// <summary>
-    /// Attempts a single recovery probe on a monitor that is currently reporting DDC unavailable.
-    /// Intended to be called from off the UI thread (e.g. the <see cref="DDCRecoveryService"/> threadpool tick):
+    /// Attempts a single targeted recovery probe on a monitor that is currently reporting DDC unavailable.
+    /// Legacy callers should invoke this from off the UI thread:
     /// the candidate snapshot + enumeration runs on the dispatcher,
     /// the DDC I/O runs on the caller's thread,
     /// and the promotion (if any) marshals back to the dispatcher.
     /// The short-circuit cases - already supported, powered off, or a user write in flight -
-    /// return without touching the bus so this is cheap to invoke every second.
+    /// return without touching the bus.
     /// </summary>
     /// <returns>
     /// True when the monitor is DDC-supported after the call
@@ -1476,7 +1477,7 @@ public sealed class MonitorService : IDisposable
             if (!info.IsPoweredOn) return;
 
             // Defer if a user-initiated brightness write is in flight on this monitor
-            // (only happens when an entry already exists, e.g. a previously-supported monitor is mid-rung).
+            // (only happens when an entry already exists, e.g. a previously-supported monitor is mid-recovery).
             // Avoids racing with the throttler-driven write payload.
             if (_entries.TryGetValue(monitorID, out MonitorEntry? _) && _writeThrottler.IsBusy(monitorID))
                 return;
@@ -1498,7 +1499,7 @@ public sealed class MonitorService : IDisposable
             // the strategy-keyed lookup misses but the panel is still there.
             // Match by EDID serial - that's the panel-bound identifier
             // and survives every topology event we care about.
-            // Without this, the recovery loop silently aborts forever for any monitor whose ID drifted,
+            // Without this, targeted recovery silently aborts forever for any monitor whose ID drifted,
             // which is exactly what hit `num:3` after the physical-restart cycle.
             if (ddc == null && info != null && !string.IsNullOrEmpty(info.EDIDSerial))
             {
@@ -1615,7 +1616,7 @@ public sealed class MonitorService : IDisposable
     /// UI-thread half of asymmetric recovery: the monitor's write probe landed even though its read
     /// failed, so flip it out of Failed back into the operable state machine and stamp IsReadDegraded
     /// so the flyout shows the informational glyph without locking the slider. Keeps LastDDCError set
-    /// because reads are still broken - the recovery loop will keep retrying so that a future read
+    /// because reads are still broken - the DDC fallback worker will keep retrying so that a future read
     /// success can fully promote via <see cref="PromoteRecovered"/>.
     /// Installs a MonitorEntry with the last successful VCP max when available; a later
     /// PromoteRecovered will overwrite it with a fresh max.
@@ -1770,7 +1771,7 @@ public sealed class MonitorService : IDisposable
         WPFLog.Log($"MonitorService: recovered '{ddc.Name}' to DDC/CI-supported");
 
         // Belt-and-braces - RecordDDCCapableObservations on the next refresh would catch this anyway,
-        // but the recovery loop is the canonical "we just saw DDC respond on this hardware" event,
+        // but recovery promotion is a canonical "we just saw DDC respond on this hardware" event,
         // so persist eagerly.
         string edidKey = ComputeEDIDKey(ddc);
         if (!string.IsNullOrEmpty(edidKey)) _knownDisplays.MarkDDCCapable(edidKey);
@@ -2157,7 +2158,7 @@ public sealed class MonitorService : IDisposable
     /// and removes the entry from <see cref="_entries"/>,
     /// mirroring how a never-responsive monitor looks at enumeration time.
     /// Once flipped, the existing flyout warning triggers fire
-    /// and <see cref="DDCRecoveryService"/> picks the monitor up as a candidate for its 1-second polling loop.
+    /// and <see cref="DDCRecoveryService"/> picks the monitor up as a candidate for its event-triggered fallback worker.
     /// Safe to call from any thread - marshals all state mutations through the dispatcher.
     /// Idempotent because <c>MonitorInfo</c>'s setters short-circuit no-op assignments.
     /// </summary>
@@ -2191,7 +2192,7 @@ public sealed class MonitorService : IDisposable
             info.LastDDCError = error;
             WPFLog.Log($"MonitorService: demoted '{entry.DDC.Name}' to DDC/CI-unavailable ({error})");
 
-            // Wake the recovery loop now instead of waiting for the next tick -
+            // Wake the DDC fallback worker now instead of waiting for another topology/settings event -
             // mirrors what a Refresh-driven add does so the UI feedback is synchronous with the failure.
             MonitorsRefreshed?.Invoke();
         }

@@ -383,12 +383,12 @@ public class KnownDisplayEntry
     /// <summary>
     /// Records whether this monitor has *ever* answered a DDC/CI brightness query successfully.
     /// Set the first time the read succeeds and never cleared.
-    /// When true, <see cref="Services.DDCRecoveryService"/> keeps probing the monitor on a 1-second cadence
-    /// whenever its current <see cref="MonitorInfo.IsHardwareFunctional"/> goes false
+    /// When true, <see cref="Services.DDCRecoveryService"/> starts the event-triggered DDC fallback worker
+    /// whenever its current <see cref="MonitorInfo.IsHardwareFunctional"/> goes false or read-degraded
     /// - recovers monitors that get stuck "unavailable" after hot-plug, dock undock, KVM rerouting,
     /// or wake-from-sleep races without requiring an app restart.
     /// Distinguishes "DDC chip is alive but having a bad moment" from "no DDC at all"
-    /// (laptop internal panels, USB displays) so the recovery loop only hammers hardware that we know can respond.
+    /// (laptop internal panels, USB displays) so the fallback worker only hammers hardware that we know can respond.
     /// </summary>
     [XmlAttribute]
     public bool WasEverDDCCapable { get; set; } = false;
@@ -398,9 +398,9 @@ public class KnownDisplayEntry
     /// Stamped from <see cref="Services.MonitorService.DoBrightnessWriteAsync"/> after a successful bus write,
     /// so it captures whatever the user actually sees on screen regardless of who drove it
     /// (slider drag, master propagation, profile load, environmental curve, etc.).
-    /// Restored as the seed for <see cref="MonitorInfo.Brightness"/> when the display is re-enumerated
-    /// after being dropped from the OS's monitor list (hard-off, cable disconnect, etc.),
-    /// AND on Failed -> recovered transitions so the visible value survives a DDC blip.
+    /// Kept for diagnostics/history. Acquisition no longer hydrates <see cref="MonitorInfo.Brightness"/>
+    /// from this value; startup, topology, and fallback recovery read current DDC first, then UI/profile
+    /// state decides whether any manual value should be written.
     /// Note: this is the *bus* value, NOT <see cref="MonitorInfo.LastUserBrightness"/>. Under curve mode the
     /// two diverge - the curve writes through <c>EnqueueDirectBrightness</c> which bypasses the Brightness
     /// setter, so LastUserBrightness can stay locked at a stale prior manual drag while the bus moves with
@@ -522,10 +522,8 @@ public class AppSettings
     // EnqueueSetStrengthSpaced, which has no pulse parameter, so toggling the UI did nothing.
 
     /// <summary>
-    /// Per-monitor cap on automatic DDC recovery attempts before the recovery loop gives up
-    /// and stops issuing probes for that monitor (the panel stays in Failed / ReadDegraded
-    /// but no more bus traffic is generated for it).
-    /// At the 1s tick cadence the default 60 means "try for one minute".
+    /// Legacy setting retained for settings-file compatibility.
+    /// DDC fallback acquisition now retries indefinitely while failed/read-degraded candidates exist.
     /// </summary>
     public int MaxRecoveryAttempts { get; set; } = 60;
 

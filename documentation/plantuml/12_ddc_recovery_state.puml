@@ -1,55 +1,39 @@
 @startuml ddc_recovery_state
 ' Created 2026-05-13: per claudeit/_diagram_amendments.md
 !include dark-theme.puml
-title DDC recovery state machine\nOwned by DDCRecoveryService; transitions verified at commit 4b5600b
+title DDC recovery state machine\nEvent-triggered fallback worker re-enters acquisition
 
 ' Per-monitor recovery state lives on MonitorInfo (SliderState + IsReadDegraded)
 state Healthy : SliderState != Failed\n!IsReadDegraded
 state Failed : SliderState == Failed\nLastDDCError set\n_entries.Remove, _writeThrottler.Drop
 state ReadDegraded : SliderState != Failed\nIsReadDegraded == true\nSlider operable, reads fail
-state Abandoned : RecoveryAttempts >= MaxRecoveryAttempts\nMonitorAbandoned event raised\nUI surfaces "gave up" badge
 
 [*] --> Healthy
 
 Healthy --> Failed : DoBrightnessWriteAsync exhausted (:1769-1784)\nOR VerifyAppliedAsync exhausted (:1822-1882)\nOR Refresh re-probe failure (:603-612)\nOR WasEverDDCCapable monitor disappeared (:475-491)
 
-Failed --> Healthy : PromoteRecovered (:1463-1517)\n(read succeeded)
-Failed --> ReadDegraded : PromoteReadDegraded (:1361-1389)\n(read failed but TryDDCWriteProbe succeeded)
-Failed --> Failed : both probes failed, refresh LastDDCError
-Failed --> Abandoned : attempts >= AppSettings.MaxRecoveryAttempts
-ReadDegraded --> Abandoned : attempts >= AppSettings.MaxRecoveryAttempts
+Failed --> Healthy : fallback Refresh acquisition succeeds\n(PromoteRecovered / Refresh promotion)
+Failed --> Failed : fallback Refresh acquisition still fails
 
-ReadDegraded --> Healthy : reads come back -> PromoteRecovered
+ReadDegraded --> Healthy : fallback Refresh read succeeds\n(IsReadDegraded=false)
 ReadDegraded --> Failed : writes start failing\n(BeginInvoke at :1295-1312)
 
 note bottom of Failed
-  DDCRecoveryService.OnTick (1 s) consumes Failed and ReadDegraded as
-  candidates via GetStuckRecoveryCandidateIds:1162.
-  PickAction (:177-189):
-    attempts 1..3   -> Probe
-    attempts 4..6   -> RefreshHandle
-    attempts 7..    -> alternate (attempt%2==0)?RefreshHandle:Probe
-  Per-monitor post-detection settle now gates the next attempt (H-31),
-  giving the panel a chance to stabilize after a topology-driven
-  failure burst before the next probe.
-  Independent: every 30 s the OnTick gate opens for rate-limited
-  full Refresh.
-end note
+  MonitorsRefreshed sets one global DDC recovery-needed flag
+  when GetStuckRecoveryCandidateIds returns any Failed or
+  ReadDegraded known-DDC rows.
 
-note bottom of Abandoned
-  Terminal state at AppSettings.MaxRecoveryAttempts (default 60).
-  MonitorAbandoned event signals the UI so the row can show the
-  user-visible "gave up" indicator and stop the runaway probe loop.
-  Recovery resumes if the user re-triggers (manual refresh, topology
-  change, app restart) which resets RecoveryAttempts.
+  DDCRecoveryService starts one worker, waits 2 seconds, then
+  calls MonitorService.Refresh. That reuses the same read-only
+  acquisition path as startup/topology. No per-monitor workers,
+  no terminal abandonment, and no brightness writes inside acquisition.
 end note
 
 note bottom of ReadDegraded
-  ReadDegraded monitors STAY candidates so probes continue to test reads.
-  TryDDCWriteProbe writes the current manual/profile slider target only
-  when that target is explicit, not curve-owned, and not disabled-before-failure.
-  The target is scaled by LastKnownBrightnessMax, so Max=255 panels do not
-  receive a raw 0-100 fallback while reads are degraded.
+  ReadDegraded monitors STAY candidates.
+  A successful fallback Refresh read clears IsReadDegraded.
+  A write failure demotes to Failed so the same fallback worker
+  keeps trying acquisition.
 end note
 
 ' Primitives explicitly NOT present (verified absent at commit 4b5600b)

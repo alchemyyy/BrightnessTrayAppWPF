@@ -354,8 +354,9 @@ partition "Topology event / recovery" {
     the settle window and cached handles may be stale.
   end note
 
-  :DDCRecoveryService polling handles Failed/read-degraded rows;
-  :PromoteRecovered / PromoteReadDegraded;
+  :DDCRecoveryService signals one global DDC fallback worker\nwhen Failed/read-degraded candidates exist;
+  :Worker re-enters Refresh acquisition every 2 seconds\nuntil the candidate set clears;
+  :PromoteRecovered / refresh promotion;
   :MonitorsAcquired(acquired rows);
   :MonitorsRefreshed;
 }
@@ -389,7 +390,7 @@ partition "Audit findings / boundaries" {
   note right $TINT_GREEN
     Fixed for Refresh Phase B: retrying reads are wrapped in
     TryReadBrightnessWithRetryAsync and stale generations abort
-    before row mutation. Recovery polling already runs off-thread.
+    before row mutation. DDC fallback acquisition runs off-thread.
   end note
 
   :5. Startup manual vs curve ownership;
