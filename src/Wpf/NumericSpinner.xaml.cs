@@ -3,9 +3,11 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 using BrightnessTrayAppWPF.WPF.Utils;
+using FontStyle = System.Windows.FontStyle;
 using KeyEventArgs = System.Windows.Input.KeyEventArgs;
 using Media = System.Windows.Media;
 using UserControl = System.Windows.Controls.UserControl;
+using WPFFlowDirection = System.Windows.FlowDirection;
 
 namespace BrightnessTrayAppWPF.WPF;
 
@@ -291,7 +293,7 @@ public partial class NumericSpinner : UserControl
         Media.FormattedText formattedText = new(
             text,
             CultureInfo.CurrentUICulture,
-            FlowDirection.LeftToRight,
+            WPFFlowDirection.LeftToRight,
             typeface,
             fontSize,
             Media.Brushes.Black,

@@ -5,6 +5,7 @@ using System.Windows.Threading;
 using BrightnessTrayAppWPF.Localization;
 using BrightnessTrayAppWPF.Models;
 using BrightnessTrayAppWPF.Services;
+using Application = System.Windows.Application;
 using UserControl = System.Windows.Controls.UserControl;
 
 namespace BrightnessTrayAppWPF.WPF.Settings.Pages;

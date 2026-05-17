@@ -1,6 +1,7 @@
 using System.IO;
 using System.Text.Json;
 using BrightnessTrayAppWPF.Models;
+using Timer = System.Threading.Timer;
 
 namespace BrightnessTrayAppWPF.Utils;
 
