@@ -18,7 +18,7 @@ namespace BrightnessTrayAppWPF.WPF;
 /// Modeless color picker window with paired ARGB / RGBA hex textboxes, an HSV saturation/value
 /// free-pick plane, vertical hue and alpha gradient sliders, vertical R/G/B channel sliders,
 /// and Default / Reset buttons. All five sliders run on the same Slider chassis (see
-/// <see cref="ChannelSliderStyle"/> for R/G/B and <see cref="HueAlphaSliderStyle"/> for hue/alpha)
+/// <c>ChannelSliderStyle</c> for R/G/B and <c>HueAlphaSliderStyle</c> for hue/alpha)
 /// so a single set of channel-slider mouse / wheel / keyboard handlers covers every input path.
 ///
 /// Shown via <see cref="Window.Show"/> (not <c>ShowDialog</c>) so the user can keep

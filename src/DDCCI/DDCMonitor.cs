@@ -155,7 +155,7 @@ public class DDCMonitor
     /// </summary>
     private static readonly IReadOnlyList<MonitorPowerCommand> VESADefaultPowerCommands =
     [
-        new MonitorPowerCommand
+        new()
         {
             Code = 0xD6,
             ValueOn = 0x01,
@@ -165,7 +165,7 @@ public class DDCMonitor
             IsInverted = false,
             Label = "VESA DPMS / Power Mode (MCCS 0xD6, default)",
         },
-        new MonitorPowerCommand
+        new()
         {
             Code = 0xE1,
             ValueOn = 0x01,

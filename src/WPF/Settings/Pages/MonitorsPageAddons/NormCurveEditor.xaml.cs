@@ -1,7 +1,6 @@
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
-using System.Windows.Media;
 using System.Windows.Shapes;
 using System.Windows.Threading;
 using BrightnessTrayAppWPF.Models;
@@ -23,7 +22,7 @@ namespace BrightnessTrayAppWPF.WPF.Settings.Pages.MonitorsPageAddons;
 /// <see cref="EnvironmentalPageAddons.CurveEditor"/>. Both axes run 0..100 by default,
 /// with (0,0) at the bottom-left and (100,100) at the top-right.
 /// The visible Y range stays centred on 50 and is Ctrl+wheel zoomable
-/// (default half-range 50; ±2 per wheel tick so the visible total range changes by 4).
+/// (default half-range 50; +/-2 per wheel tick so the visible total range changes by 4).
 /// Linear interpolation is the default; the monotonic cubic Hermite path stays wired
 /// up behind the smoothness blend so a host can opt back into curvature later
 /// without re-introducing the interpolator. All chrome reuses the themed brushes
@@ -168,7 +167,7 @@ public partial class NormCurveEditor : UserControl
     public IReadOnlyList<NormCurvePoint> Points => _points;
 
     /// <summary>
-    /// Sets the linear (0) <-> cubic Hermite (1) blend. Defaults to 0 per spec;
+    /// Sets the linear 0-to-cubic-Hermite 1 blend. Defaults to 0 per spec;
     /// raising toward 1 fades the polyline into a smooth PCHIP shape using the same
     /// primitive the Environmental CurveEditor and runtime sampler share.
     /// </summary>
@@ -204,7 +203,7 @@ public partial class NormCurveEditor : UserControl
         if ((Keyboard.Modifiers & ModifierKeys.Control) == 0) return;
 
         // Wheel up "expands" the displayed Y range: the half-range grows by YZoomStep
-        // (a 4-point change to the visible total range, ±2 per side) so the same data
+        // (a 4-point change to the visible total range, +/-2 per side) so the same data
         // takes up less vertical space (zoomed out). Wheel down does the inverse.
         double delta = e.Delta > 0 ? YZoomStep : -YZoomStep;
         double newHalf = Math.Clamp(_yHalfRange + delta, YHalfRangeMin, YHalfRangeMax);

@@ -819,8 +819,10 @@ public sealed class EnvironmentalCurveService : IDisposable
                 foreach (MonitorInfo monitor in _monitors)
                 {
                     if (monitor.IsCurveDriven)
+                    {
                         monitor.CurveTargetBrightness =
                             Math.Clamp(monitor.LastUserBrightness + offsetPercent, 0.0, 100.0);
+                    }
                 }
 
                 foreach (MonitorInfo monitor in _monitors)

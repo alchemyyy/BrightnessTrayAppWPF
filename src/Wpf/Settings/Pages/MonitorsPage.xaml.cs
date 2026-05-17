@@ -13,7 +13,6 @@ using BrightnessTrayAppWPF.Services;
 using BrightnessTrayAppWPF.WPF.Settings.Pages.MonitorsPageAddons;
 using BrightnessTrayAppWPF.WPF.Settings.Utils;
 using Button = System.Windows.Controls.Button;
-using ComboBox = System.Windows.Controls.ComboBox;
 using KeyEventArgs = System.Windows.Input.KeyEventArgs;
 using MouseEventArgs = System.Windows.Input.MouseEventArgs;
 using TextBox = System.Windows.Controls.TextBox;
@@ -438,7 +437,7 @@ public partial class MonitorsPage : UserControl
 
         // A live drag against the soon-to-be-rebuilt containers would carry stale indices
         // across the refresh and corrupt MonitorOrder at mouse-up. Cancel before we touch the list.
-        if (_monitorDrag != null && _monitorDrag.IsDragging) _monitorDrag.CancelDrag();
+        if (_monitorDrag is { IsDragging: true }) _monitorDrag.CancelDrag();
 
         IReadOnlyList<MonitorInfo> liveMonitors = _monitorService?.Monitors
             ?? (IReadOnlyList<MonitorInfo>)[];

@@ -612,9 +612,11 @@ public partial class GeneralPage : UserControl
             {
                 InstallResult result = await Task.Run(InstallationService.InstallToLocalAppData);
                 if (result is { Success: false, UserCancelled: false } && !string.IsNullOrEmpty(result.ErrorMessage))
+                {
                     ShowOwnedWarning(
                         result.ErrorMessage,
                         LocalizationManager.Instance["Settings_General_InstallFailed_Title"]);
+                }
             }
             finally
             {
@@ -651,9 +653,11 @@ public partial class GeneralPage : UserControl
             {
                 InstallResult result = await Task.Run(InstallationService.InstallSystemWide);
                 if (result is { Success: false, UserCancelled: false } && !string.IsNullOrEmpty(result.ErrorMessage))
+                {
                     ShowOwnedWarning(
                         result.ErrorMessage,
                         LocalizationManager.Instance["Settings_General_InstallFailed_Title"]);
+                }
             }
             finally
             {

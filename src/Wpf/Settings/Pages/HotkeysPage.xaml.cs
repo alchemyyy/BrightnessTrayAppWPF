@@ -190,7 +190,7 @@ public partial class HotkeysPage : UserControl
         // Tombstones (RemovedByUser=true) are skipped so a fully-removed monitor-off target
         // doesn't keep its row alive.
         IEnumerable<string> monitorOffParams = _settings.Hotkeys
-            .Where(b => !b.RemovedByUser && b.Action == HotkeyAction.MonitorOff)
+            .Where(b => b is { RemovedByUser: false, Action: HotkeyAction.MonitorOff })
             .Select(b => b.Parameter)
             .Distinct(StringComparer.Ordinal)
             .ToList();
@@ -502,9 +502,7 @@ public partial class HotkeysPage : UserControl
             }
         }
         else
-        {
             _settings.Hotkeys.RemoveAll(b => b.Matches(owner.Action, owner.Parameter, entry.BindingID));
-        }
         SaveAndNotify();
         ReapplyHotkeysAndUpdateStatuses();
     }

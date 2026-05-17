@@ -92,7 +92,7 @@ public sealed class MonitorBrightnessRangeProvider : IDisposable
             _subscribed.Add(monitor);
         }
 
-        if (AppServices.BrightnessFlyout is BrightnessFlyout flyout)
+        if (AppServices.BrightnessFlyout is { } flyout)
         {
             flyout.MasterMonitor.PropertyChanged += OnMonitorPropertyChanged;
             _subscribedMaster = flyout.MasterMonitor;

@@ -198,16 +198,11 @@ public partial class MapPickerOverlay : UserControl
     // Latitude maps through ln(tan(pi/4 + lat/2));
     // the result is unitless and grows without bound near the poles,
     // so we clamp inputs to the SVG's declared latitude range before normalising into pixel space.
-    private static double LatToMercatorY(double latitudeDegrees)
-    {
-        double latRad = latitudeDegrees * Math.PI / 180.0;
-        return Math.Log(Math.Tan(Math.PI / 4.0 + latRad / 2.0));
-    }
+    private static double LatToMercatorY(double latitudeDegrees) =>
+        Math.Log(Math.Tan(Math.PI / 4.0 + latitudeDegrees * Math.PI / 180.0 / 2.0));
 
-    private static double MercatorYToLat(double mercatorY)
-    {
-        return (2.0 * Math.Atan(Math.Exp(mercatorY)) - Math.PI / 2.0) * 180.0 / Math.PI;
-    }
+    private static double MercatorYToLat(double mercatorY) =>
+        (2.0 * Math.Atan(Math.Exp(mercatorY)) - Math.PI / 2.0) * 180.0 / Math.PI;
 
     private static (double x, double y) ProjectToMap(double latitude, double longitude)
     {
@@ -239,10 +234,7 @@ public partial class MapPickerOverlay : UserControl
         Canvas.SetTop(PinGlyph, y - PinGlyph.DesiredSize.Height * PinAnchorYFraction);
     }
 
-    private void UpdateCoordsText()
-    {
-        CoordsText.Text = $"{_latitude:F4}, {_longitude:F4}";
-    }
+    private void UpdateCoordsText() => CoordsText.Text = $"{_latitude:F4}, {_longitude:F4}";
 
     private void CentreOnPin()
     {
@@ -507,13 +499,7 @@ public partial class MapPickerOverlay : UserControl
 
     // --- Apply / Exit ---
 
-    private void Apply_Click(object sender, RoutedEventArgs e)
-    {
-        Applied?.Invoke(_latitude, _longitude);
-    }
+    private void Apply_Click(object sender, RoutedEventArgs e) => Applied?.Invoke(_latitude, _longitude);
 
-    private void Exit_Click(object sender, RoutedEventArgs e)
-    {
-        Cancelled?.Invoke();
-    }
+    private void Exit_Click(object sender, RoutedEventArgs e) => Cancelled?.Invoke();
 }

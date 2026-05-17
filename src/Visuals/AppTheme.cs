@@ -490,9 +490,7 @@ public sealed class AppTheme : IDisposable
     }
 
     /// <summary>
-    /// Twilight backdrop band: user RGB override (or default) combined with the user's alpha textbox value.
-    /// Alpha lives separately on <see cref="AppSettings.EnvironmentalTwilightBackdropAlpha"/>
-    /// because the system color picker is RGB-only.
+    /// Twilight backdrop band: user color override, or the theme default when unset.
     /// </summary>
     public Color ResolveEnvironmentalTwilightBackdrop(AppSettings? settings, bool isLightTheme)
     {

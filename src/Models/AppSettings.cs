@@ -867,7 +867,7 @@ public class AppSettings
     /// </summary>
     private static IReadOnlyList<HotkeyBinding> CreateDefaultHotkeys() =>
     [
-        new HotkeyBinding
+        new()
         {
             Action = HotkeyAction.FullBright,
             Parameter = string.Empty,
@@ -904,7 +904,7 @@ public class AppSettings
         for (int readIndex = 0; readIndex < Hotkeys.Count; readIndex++)
         {
             HotkeyBinding b = Hotkeys[readIndex];
-            (HotkeyAction, string, int) key = (b.Action, b.Parameter ?? string.Empty, b.BindingID);
+            (HotkeyAction, string, int) key = (b.Action, b.Parameter, b.BindingID);
             if (!seen.Add(key)) continue;
 
             if (writeIndex != readIndex) Hotkeys[writeIndex] = b;

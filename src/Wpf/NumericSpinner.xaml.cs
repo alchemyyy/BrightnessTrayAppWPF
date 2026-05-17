@@ -281,17 +281,17 @@ public partial class NumericSpinner : UserControl
     private double MeasureText(
         string text,
         Media.FontFamily fontFamily,
-        System.Windows.FontStyle fontStyle,
-        System.Windows.FontWeight fontWeight,
-        System.Windows.FontStretch fontStretch,
+        FontStyle fontStyle,
+        FontWeight fontWeight,
+        FontStretch fontStretch,
         double fontSize)
     {
-        var typeface = new Media.Typeface(fontFamily, fontStyle, fontWeight, fontStretch);
+        Media.Typeface typeface = new(fontFamily, fontStyle, fontWeight, fontStretch);
         double pixelsPerDip = Media.VisualTreeHelper.GetDpi(this).PixelsPerDip;
-        var formattedText = new Media.FormattedText(
+        Media.FormattedText formattedText = new(
             text,
             CultureInfo.CurrentUICulture,
-            System.Windows.FlowDirection.LeftToRight,
+            FlowDirection.LeftToRight,
             typeface,
             fontSize,
             Media.Brushes.Black,

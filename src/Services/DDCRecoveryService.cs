@@ -113,9 +113,7 @@ public sealed class DDCRecoveryService(MonitorService monitorService) : IDisposa
         finally
         {
             lock (_gate)
-            {
                 _worker = null;
-            }
 
             WPFLog.Log("DDCRecoveryService: fallback worker stopped");
 
@@ -208,8 +206,6 @@ public sealed class DDCRecoveryService(MonitorService monitorService) : IDisposa
         }
 
         lock (_candidateLogLock)
-        {
             _lastCandidateSet.Clear();
-        }
     }
 }

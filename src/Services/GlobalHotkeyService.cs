@@ -13,8 +13,6 @@ public sealed class HotkeyFiredEventArgs(HotkeyAction action, string parameter) 
 
 public sealed class HotkeyApplyResult
 {
-    public List<HotkeyBinding> Registered { get; } = [];
-
     /// <summary>Bindings that failed to register (combo already taken by another app, reserved, etc.).</summary>
     public Dictionary<HotkeyBinding, string> Failed { get; } = [];
 }
@@ -76,9 +74,7 @@ public sealed class GlobalHotkeyService : IDisposable
             if (b.RemovedByUser) continue;
             if (!b.Enabled || !b.IsBound) continue;
 
-            if (TryRegisterInternal(b, out string? error))
-                result.Registered.Add(b);
-            else
+            if (!TryRegisterInternal(b, out string? error))
                 result.Failed[b] = error ?? "Registration failed.";
         }
         return result;

@@ -151,14 +151,19 @@ public partial class AboutPage : UserControl
         SaveAndNotify();
     }
 
-    private async void CheckForUpdatesButton_Click(object sender, RoutedEventArgs e)
-    {
-        UpdateCheckService? svc = _updateService ?? AppServices.UpdateCheckService;
-        if (svc == null) return;
+    private void CheckForUpdatesButton_Click(object sender, RoutedEventArgs e) =>
+        _ = CheckForUpdatesButtonClickAsync();
 
-        CheckForUpdatesButton.IsEnabled = false;
+    private async Task CheckForUpdatesButtonClickAsync()
+    {
+        UpdateCheckService? svc = null;
+
         try
         {
+            svc = _updateService ?? AppServices.UpdateCheckService;
+            if (svc == null) return;
+
+            CheckForUpdatesButton.IsEnabled = false;
             await svc.CheckNowAsync();
         }
         catch (Exception ex)
@@ -167,42 +172,66 @@ public partial class AboutPage : UserControl
         }
         finally
         {
-            CheckForUpdatesButton.IsEnabled = true;
-            RefreshUpdateUi();
+            if (svc != null)
+            {
+                try
+                {
+                    CheckForUpdatesButton.IsEnabled = true;
+                    RefreshUpdateUi();
+                }
+                catch (Exception ex)
+                {
+                    WPFLog.Log($"AboutPage.CheckForUpdatesButton_Click refresh failed: {ex.Message}");
+                }
+            }
         }
     }
 
-    private async void InstallUpdateButton_Click(object sender, RoutedEventArgs e)
+    private void InstallUpdateButton_Click(object sender, RoutedEventArgs e) =>
+        _ = InstallUpdateButtonClickAsync();
+
+    private async Task InstallUpdateButtonClickAsync()
     {
-        UpdateCheckService? svc = _updateService ?? AppServices.UpdateCheckService;
-        UpdateInfo? info = svc?.AvailableUpdate;
-        if (svc == null || info == null) return;
+        bool buttonsDisabled = false;
 
-        UpdateConfirmationWindow dialog = new(info) { Owner = Window.GetWindow(this) };
-        bool? result = dialog.ShowDialog();
-        if (result != true) return;
-
-        InstallUpdateButton.IsEnabled = false;
-        CheckForUpdatesButton.IsEnabled = false;
-        bool ok = false;
         try
         {
-            ok = await svc.DownloadAndStageAsync(info);
+            UpdateCheckService? svc = _updateService ?? AppServices.UpdateCheckService;
+            UpdateInfo? info = svc?.AvailableUpdate;
+            if (svc == null || info == null) return;
+
+            UpdateConfirmationWindow dialog = new(info) { Owner = Window.GetWindow(this) };
+            bool? result = dialog.ShowDialog();
+            if (result != true) return;
+
+            InstallUpdateButton.IsEnabled = false;
+            CheckForUpdatesButton.IsEnabled = false;
+            buttonsDisabled = true;
+
+            bool ok = await svc.DownloadAndStageAsync(info);
+            if (ok)
+            {
+                Application.Current?.Shutdown();
+                return;
+            }
         }
         catch (Exception ex)
         {
             WPFLog.Log($"AboutPage.InstallUpdateButton_Click: {ex.Message}");
         }
 
-        if (ok)
+        if (buttonsDisabled)
         {
-            System.Windows.Application.Current?.Shutdown();
-        }
-        else
-        {
-            // Re-enable so the user can retry; RefreshUpdateUi handles the label based on current state.
-            CheckForUpdatesButton.IsEnabled = true;
-            RefreshUpdateUi();
+            try
+            {
+                // Re-enable so the user can retry; RefreshUpdateUi handles the label based on current state.
+                CheckForUpdatesButton.IsEnabled = true;
+                RefreshUpdateUi();
+            }
+            catch (Exception ex)
+            {
+                WPFLog.Log($"AboutPage.InstallUpdateButton_Click refresh failed: {ex.Message}");
+            }
         }
     }
 
@@ -231,24 +260,16 @@ public partial class AboutPage : UserControl
         DateTime? last = svc.LastCheckTimeUtc;
 
         if (isChecking)
-        {
             UpdateStatusText.Text = LocalizationManager.Instance["Settings_About_UpdateStatus_Checking"];
-        }
         else if (info != null)
-        {
             UpdateStatusText.Text = string.Format(
                 LocalizationManager.Instance["Settings_About_UpdateStatus_AvailableFormat"], info.ReleaseName);
-        }
         else if (last == null)
-        {
             UpdateStatusText.Text = LocalizationManager.Instance["Settings_About_UpdateStatus_NeverChecked"];
-        }
         else
-        {
             UpdateStatusText.Text = string.Format(
                 LocalizationManager.Instance["Settings_About_UpdateStatus_LastCheckedFormat"],
                 FormatRelativeTimestamp(last.Value));
-        }
 
         bool stale = ComputeStaleness(svc);
         if (info != null)

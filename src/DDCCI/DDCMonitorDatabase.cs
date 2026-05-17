@@ -107,9 +107,7 @@ public static class DDCMonitorDatabase
             && brightnessElem.ValueKind == JsonValueKind.Object
             && brightnessElem.TryGetProperty("code", out JsonElement bcElem)
             && bcElem.TryGetInt32(out int bcInt))
-        {
             brightnessCode = (byte)bcInt;
-        }
 
         List<MonitorPowerCommand> powerCommands = [];
         if (m.TryGetProperty("powerOff", out JsonElement powerArr) && powerArr.ValueKind == JsonValueKind.Array)
@@ -156,8 +154,8 @@ public static class DDCMonitorDatabase
         // Hard-off value lives under "valueHardOff" for 0xD6 (which has multiple off levels);
         // 0xE1 has a single off value under "valueOff". Either is the "off" we use for the
         // most aggressive power-off.
-        byte valueHardOff = ReadByte(p, "valueHardOff", defaultValue: ReadByte(p, "valueOff", defaultValue: (byte)0));
-        byte valueOn = ReadByte(p, "valueOn", defaultValue: (byte)0x01);
+        byte valueHardOff = ReadByte(p, "valueHardOff", defaultValue: ReadByte(p, "valueOff", defaultValue: 0));
+        byte valueOn = ReadByte(p, "valueOn", defaultValue: 0x01);
 
         byte? valueStandby = TryReadByte(p, "valueStandby");
         byte? valueSoftOff = TryReadByte(p, "valueSoftOff");
@@ -183,13 +181,9 @@ public static class DDCMonitorDatabase
             : string.Empty;
     }
 
-    private static byte ReadByte(JsonElement obj, string name, byte defaultValue)
-    {
-        return obj.TryGetProperty(name, out JsonElement v) && v.TryGetInt32(out int n) ? (byte)n : defaultValue;
-    }
+    private static byte ReadByte(JsonElement obj, string name, byte defaultValue) =>
+        obj.TryGetProperty(name, out JsonElement v) && v.TryGetInt32(out int n) ? (byte)n : defaultValue;
 
-    private static byte? TryReadByte(JsonElement obj, string name)
-    {
-        return obj.TryGetProperty(name, out JsonElement v) && v.TryGetInt32(out int n) ? (byte)n : null;
-    }
+    private static byte? TryReadByte(JsonElement obj, string name) =>
+        obj.TryGetProperty(name, out JsonElement v) && v.TryGetInt32(out int n) ? (byte)n : null;
 }

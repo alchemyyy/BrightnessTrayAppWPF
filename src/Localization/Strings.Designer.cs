@@ -1656,7 +1656,7 @@ namespace BrightnessTrayAppWPF.Localization {
         }
         
         /// <summary>
-        ///   Looks up a localized string similar to Drag or Ctrl+↑/↓ to reorder; double-click or type to rename.
+        ///   Looks up a localized string similar to Drag or Ctrl+^/v to reorder; double-click or type to rename.
         /// </summary>
         public static string Settings_General_ProfileCard_DragTooltip {
             get {

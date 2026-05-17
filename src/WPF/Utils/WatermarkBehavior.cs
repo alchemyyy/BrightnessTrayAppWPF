@@ -50,14 +50,11 @@ public static class WatermarkBehavior
 
     private static void Refresh(TextBox tb)
     {
-        string? watermark = GetText(tb);
-        bool show = !string.IsNullOrEmpty(watermark)
+        if (GetText(tb) is { Length: > 0 } watermark
             && string.IsNullOrEmpty(tb.Text)
             && !tb.IsKeyboardFocused
-            && tb.IsVisible;
-
-        if (show)
-            EnsureAdorner(tb, watermark!);
+            && tb.IsVisible)
+            EnsureAdorner(tb, watermark);
         else
             RemoveAdorner(tb);
     }
@@ -71,11 +68,13 @@ public static class WatermarkBehavior
         if (existing != null)
         {
             foreach (Adorner a in existing)
+            {
                 if (a is WatermarkAdorner wa)
                 {
                     wa.UpdateText(watermark);
                     return;
                 }
+            }
         }
 
         layer.Add(new WatermarkAdorner(tb, watermark));
@@ -90,8 +89,10 @@ public static class WatermarkBehavior
         if (existing == null) return;
 
         foreach (Adorner a in existing)
+        {
             if (a is WatermarkAdorner wa)
                 layer.Remove(wa);
+        }
     }
 
     private sealed class WatermarkAdorner : Adorner
@@ -171,7 +172,7 @@ public static class WatermarkBehavior
         public static readonly HorizontalDoubleThicknessConverter Instance = new();
 
         public object Convert(object value, Type targetType, object? parameter, CultureInfo culture) =>
-            value is Thickness t ? new Thickness(t.Left * 2, t.Top, t.Right * 2, t.Bottom) : value!;
+            value is Thickness t ? new Thickness(t.Left * 2, t.Top, t.Right * 2, t.Bottom) : value;
 
         public object ConvertBack(object value, Type targetType, object? parameter, CultureInfo culture) =>
             Binding.DoNothing;

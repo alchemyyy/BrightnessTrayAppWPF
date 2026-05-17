@@ -905,66 +905,76 @@ public partial class EnvironmentalPage : UserControl
         return true;
     }
 
-    private async void EnvironmentalResetCurves_Click(object sender, RoutedEventArgs e)
+    private void EnvironmentalResetCurves_Click(object sender, RoutedEventArgs e) =>
+        _ = EnvironmentalResetCurvesClickAsync();
+
+    private async Task EnvironmentalResetCurvesClickAsync()
     {
-        if (_profileManager == null) return;
-        if (_settings == null) return;
-
-        if (_environmentalProfileIndex < 0 || _environmentalProfileIndex >= _profileManager.Profiles.Profiles.Count)
-            return;
-
-        // Gate the destructive reset behind the shell's confirm overlay.
-        // The reset replaces the active mode's curve lists with fresh defaults and is not undoable
-        // once Save has run, so a confirm step is worth the extra click.
-        if (Window.GetWindow(this) is IConfirmDialogService confirm)
+        try
         {
-            bool ok = await confirm.ConfirmAsync(
-                title: LocalizationManager.Instance["Settings_Environmental_ResetCurves_ConfirmTitle"],
-                message: LocalizationManager.Instance["Settings_Environmental_ResetCurves_ConfirmMessage"],
-                confirmText: LocalizationManager.Instance["Settings_Environmental_ResetCurves_ConfirmButton"],
-                cancelText: LocalizationManager.Instance["Settings_Environmental_Cancel_Button"]);
-            if (!ok) return;
+            if (_profileManager == null) return;
+            if (_settings == null) return;
+
+            if (_environmentalProfileIndex < 0 || _environmentalProfileIndex >= _profileManager.Profiles.Profiles.Count)
+                return;
+
+            // Gate the destructive reset behind the shell's confirm overlay.
+            // The reset replaces the active mode's curve lists with fresh defaults and is not undoable
+            // once Save has run, so a confirm step is worth the extra click.
+            if (Window.GetWindow(this) is IConfirmDialogService confirm)
+            {
+                bool ok = await confirm.ConfirmAsync(
+                    title: LocalizationManager.Instance["Settings_Environmental_ResetCurves_ConfirmTitle"],
+                    message: LocalizationManager.Instance["Settings_Environmental_ResetCurves_ConfirmMessage"],
+                    confirmText: LocalizationManager.Instance["Settings_Environmental_ResetCurves_ConfirmButton"],
+                    cancelText: LocalizationManager.Instance["Settings_Environmental_Cancel_Button"]);
+                if (!ok) return;
+            }
+
+            // Re-validate after the await: the dialog is modal but state-bearing fields can still go
+            // stale if the page was disposed/reloaded while the prompt was up.
+            if (_profileManager == null) return;
+            if (_settings == null) return;
+            if (_environmentalProfileIndex < 0 || _environmentalProfileIndex >= _profileManager.Profiles.Profiles.Count)
+                return;
+
+            BrightnessProfile profile = _profileManager.Profiles.Profiles[_environmentalProfileIndex];
+
+            // Reset only the lists matching the currently-selected mode (offset vs absolute).
+            // The opposite mode's curves stay untouched,
+            // so a user editing offsets can wipe their offset shapes without losing their absolute curves
+            // (and vice versa).
+            EnvironmentalCurve curve = profile.EnvironmentalCurve;
+            if (_settings.EnvironmentalOffsetMode)
+            {
+                curve.BrightnessOffset = EnvironmentalCurve.CreateDefaultOffset();
+                curve.NightLightOffset = EnvironmentalCurve.CreateDefaultOffset();
+                curve.BrightnessOffsetMin = 0.0;
+                curve.BrightnessOffsetMax = 100.0;
+                curve.NightLightOffsetMin = 0.0;
+                curve.NightLightOffsetMax = 100.0;
+            }
+            else
+            {
+                curve.Brightness = EnvironmentalCurve.CreateDefaultBrightness();
+                curve.NightLight = EnvironmentalCurve.CreateDefaultNightLight();
+            }
+
+            _profileManager.Save();
+
+            // Rebind so the editor picks up the new lists - it holds direct references to the old lists
+            // otherwise and would keep rendering the pre-reset shape.
+            ApplyEnvironmentalPreviewState(_environmentalSunOverlayDate);
+
+            // Push the freshly-defaulted curves onto the live runtime so monitors and the flyout's
+            // CurveTargetBrightness indicators snap to the new shape on the next dispatcher pass
+            // instead of waiting for the periodic tick.
+            NotifyRuntimeCurveChanged();
         }
-
-        // Re-validate after the await: the dialog is modal but state-bearing fields can still go
-        // stale if the page was disposed/reloaded while the prompt was up.
-        if (_profileManager == null) return;
-        if (_settings == null) return;
-        if (_environmentalProfileIndex < 0 || _environmentalProfileIndex >= _profileManager.Profiles.Profiles.Count)
-            return;
-
-        BrightnessProfile profile = _profileManager.Profiles.Profiles[_environmentalProfileIndex];
-
-        // Reset only the lists matching the currently-selected mode (offset vs absolute).
-        // The opposite mode's curves stay untouched,
-        // so a user editing offsets can wipe their offset shapes without losing their absolute curves
-        // (and vice versa).
-        EnvironmentalCurve curve = profile.EnvironmentalCurve;
-        if (_settings.EnvironmentalOffsetMode)
+        catch (Exception ex)
         {
-            curve.BrightnessOffset = EnvironmentalCurve.CreateDefaultOffset();
-            curve.NightLightOffset = EnvironmentalCurve.CreateDefaultOffset();
-            curve.BrightnessOffsetMin = 0.0;
-            curve.BrightnessOffsetMax = 100.0;
-            curve.NightLightOffsetMin = 0.0;
-            curve.NightLightOffsetMax = 100.0;
+            WPFLog.Log($"EnvironmentalPage.EnvironmentalResetCurves_Click: {ex.Message}");
         }
-        else
-        {
-            curve.Brightness = EnvironmentalCurve.CreateDefaultBrightness();
-            curve.NightLight = EnvironmentalCurve.CreateDefaultNightLight();
-        }
-
-        _profileManager.Save();
-
-        // Rebind so the editor picks up the new lists - it holds direct references to the old lists
-        // otherwise and would keep rendering the pre-reset shape.
-        ApplyEnvironmentalPreviewState(_environmentalSunOverlayDate);
-
-        // Push the freshly-defaulted curves onto the live runtime so monitors and the flyout's
-        // CurveTargetBrightness indicators snap to the new shape on the next dispatcher pass
-        // instead of waiting for the periodic tick.
-        NotifyRuntimeCurveChanged();
     }
 
     private void EnvironmentalShowCursorReadout_Changed(object sender, RoutedEventArgs e)

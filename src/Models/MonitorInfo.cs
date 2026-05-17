@@ -669,7 +669,7 @@ public class MonitorInfo : INotifyPropertyChanged
     /// so the monitor's write half is still alive even though its reply pipeline is wedged.
     /// Independent of <see cref="IsFailed"/> - the slider stays operable in this state because
     /// brightness writes will still land; the UI just shows an informational glyph and routes
-    /// power-off to Ctrl+click instead of plain click. Cleared by <see cref="PromoteRecovered"/>
+    /// power-off to Ctrl+click instead of plain click. Cleared by <c>MonitorService.PromoteRecovered</c>
     /// when reads come back, and only set when targeted recovery's write probe positively
     /// confirms the write half.
     /// </summary>

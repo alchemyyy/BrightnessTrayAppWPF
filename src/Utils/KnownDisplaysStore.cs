@@ -28,7 +28,7 @@ public sealed class KnownDisplaysStore : IDisposable
     private const int StampDebounceMs = 500;
 
     private readonly string _path;
-    private readonly System.Threading.Timer _stampDebounceTimer;
+    private readonly Timer _stampDebounceTimer;
     private int _disposed;
 
     private readonly Lock _gate = new();
@@ -37,11 +37,11 @@ public sealed class KnownDisplaysStore : IDisposable
     public KnownDisplaysStore(string path)
     {
         _path = path;
-        _stampDebounceTimer = new System.Threading.Timer(
+        _stampDebounceTimer = new Timer(
             _ => FlushPendingSave(),
             null,
-            System.Threading.Timeout.Infinite,
-            System.Threading.Timeout.Infinite);
+            Timeout.Infinite,
+            Timeout.Infinite);
     }
 
     public KnownDisplaysStore() : this(GetDefaultPath()) { }
@@ -295,7 +295,7 @@ public sealed class KnownDisplaysStore : IDisposable
     public void Flush()
     {
         if (Volatile.Read(ref _disposed) != 0) return;
-        _stampDebounceTimer.Change(System.Threading.Timeout.Infinite, System.Threading.Timeout.Infinite);
+        _stampDebounceTimer.Change(Timeout.Infinite, Timeout.Infinite);
         FlushPendingSave();
     }
 
@@ -304,7 +304,7 @@ public sealed class KnownDisplaysStore : IDisposable
         // Change resets the timer's due time - successive stamps within StampDebounceMs collapse
         // into one trailing-edge fire.
         if (Volatile.Read(ref _disposed) != 0) return;
-        try { _stampDebounceTimer.Change(StampDebounceMs, System.Threading.Timeout.Infinite); }
+        try { _stampDebounceTimer.Change(StampDebounceMs, Timeout.Infinite); }
         catch (ObjectDisposedException) { /* racing dispose; safe to drop */ }
     }
 
@@ -315,8 +315,8 @@ public sealed class KnownDisplaysStore : IDisposable
 
     public void Dispose()
     {
-        if (System.Threading.Interlocked.Exchange(ref _disposed, 1) != 0) return;
-        try { _stampDebounceTimer.Change(System.Threading.Timeout.Infinite, System.Threading.Timeout.Infinite); }
+        if (Interlocked.Exchange(ref _disposed, 1) != 0) return;
+        try { _stampDebounceTimer.Change(Timeout.Infinite, Timeout.Infinite); }
         catch (ObjectDisposedException) { /* fine */ }
         FlushPendingSave();
         _stampDebounceTimer.Dispose();

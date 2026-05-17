@@ -29,8 +29,5 @@ internal sealed class Win32Window : NativeWindow, IDisposable
         base.WndProc(ref message);
     }
 
-    public void Dispose()
-    {
-        DestroyHandle();
-    }
+    public void Dispose() => DestroyHandle();
 }

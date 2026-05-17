@@ -1,5 +1,5 @@
 {
-  "$schema": "https://github.com/alchemyyy/BrightnessTrayAppWpf/monitor-database-schema.json",
+  "$schema": "https://github.com/alchemyyy/BrightnessTrayAppWPF/monitor-database-schema.json",
   "version": "1.0.0",
   "generatedAt": "2026-05-06",
   "description": "Consolidated monitor DDC/CI VCP-command database. Per-monitor mappings for brightness (VCP 0x10) and power-off (VCP 0xD6 DPMS or 0xE1 Power) plus quirks. Lookup key is the 7-character EDID identifier: 3-letter PnP manufacturer ID concatenated with the 4-hex-digit product code (e.g. 'DEL4187' for Dell P2719HC).",

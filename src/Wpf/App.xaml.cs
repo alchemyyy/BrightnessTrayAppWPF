@@ -12,7 +12,6 @@ using BrightnessTrayAppWPF.Models;
 using BrightnessTrayAppWPF.Services;
 using BrightnessTrayAppWPF.Visuals;
 using Point = System.Windows.Point;
-using SettingsThemeMode = BrightnessTrayAppWPF.Models.ThemeMode;
 
 namespace BrightnessTrayAppWPF.WPF;
 
@@ -78,7 +77,7 @@ public partial class App
         // Windows has its own kill-this-process timer if we sit here too long.
         AppDomain.CurrentDomain.UnhandledException += (_, args) =>
         {
-            WriteFatalCrashRecord("UnhandledException", args.ExceptionObject?.ToString());
+            WriteFatalCrashRecord("UnhandledException", args.ExceptionObject.ToString());
             WPFLog.Log($"FATAL UnhandledException: {args.ExceptionObject}");
             TryDrainQuickly(TimeSpan.FromMilliseconds(TimeConstants.CrashHandlerDrainTimeoutMs));
             WPFLog.Flush();
@@ -87,7 +86,7 @@ public partial class App
         DispatcherUnhandledException += (_, args) =>
         {
             args.Handled = true;
-            WriteFatalCrashRecord("DispatcherUnhandledException", args.Exception?.ToString());
+            WriteFatalCrashRecord("DispatcherUnhandledException", args.Exception.ToString());
             WPFLog.Log($"FATAL DispatcherUnhandledException: {args.Exception}");
             TryDrainQuickly(TimeSpan.FromMilliseconds(TimeConstants.CrashHandlerDrainTimeoutMs));
             WPFLog.Flush();
@@ -95,9 +94,9 @@ public partial class App
         };
         // Background Task exceptions that nothing observed otherwise become fatal at GC time -
         // catch them so we can log the cause, then exit deterministically.
-        System.Threading.Tasks.TaskScheduler.UnobservedTaskException += (_, args) =>
+        TaskScheduler.UnobservedTaskException += (_, args) =>
         {
-            WriteFatalCrashRecord("UnobservedTaskException", args.Exception?.ToString());
+            WriteFatalCrashRecord("UnobservedTaskException", args.Exception.ToString());
             WPFLog.Log($"FATAL UnobservedTaskException: {args.Exception}");
             args.SetObserved();
         };
@@ -817,8 +816,7 @@ public partial class App
 
         if (info.Version <= _lastNotifiedUpdateVersion) return;
 
-        bool flyoutVisible = _activeFlyout != null && _activeFlyout.IsVisible
-            && _activeFlyout.Left > -1000;
+        bool flyoutVisible = _activeFlyout is { IsVisible: true, Left: > -1000 };
         if (flyoutVisible) return;
 
         _lastNotifiedUpdateVersion = info.Version;
@@ -1303,8 +1301,10 @@ public partial class App
         string tooltip = string.Format(
             LocalizationManager.Instance["Tray_Tooltip_Brightness_Format"], brightness);
         if (NightLightProvider.IsSupported() && NightLightProvider.IsEnabled())
+        {
             tooltip += string.Format(
                 LocalizationManager.Instance["Tray_Tooltip_NightLight_Format"], NightLightProvider.GetStrength());
+        }
 
         return (brightness, tooltip);
     }
@@ -1532,13 +1532,13 @@ public partial class App
         try
         {
             string folder = Program.AppLocalAppDataDirectory;
-            System.IO.Directory.CreateDirectory(folder);
-            string path = System.IO.Path.Combine(folder, "fatal-crash.log");
+            Directory.CreateDirectory(folder);
+            string path = Path.Combine(folder, "fatal-crash.log");
             string timestamp = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss.fff");
             int pid = Environment.ProcessId;
-            string thread = System.Threading.Thread.CurrentThread.ManagedThreadId.ToString();
+            string thread = Thread.CurrentThread.ManagedThreadId.ToString();
             string text = $"[{timestamp}] pid={pid} tid={thread} {category}: {detail}{Environment.NewLine}{Environment.NewLine}";
-            System.IO.File.AppendAllText(path, text, System.Text.Encoding.UTF8);
+            File.AppendAllText(path, text, System.Text.Encoding.UTF8);
         }
         catch
         {

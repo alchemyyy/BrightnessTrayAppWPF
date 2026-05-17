@@ -44,10 +44,8 @@ internal static class EDIDParser
     /// (e.g. "LG ULTRAGEAR+").
     /// Empty when absent - typical on older or cost-reduced displays.
     /// </summary>
-    public static string ExtractMonitorName(byte[]? edid)
-    {
-        return !HasValidHeader(edid) ? string.Empty : ReadStringDescriptor(edid!, TagMonitorName);
-    }
+    public static string ExtractMonitorName(byte[]? edid) =>
+        !HasValidHeader(edid) ? string.Empty : ReadStringDescriptor(edid!, TagMonitorName);
 
     /// <summary>
     /// Decodes the 3-letter manufacturer ID at bytes 8-9
@@ -72,10 +70,8 @@ internal static class EDIDParser
     /// Used together with the manufacturer ID to uniquely key a monitor <i>model</i>
     /// (not a specific unit - the serial does that).
     /// </summary>
-    public static ushort ExtractProductCode(byte[]? edid)
-    {
-        return !HasValidHeader(edid) ? (ushort)0 : (ushort)(edid![10] | (edid[11] << 8));
-    }
+    public static ushort ExtractProductCode(byte[]? edid) =>
+        !HasValidHeader(edid) ? (ushort)0 : (ushort)(edid![10] | (edid[11] << 8));
 
     private static bool HasValidHeader(byte[]? edid)
     {

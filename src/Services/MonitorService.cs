@@ -118,6 +118,8 @@ public sealed class MonitorService : IDisposable
     public Func<bool>? IsInDisabledPeriodQuery { get; set; }
 
     /// <summary>
+    /// Creates the monitor service and optionally uses an injected known-display store.
+    /// </summary>
     public MonitorService(IDisplayService display, AppSettings settings, KnownDisplaysStore? knownDisplays = null)
     {
         _display = display;
@@ -590,12 +592,10 @@ public sealed class MonitorService : IDisposable
             // place rather than letting Phase A drop the row and forcing a destroy+recreate. See M-16
             // / audit_08 F-06.
             if (!stillPresent
-                && !string.IsNullOrEmpty(existing.EDIDKey)
-                && existing.EDIDKey.StartsWith("port:", StringComparison.Ordinal)
-                && latestByPortForm.ContainsKey(existing.EDIDKey))
-            {
+                && existing.EDIDKey is { Length: > 0 } edidKey
+                && edidKey.StartsWith("port:", StringComparison.Ordinal)
+                && latestByPortForm.ContainsKey(edidKey))
                 stillPresent = true;
-            }
             if (stillPresent) continue;
 
             bool wasEverCapable = !string.IsNullOrEmpty(existing.EDIDKey)
@@ -667,8 +667,9 @@ public sealed class MonitorService : IDisposable
 
         // The generation captured above lets the deferred continuation detect a fresher Refresh that
         // landed during the settle window and bail without running on a stale snapshot.
-        _ = Task.Delay(remainingSettleMs).ContinueWith(_ =>
+        _ = Task.Delay(remainingSettleMs).ContinueWith(delayTask =>
         {
+            if (!delayTask.IsCompletedSuccessfully) return;
             if (_disposed || _draining) return;
             // Threadpool-side gen check: if the gen has already moved past the one we scheduled,
             // a fresher Refresh is queued and will fire its own Phase B, so dropping this one is fine.
@@ -794,7 +795,7 @@ public sealed class MonitorService : IDisposable
                     // demote a healthy monitor and produce a ~1-2s warning-glyph blink before the DDC
                     // fallback probes it back. Single-shot reads here were responsible for the curve-toggle
                     // and topology-event flicker observed in the field.
-                    var probe = await TryReadBrightnessWithRetryAsync(ddc);
+                    (bool Ok, uint Current, uint Max, string? Error) probe = await TryReadBrightnessWithRetryAsync(ddc);
                     if (!IsRefreshProbePhaseCurrent(phaseGen)) return;
 
                     if (probe.Ok)
@@ -821,7 +822,7 @@ public sealed class MonitorService : IDisposable
                 else
                 {
                     // Previously unsupported - attempt promotion with fresh handles
-                    var promote = await TryReadBrightnessWithRetryAsync(ddc);
+                    (bool Ok, uint Current, uint Max, string? Error) promote = await TryReadBrightnessWithRetryAsync(ddc);
                     if (!IsRefreshProbePhaseCurrent(phaseGen)) return;
 
                     if (promote.Ok)
@@ -847,8 +848,7 @@ public sealed class MonitorService : IDisposable
                         bool curveEngagedAtPromote = IsBrightnessCurveEnabledForHardware();
                         bool inDisabledAtPromote = IsBrightnessCurveDisabledPeriodActive();
 
-                        if (!existingInfo.HasUserBrightness
-                            && !existingInfo.WasCurveDrivenBeforeFailure
+                        if (existingInfo is { HasUserBrightness: false, WasCurveDrivenBeforeFailure: false }
                             && !curveEngagedAtPromote)
                             SyncBrightnessReadOnly(existingInfo, Math.Clamp(percent, 0, 100));
                         // Recovery transitions Failed -> the right curve-aware state in ONE PropertyChanged fan-out.
@@ -870,7 +870,7 @@ public sealed class MonitorService : IDisposable
 
             // New monitor - try DDC/CI; if it answers, normal path;
             // otherwise add as a disabled row that later refreshes can promote.
-            var newRead = await TryReadBrightnessWithRetryAsync(ddc);
+            (bool Ok, uint Current, uint Max, string? Error) newRead = await TryReadBrightnessWithRetryAsync(ddc);
             if (!IsRefreshProbePhaseCurrent(phaseGen)) return;
 
             bool supported = newRead.Ok;
@@ -1413,7 +1413,7 @@ public sealed class MonitorService : IDisposable
                 // DDC fallback probes any monitor whose read half is failing - includes the asymmetric
                 // IsReadDegraded state where writes work but reads don't, so we can detect when reads come
                 // back and full-promote via PromoteRecovered.
-                if (m.IsHardwareFunctional && !m.IsReadDegraded) continue;
+                if (m is { IsHardwareFunctional: true, IsReadDegraded: false }) continue;
 
                 if (!m.IsPoweredOn) continue;
 
@@ -1466,7 +1466,7 @@ public sealed class MonitorService : IDisposable
             // IsReadDegraded monitors are technically "functional" (writes work, slider operable) but
             // still need read-probing so we can fully promote when reads come back. Only short-circuit
             // for monitors that are both functional AND not read-degraded.
-            if (info.IsHardwareFunctional && !info.IsReadDegraded)
+            if (info is { IsHardwareFunctional: true, IsReadDegraded: false })
             {
                 alreadySupported = true;
                 return;
@@ -1617,7 +1617,7 @@ public sealed class MonitorService : IDisposable
     /// failed, so flip it out of Failed back into the operable state machine and stamp IsReadDegraded
     /// so the flyout shows the informational glyph without locking the slider. Keeps LastDDCError set
     /// because reads are still broken - the DDC fallback worker will keep retrying so that a future read
-    /// success can fully promote via <see cref="PromoteRecovered"/>.
+    /// success can fully promote via <c>PromoteRecovered</c>.
     /// Installs a MonitorEntry with the last successful VCP max when available; a later
     /// PromoteRecovered will overwrite it with a fresh max.
     /// </summary>
@@ -1626,7 +1626,7 @@ public sealed class MonitorService : IDisposable
         if (_disposed) return;
 
         // Don't trample a fully-recovered or fully-functional monitor.
-        if (info.IsHardwareFunctional && !info.IsReadDegraded) return;
+        if (info is { IsHardwareFunctional: true, IsReadDegraded: false }) return;
 
         // Install a minimal entry so the throttler / curve service can route writes to this monitor.
         // Reads are still degraded, so reuse the last known max range captured before failure.
@@ -1664,7 +1664,7 @@ public sealed class MonitorService : IDisposable
     /// if writes still get through (often they do even when reads fail with checksum errors,
     /// because writes have no reply to corrupt),
     /// the monitor turns itself off and the user can power-cycle it physically.
-    /// The (code, value) pair is resolved via <see cref="DDCMonitorDatabase.Resolve(DDCMonitor)"/>:
+    /// The (code, value) pair is resolved via <see cref="DDCMonitor.ResolvePowerOff(PowerOffLevel)"/>:
     /// VESA default is 0xD6=0x05; Dell P/U-series monitors override to 0xE1=0x01 (inverted).
     /// Returns false when no live monitor matches the EDID serial or the VCP write itself throws.
     /// </summary>
@@ -1756,8 +1756,7 @@ public sealed class MonitorService : IDisposable
         bool curveEngagedAtPromote = IsBrightnessCurveEnabledForHardware();
         bool inDisabledAtPromote = IsBrightnessCurveDisabledPeriodActive();
 
-        if (!info.HasUserBrightness
-            && !info.WasCurveDrivenBeforeFailure
+        if (info is { HasUserBrightness: false, WasCurveDrivenBeforeFailure: false }
             && !curveEngagedAtPromote)
             SyncBrightnessReadOnly(info, Math.Clamp(pct, 0, 100));
         // Same Failed -> right-curve-state transition the Refresh-promotion path uses, plumbed with the live
@@ -1805,7 +1804,7 @@ public sealed class MonitorService : IDisposable
             });
         (bool ok, string? errorMessage) = await WithDDCLockAsync(entry.DDC, () =>
         {
-            bool wrote = _display.TrySetVCPFeature(entry.DDC, code, (uint)value, out string? e);
+            bool wrote = _display.TrySetVCPFeature(entry.DDC, code, value, out string? e);
             return (wrote, e);
         }).ConfigureAwait(false);
         if (!ok)
@@ -1841,7 +1840,7 @@ public sealed class MonitorService : IDisposable
         // Mirrors the slider-drag release at BrightnessFlyout.PreviewMouseLeftButtonDown.
         // Master/night-light are excluded: the flyout owns their manual curve-release transitions,
         // and night-light isn't subscribed to OnMonitorPropertyChanged anyway.
-        if (!monitor.IsMaster && !monitor.IsNightLight)
+        if (monitor is { IsMaster: false, IsNightLight: false })
             monitor.SliderState = SliderStateMachine.OnUserRelease(monitor.SliderState);
 
         // Bus-value persistence stamp lives in DoBrightnessWriteAsync, not here - LastUserBrightness
