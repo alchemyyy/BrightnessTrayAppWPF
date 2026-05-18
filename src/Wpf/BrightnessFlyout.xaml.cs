@@ -2765,7 +2765,7 @@ public partial class BrightnessFlyout : Window, INotifyPropertyChanged
         if (monitor.IsMaster)
         {
             monitor.SliderState = SliderStateMachine.OnUserReengage(monitor.SliderState, _isInCurveDisabledPeriod);
-            ReengageStopwatchesBlockedByMaster();
+            ReengageIndividualBrightnessCurveOverridesFromMaster();
         }
         else if (monitor.IsNightLight)
             monitor.SliderState = SliderStateMachine.OnUserReengage(monitor.SliderState, _isInCurveDisabledPeriod);
@@ -2778,17 +2778,21 @@ public partial class BrightnessFlyout : Window, INotifyPropertyChanged
         _curveService?.Evaluate();
     }
 
-    private void ReengageStopwatchesBlockedByMaster()
+    /// <summary>
+    /// Master override re-engage is global for the brightness curve: if the user releases the master row
+    /// and later re-engages it, any per-monitor manual curve overrides should come back under curve control too.
+    /// Snapshot offsets first so those released rows keep their current manual spread once the curve resumes.
+    /// </summary>
+    private void ReengageIndividualBrightnessCurveOverridesFromMaster()
     {
-        if (_curveStopwatchReengageBlockedByMaster.Count == 0) return;
+        CaptureOffsetsFromMaster();
 
         foreach (MonitorInfo monitor in Monitors)
         {
-            string key = CurveStopwatchKeyFor(monitor);
-            if (!_curveStopwatchReengageBlockedByMaster.Remove(key)) continue;
-            if (monitor.IsCurveStopwatchEnabled) continue;
+            if (monitor.SliderState != SliderState.CurveReleased) continue;
+
             monitor.SliderState = SliderStateMachine.OnUserReengage(monitor.SliderState, _isInCurveDisabledPeriod);
-            UpdateCurveStopwatchVisibility(monitor, saveIfDisabled: false);
+            UpdateCurveStopwatchVisibility(monitor);
         }
 
         _curveStopwatchReengageBlockedByMaster.Clear();
@@ -2888,6 +2892,7 @@ public partial class BrightnessFlyout : Window, INotifyPropertyChanged
         if (_isInCurveDisabledPeriod) return;
 
         // Re-engage path: a double-click on a released row flips it back into curve control.
+        // Master re-engage cascades to released individual brightness rows so the whole curve group resumes together.
         // Tested before the un-toggle/release branches because a double-click also generates two single-click events;
         // without an early return on the second one, the curve would un-toggle on the same gesture that re-engaged it.
         if (e.ClickCount >= 2 && monitor.IsCurveReleased)
@@ -2904,7 +2909,7 @@ public partial class BrightnessFlyout : Window, INotifyPropertyChanged
                 monitor.Offset = source - MasterMonitor.Brightness;
             }
             else if (monitor.IsMaster)
-                CaptureOffsetsFromMaster();
+                ReengageIndividualBrightnessCurveOverridesFromMaster();
             UpdateCurveStopwatchVisibility(monitor);
             // Trigger an immediate evaluation so the row's hardware snaps to the curve target
             // without waiting for the next periodic tick.
