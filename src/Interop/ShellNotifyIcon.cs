@@ -6,6 +6,8 @@ using System.Windows.Interop;
 using System.Windows.Threading;
 using BrightnessTrayAppWPF.Models;
 using Point = System.Windows.Point;
+// net10's WinForms ref now ships ContextMenu too; pin the WPF type.
+using ContextMenu = System.Windows.Controls.ContextMenu;
 
 namespace BrightnessTrayAppWPF.Interop;
 
@@ -39,11 +41,10 @@ internal sealed class ShellNotifyIcon : IDisposable
 
     private const int WM_CALLBACKMOUSEMSG = User32.WM_USER + 1024;
 
-    // Persistent GUID for this icon - reduces flicker on updates.
-    // Derived from AppIdentity.AppGuid so two apps forked from the same skeleton can't
-    // collide on the same icon identity in the shell registry (which would cause NIM_ADD
-    // to fail and cross-app NIM_DELETEs to yank the wrong icon).
-    private static readonly Guid IconGuid = new(AppIdentity.AppGuid);
+    // Persistent GUID for this icon - reduces flicker on updates. This must be unique
+    // per app, not shared with the process/single-instance GUID, because guidItem is the
+    // shell's notify-icon identity and sibling TrayAppWPF apps can run side-by-side.
+    private static readonly Guid IconGuid = new(AppIdentity.TrayIconGuid);
 
     private readonly Win32Window _window;
     private readonly DispatcherTimer _taskbarRecreateTimer;
@@ -113,6 +114,11 @@ internal sealed class ShellNotifyIcon : IDisposable
         }
     }
 
+    public string DiagnosticState =>
+        $"visible={_isVisible}; created={_isCreated}; disposed={_disposed}; hwnd={FormatHandle(_window.Handle)}; "
+        + $"icon={FormatHandle(_currentIcon?.Handle ?? IntPtr.Zero)}; tipLen={_tooltipText.Length}; "
+        + $"tip='{EscapeTip(_tooltipText)}'; guid={IconGuid}";
+
     public ShellNotifyIcon()
     {
         _window = new Win32Window();
@@ -128,16 +134,54 @@ internal sealed class ShellNotifyIcon : IDisposable
 
     public void SetIcon(Icon icon)
     {
-        if (icon == _currentIcon) return;
+        if (_disposed)
+        {
+            WPFLog.Log("TrayTrace.Shell.SetIcon: skipped disposed");
+            return;
+        }
 
-        _currentIcon = icon;
+        Icon shellOwnedIcon;
+        try
+        {
+            shellOwnedIcon = (Icon)icon.Clone();
+        }
+        catch (Exception ex)
+        {
+            WPFLog.Log($"ShellNotifyIcon.SetIcon: clone failed: {ex.Message}");
+            return;
+        }
+
+        Icon? oldIcon = _currentIcon;
+        _currentIcon = shellOwnedIcon;
+        WPFLog.Log(
+            $"TrayTrace.Shell.SetIcon: source={FormatHandle(icon.Handle)}; clone={FormatHandle(shellOwnedIcon.Handle)}; "
+            + $"old={FormatHandle(oldIcon?.Handle ?? IntPtr.Zero)}; {DiagnosticState}");
         Update();
+        oldIcon?.Dispose();
     }
 
     public void SetTooltip(string text)
     {
-        if (text == _tooltipText) return;
+        if (_disposed)
+        {
+            WPFLog.Log($"TrayTrace.Shell.SetTooltip: skipped disposed; len={text.Length}; tip='{EscapeTip(text)}'");
+            return;
+        }
 
+        if (text == _tooltipText)
+        {
+            WPFLog.Log($"TrayTrace.Shell.SetTooltip: skipped same; {DiagnosticState}");
+            if (_isVisible && !_isCreated)
+            {
+                WPFLog.Log("TrayTrace.Shell.SetTooltip: same tooltip but icon not registered; retrying Update");
+                Update();
+            }
+            return;
+        }
+
+        WPFLog.Log(
+            $"TrayTrace.Shell.SetTooltip: oldLen={_tooltipText.Length}; newLen={text.Length}; "
+            + $"truncated={text.Length > 127}; tip='{EscapeTip(text)}'; {DiagnosticState}");
         _tooltipText = text;
         Update();
     }
@@ -162,22 +206,43 @@ internal sealed class ShellNotifyIcon : IDisposable
 
     private void Update()
     {
-        if (_disposed) return;
+        if (_disposed)
+        {
+            WPFLog.Log("TrayTrace.Shell.Update: skipped disposed");
+            return;
+        }
 
         NOTIFYICONDATAW data = MakeData();
+        WPFLog.Log("TrayTrace.Shell.Update.begin: " + DataSummary(data));
 
         if (!_isVisible)
         {
             if (_isCreated)
             {
-                Shell32.Shell_NotifyIconW(Shell32.NotifyIconMessage.NIM_DELETE, ref data);
+                bool deleteHidden = Shell32.Shell_NotifyIconW(Shell32.NotifyIconMessage.NIM_DELETE, ref data);
+                int deleteHiddenError = Marshal.GetLastWin32Error();
+                WPFLog.Log(
+                    $"TrayTrace.Shell.Update.hiddenDelete: result={deleteHidden}; lastError=0x{deleteHiddenError:X8}; "
+                    + DataSummary(data));
                 _isCreated = false;
+            }
+            else
+            {
+                WPFLog.Log("TrayTrace.Shell.Update.hiddenNoop: " + DataSummary(data));
             }
             return;
         }
 
         // Fast path: shell still knows about us, just push the new data.
-        if (_isCreated && Shell32.Shell_NotifyIconW(Shell32.NotifyIconMessage.NIM_MODIFY, ref data)) return;
+        if (_isCreated)
+        {
+            bool modify = Shell32.Shell_NotifyIconW(Shell32.NotifyIconMessage.NIM_MODIFY, ref data);
+            int modifyError = Marshal.GetLastWin32Error();
+            WPFLog.Log(
+                $"TrayTrace.Shell.Update.modify: result={modify}; lastError=0x{modifyError:X8}; "
+                + DataSummary(data));
+            if (modify) return;
+        }
 
         // Recovery path. Reached when either:
         //   - we never registered (first call, or a previous add failed), or
@@ -188,21 +253,42 @@ internal sealed class ShellNotifyIcon : IDisposable
         // so issue a best-effort NIM_DELETE to clear it first.
         bool wasCreated = _isCreated;
         if (wasCreated) WPFLog.Log("ShellNotifyIcon.Update: NIM_MODIFY failed, falling back to delete+add recovery");
-        _ = Shell32.Shell_NotifyIconW(Shell32.NotifyIconMessage.NIM_DELETE, ref data);
+        bool delete = Shell32.Shell_NotifyIconW(Shell32.NotifyIconMessage.NIM_DELETE, ref data);
+        int deleteError = Marshal.GetLastWin32Error();
+        WPFLog.Log(
+            $"TrayTrace.Shell.Update.recoveryDelete: result={delete}; lastError=0x{deleteError:X8}; "
+            + DataSummary(data));
         _isCreated = false;
 
-        if (Shell32.Shell_NotifyIconW(Shell32.NotifyIconMessage.NIM_ADD, ref data))
+        bool add = Shell32.Shell_NotifyIconW(Shell32.NotifyIconMessage.NIM_ADD, ref data);
+        int addError = Marshal.GetLastWin32Error();
+        WPFLog.Log(
+            $"TrayTrace.Shell.Update.add: result={add}; lastError=0x{addError:X8}; "
+            + DataSummary(data));
+        if (add)
         {
             _isCreated = true;
             data.uTimeoutOrVersion = Shell32.NOTIFYICON_VERSION_4;
-            Shell32.Shell_NotifyIconW(Shell32.NotifyIconMessage.NIM_SETVERSION, ref data);
+            bool setVersion = Shell32.Shell_NotifyIconW(Shell32.NotifyIconMessage.NIM_SETVERSION, ref data);
+            int setVersionError = Marshal.GetLastWin32Error();
+            WPFLog.Log(
+                $"TrayTrace.Shell.Update.setVersion: result={setVersion}; lastError=0x{setVersionError:X8}; "
+                + DataSummary(data));
         }
         else
         {
-            int lastError = Marshal.GetLastWin32Error();
-            WPFLog.Log($"ShellNotifyIcon.Update: NIM_ADD failed after recovery (lastError=0x{lastError:X8}); icon will retry on next update");
+            WPFLog.Log($"ShellNotifyIcon.Update: NIM_ADD failed after recovery (lastError=0x{addError:X8}); icon will retry on next update");
         }
     }
+
+    private static string FormatHandle(IntPtr handle) => $"0x{handle.ToInt64():X}";
+
+    private static string EscapeTip(string text) =>
+        text.Replace("\r", "\\r").Replace("\n", "\\n");
+
+    private static string DataSummary(NOTIFYICONDATAW data) =>
+        $"hwnd={FormatHandle(data.hWnd)}; flags={data.uFlags}; icon={FormatHandle(data.hIcon)}; "
+        + $"tipLen={data.szTip?.Length ?? 0}; tip='{EscapeTip(data.szTip ?? string.Empty)}'; guid={data.guidItem}; cb={data.cbSize}";
 
     private void WndProc(Message msg)
     {
@@ -536,8 +622,6 @@ internal sealed class ShellNotifyIcon : IDisposable
     {
         if (_disposed) return;
 
-        _disposed = true;
-
         if (_isListeningForInput)
         {
             _isListeningForInput = false;
@@ -546,6 +630,9 @@ internal sealed class ShellNotifyIcon : IDisposable
 
         _taskbarRecreateTimer.Stop();
         IsVisible = false;
+        _disposed = true;
+        _currentIcon?.Dispose();
+        _currentIcon = null;
         _window.Dispose();
     }
 }

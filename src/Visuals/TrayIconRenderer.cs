@@ -129,29 +129,64 @@ public sealed class TrayIconRenderer : IDisposable
     {
         // Post-Dispose guard: an in-flight cooldown can land here after the manager was torn down.
         // Without this, we'd allocate and leak a GDI Icon handle on the way out (audit_11 F4).
-        if (_disposed) return null;
+        if (_disposed)
+        {
+            WPFLog.Log($"TrayTrace.Renderer.CreateIcon: skipped disposed; brightness={brightnessPercent}");
+            return null;
+        }
 
         uint dpi = IconRenderingHelper.GetTaskbarDpi();
 
         // Cache hit requires BOTH brightness and DPI to match.
         // DPI change without brightness change must still force a re-render at the new pixel size.
-        if (brightnessPercent == _lastBrightness && dpi == _lastDpi && _currentIcon != null) return null;
-
-        _lastBrightness = brightnessPercent;
-        _lastDpi = dpi;
+        if (brightnessPercent == _lastBrightness && dpi == _lastDpi && _currentIcon != null)
+        {
+            WPFLog.Log(
+                $"TrayTrace.Renderer.CreateIcon: cacheHit brightness={brightnessPercent}; dpi={dpi}; "
+                + $"handle={FormatHandle(_currentIcon.Handle)}");
+            return null;
+        }
 
         int iconSize = IconRenderingHelper.GetIconSizeForDpi(dpi);
 
         Color foregroundColor = ResolveForegroundColor(brightnessPercent);
+        WPFLog.Log(
+            $"TrayTrace.Renderer.CreateIcon: render brightness={brightnessPercent}; dpi={dpi}; size={iconSize}; "
+            + $"fg={FormatColor(foregroundColor)}; light={IsLightTheme}; custom={FormatColor(_customColor)}; "
+            + $"bright={FormatColor(_brightColor)}; dim={FormatColor(_dimColor)}");
 
-        Icon icon = RenderIcon(iconSize, brightnessPercent, foregroundColor);
+        Icon icon;
+        try
+        {
+            icon = RenderIcon(iconSize, brightnessPercent, foregroundColor);
+        }
+        catch (Exception ex)
+        {
+            WPFLog.Log($"TrayTrace.Renderer.CreateIcon: render failed brightness={brightnessPercent}; error={ex.Message}");
+            _lastBrightness = -1;
+            _lastDpi = 0;
+            throw;
+        }
+
+        _lastBrightness = brightnessPercent;
+        _lastDpi = dpi;
 
         Icon? oldIcon = _currentIcon;
         _currentIcon = icon;
+        WPFLog.Log(
+            $"TrayTrace.Renderer.CreateIcon: rendered handle={FormatHandle(icon.Handle)}; "
+            + $"old={FormatHandle(oldIcon?.Handle ?? IntPtr.Zero)}");
         oldIcon?.Dispose();
 
         return icon;
     }
+
+    private static string FormatHandle(IntPtr handle) => $"0x{handle.ToInt64():X}";
+
+    private static string FormatColor(Color? color) =>
+        color.HasValue
+            ? $"#{color.Value.A:X2}{color.Value.R:X2}{color.Value.G:X2}{color.Value.B:X2}"
+            : "<null>";
 
     /// <summary>
     /// Resolves the icon foreground color for the given brightness, applying any configured overrides.
@@ -213,8 +248,11 @@ public sealed class TrayIconRenderer : IDisposable
             // Moon offset from sun center, normalized to 0-100.
             double eclipseOffset = (x + d) * 50;
 
-            // Push the eclipse clip BEFORE drawing any glyph.
-            Geometry? eclipseClip = GetEclipseGeometry(typeface, size, size, eclipseOffset, 0);
+            // Push the eclipse clip BEFORE drawing any glyph. Endpoint icons are already
+            // represented by their own glyphs; clipping at 0% removes the centered glyph.
+            Geometry? eclipseClip = brightnessPercent is > 0 and < 100
+                ? GetEclipseGeometry(typeface, size, size, eclipseOffset, 0)
+                : null;
             if (eclipseClip != null)
             {
                 RectangleGeometry fullCanvas = new(new Rect(0, 0, size, size));

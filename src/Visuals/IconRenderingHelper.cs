@@ -39,10 +39,17 @@ internal static class IconRenderingHelper
 
         using Bitmap gdiBitmap = new(stream);
         IntPtr hIcon = gdiBitmap.GetHicon();
+        WPFLog.Log(
+            $"TrayTrace.IconHelper.BitmapToIcon: bitmap={bitmap.PixelWidth}x{bitmap.PixelHeight}; "
+            + $"hIcon=0x{hIcon.ToInt64():X}");
+        if (hIcon == IntPtr.Zero)
+            throw new InvalidOperationException($"Bitmap.GetHicon returned zero for {bitmap.PixelWidth}x{bitmap.PixelHeight}");
         try
         {
             using Icon original = Icon.FromHandle(hIcon);
-            return (Icon)original.Clone();
+            Icon clone = (Icon)original.Clone();
+            WPFLog.Log($"TrayTrace.IconHelper.BitmapToIcon: clone=0x{clone.Handle.ToInt64():X}");
+            return clone;
         }
         finally
         {

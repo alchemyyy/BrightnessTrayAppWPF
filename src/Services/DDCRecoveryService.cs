@@ -4,8 +4,8 @@ namespace BrightnessTrayAppWPF.Services;
 /// Event-triggered final fallback for DDC acquisition failures.
 /// Healthy state is fully event-driven and no worker runs. When MonitorService reports a failed or
 /// read-degraded known-DDC row, this service sets one global DDC recovery flag and starts a single
-/// background loop. The loop re-enters the normal read-only acquisition path every two seconds until
-/// no stuck DDC candidates remain.
+/// background loop. The loop performs targeted handle refresh/re-probe attempts every two seconds
+/// until no stuck DDC candidates remain.
 /// </summary>
 public sealed class DDCRecoveryService(MonitorService monitorService) : IDisposable
 {
@@ -91,7 +91,7 @@ public sealed class DDCRecoveryService(MonitorService monitorService) : IDisposa
                     $"DDCRecoveryService: acquisition retry for {candidates.Count} candidate(s): "
                     + string.Join(", ", candidates));
 
-                await RunDDCAcquisitionPassAsync(token).ConfigureAwait(false);
+                await RunDDCAcquisitionPassAsync(candidates, token).ConfigureAwait(false);
 
                 if (GetDDCRecoveryCandidateIds().Count == 0)
                 {
@@ -124,34 +124,24 @@ public sealed class DDCRecoveryService(MonitorService monitorService) : IDisposa
         }
     }
 
-    private async Task RunDDCAcquisitionPassAsync(CancellationToken token)
+    private async Task RunDDCAcquisitionPassAsync(List<string> candidates, CancellationToken token)
     {
-        TaskCompletionSource completion = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        foreach (string id in candidates)
+        {
+            token.ThrowIfCancellationRequested();
 
-        void OnRefreshed() => completion.TrySetResult();
-
-        monitorService.MonitorsRefreshed += OnRefreshed;
-        try
-        {
-            monitorService.Refresh();
-
-            await completion.Task
-                .WaitAsync(
-                    TimeSpan.FromMilliseconds(TimeConstants.DDCRecoveryAcquisitionPassTimeoutMs),
-                    token)
-                .ConfigureAwait(false);
-        }
-        catch (TimeoutException)
-        {
-            WPFLog.Log("DDCRecoveryService: acquisition retry timed out waiting for MonitorsRefreshed");
-        }
-        catch (Exception ex) when (ex is not OperationCanceledException)
-        {
-            WPFLog.Log($"DDCRecoveryService: acquisition retry failed: {ex.Message}");
-        }
-        finally
-        {
-            monitorService.MonitorsRefreshed -= OnRefreshed;
+            try
+            {
+                bool recovered = await Task.Run(
+                        () => monitorService.TryRecoverMonitor(id, DDCRecoveryAction.RefreshHandle),
+                        token)
+                    .ConfigureAwait(false);
+                WPFLog.Log($"DDCRecoveryService: targeted retry '{id}' result={recovered}");
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                WPFLog.Log($"DDCRecoveryService: targeted retry '{id}' failed: {ex.Message}");
+            }
         }
     }
 

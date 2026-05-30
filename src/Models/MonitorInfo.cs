@@ -130,6 +130,7 @@ public class MonitorInfo : INotifyPropertyChanged
     private string? _lastDDCError;
     private string _name = string.Empty;
     private double _curveTargetBrightness;
+    private bool _hasCurveTargetBrightness;
     private SliderState _sliderState = SliderState.Enabled;
     private SliderState _preFailureSliderState = SliderState.Enabled;
     private bool _isDragging;
@@ -247,10 +248,11 @@ public class MonitorInfo : INotifyPropertyChanged
             {
                 OnPropertyChanged();
                 OnPropertyChanged(nameof(RoundedBrightness));
-                // Only fire when the value label is reading from Brightness (i.e. we're not in
-                // the CurveActive state where it reads CurveTargetBrightness instead).
-                // CurveSleeping / CurveReleased / Disabled / Enabled / Failed all read from Brightness.
-                if (_sliderState != SliderState.CurveActive) OnPropertyChanged(nameof(EffectiveRoundedBrightness));
+                // Only suppress when a seeded curve target is the effective value. A row can briefly be
+                // CurveActive before the evaluator has produced its first target; in that gap the slider
+                // value remains the safest value to expose.
+                if (_sliderState != SliderState.CurveActive || !_hasCurveTargetBrightness)
+                    OnPropertyChanged(nameof(EffectiveRoundedBrightness));
             }
         }
     }
@@ -327,7 +329,8 @@ public class MonitorInfo : INotifyPropertyChanged
         {
             OnPropertyChanged(nameof(Brightness));
             OnPropertyChanged(nameof(RoundedBrightness));
-            if (_sliderState != SliderState.CurveActive) OnPropertyChanged(nameof(EffectiveRoundedBrightness));
+            if (_sliderState != SliderState.CurveActive || !_hasCurveTargetBrightness)
+                OnPropertyChanged(nameof(EffectiveRoundedBrightness));
         }
     }
 
@@ -338,8 +341,8 @@ public class MonitorInfo : INotifyPropertyChanged
 
     /// <summary>
     /// The "actual current value" shown next to the slider: <see cref="CurveTargetBrightness"/> rounded
-    /// when the curve is actively writing hardware (state is <see cref="SliderState.CurveActive"/>),
-    /// otherwise <see cref="RoundedBrightness"/>.
+    /// when the curve is actively writing hardware (state is <see cref="SliderState.CurveActive"/>)
+    /// and the evaluator has supplied a target, otherwise <see cref="RoundedBrightness"/>.
     /// In <see cref="SliderState.CurveSleeping"/> the curve indicator dot still shows its would-be value
     /// (via <see cref="IsCurveDriven"/>), but the bus is at the slider value -
     /// so the value label has to follow the slider, not the curve target.
@@ -352,7 +355,7 @@ public class MonitorInfo : INotifyPropertyChanged
     /// - gated to integer transitions to match RoundedBrightness's contract.
     /// </summary>
     public int EffectiveRoundedBrightness =>
-        _sliderState == SliderState.CurveActive
+        _sliderState == SliderState.CurveActive && _hasCurveTargetBrightness
             ? (int)Math.Round(_curveTargetBrightness)
             : (int)Math.Round(_brightness);
 
@@ -414,11 +417,11 @@ public class MonitorInfo : INotifyPropertyChanged
         set
         {
             if (_sliderState == value) return;
-            // EffectiveRoundedBrightness reads from CurveTargetBrightness only in CurveActive;
-            // every other state reads from Brightness.
+            // EffectiveRoundedBrightness reads from CurveTargetBrightness only in CurveActive after
+            // the curve target has been seeded; every other state reads from Brightness.
             // So the displayed value label has to re-bind whenever we cross that boundary in either direction
             // - including CurveActive <-> CurveSleeping, where the bus and the displayed source both flip.
-            bool oldShowsCurveTarget = _sliderState == SliderState.CurveActive;
+            bool oldShowsCurveTarget = _sliderState == SliderState.CurveActive && _hasCurveTargetBrightness;
             // Stash the state we were in before going Failed so the recovery path can tell
             // a curve-driven row (CurveActive/Sleeping/Released) apart from a plain user-owned one.
             // Curve writes go through MonitorService.EnqueueDirectBrightness which bypasses the Brightness setter,
@@ -441,7 +444,7 @@ public class MonitorInfo : INotifyPropertyChanged
             OnPropertyChanged(nameof(IsCurveReleased));
             OnPropertyChanged(nameof(IsFailed));
             OnPropertyChanged(nameof(IsDisabled));
-            bool newShowsCurveTarget = _sliderState == SliderState.CurveActive;
+            bool newShowsCurveTarget = _sliderState == SliderState.CurveActive && _hasCurveTargetBrightness;
             if (oldShowsCurveTarget != newShowsCurveTarget) OnPropertyChanged(nameof(EffectiveRoundedBrightness));
         }
     }
@@ -721,19 +724,47 @@ public class MonitorInfo : INotifyPropertyChanged
         get => _curveTargetBrightness;
         set
         {
-            if (_curveTargetBrightness != value)
-            {
-                int oldRounded = (int)Math.Round(_curveTargetBrightness);
-                _curveTargetBrightness = value;
-                OnPropertyChanged();
-                int newRounded = (int)Math.Round(value);
-                // EffectiveRoundedBrightness reads CurveTargetBrightness only in CurveActive;
-                // a Sleeping/Released/Disabled/Enabled/Failed row's value label tracks Brightness,
-                // so a curve-target update there shouldn't redundantly bump the label binding.
-                if (oldRounded != newRounded && _sliderState == SliderState.CurveActive)
-                    OnPropertyChanged(nameof(EffectiveRoundedBrightness));
-            }
+            int oldEffective = EffectiveRoundedBrightness;
+            bool hadTarget = _hasCurveTargetBrightness;
+            bool changed = _curveTargetBrightness != value;
+
+            _curveTargetBrightness = value;
+            _hasCurveTargetBrightness = true;
+
+            if (changed) OnPropertyChanged();
+            if (!hadTarget) OnPropertyChanged(nameof(HasCurveTargetBrightness));
+
+            // EffectiveRoundedBrightness reads CurveTargetBrightness only in CurveActive after a target has
+            // been seeded; a Sleeping/Released/Disabled/Enabled/Failed row's value label tracks Brightness,
+            // so a curve-target update there shouldn't redundantly bump the label binding.
+            if (_sliderState == SliderState.CurveActive && oldEffective != EffectiveRoundedBrightness)
+                OnPropertyChanged(nameof(EffectiveRoundedBrightness));
         }
+    }
+
+    /// <summary>
+    /// True after the curve evaluator or a transition seed has supplied a real target for this row.
+    /// Prevents a new CurveActive row from exposing the field's default zero as if it were a sampled curve value.
+    /// </summary>
+    public bool HasCurveTargetBrightness => _hasCurveTargetBrightness;
+
+    public void SeedCurveTargetBrightnessFromSlider()
+    {
+        CurveTargetBrightness = Math.Clamp(_brightness, 0.0, 100.0);
+    }
+
+    public void ClearCurveTargetBrightness()
+    {
+        if (!_hasCurveTargetBrightness && _curveTargetBrightness == 0.0) return;
+
+        int oldEffective = EffectiveRoundedBrightness;
+        _curveTargetBrightness = 0.0;
+        _hasCurveTargetBrightness = false;
+        OnPropertyChanged(nameof(CurveTargetBrightness));
+        OnPropertyChanged(nameof(HasCurveTargetBrightness));
+
+        if (_sliderState == SliderState.CurveActive && oldEffective != EffectiveRoundedBrightness)
+            OnPropertyChanged(nameof(EffectiveRoundedBrightness));
     }
 
     /// <summary>

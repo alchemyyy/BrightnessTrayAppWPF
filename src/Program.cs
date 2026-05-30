@@ -2,6 +2,7 @@ using BrightnessTrayAppWPF.Services;
 using BrightnessTrayAppWPF.WPF;
 using System.Diagnostics;
 using System.IO;
+using System.Runtime.InteropServices;
 using BrightnessTrayAppWPF.Utils;
 using BrightnessTrayAppWPF.Visuals;
 
@@ -60,9 +61,16 @@ internal static class Program
         // ProcessExit ensures the buffer flushes on every exit path.
         WPFLog.Initialize();
         AppDomain.CurrentDomain.ProcessExit += (_, _) => WPFLog.Flush();
+        LogStartupIdentity(args);
 
         // Privileged branches: re-entered with runas. No watcher, no WPF - just do the action and exit.
         if (TryGetArgValue(args, "--admin-action") is { } adminVerb) return RunAdminAction(adminVerb, args);
+
+        // Headless install: --install <system|local>. Same code path as the Settings > General
+        // install buttons but without WPF, so a .bat / CI can drive it. The system branch may
+        // re-launch itself with --admin-action install-system to elevate.
+        if (args.Contains("--install", StringComparer.OrdinalIgnoreCase))
+            return RunInstall(TryGetArgValue(args, "--install"));
 
         // Uninstaller mode: boot WPF minimally and host UninstallerWindow as the only window.
         // On confirm the window writes a self-deleting bat to %TEMP% (via UninstallScript)
@@ -71,6 +79,9 @@ internal static class Program
 
         bool isWatcher = args.Contains("--watcher", StringComparer.OrdinalIgnoreCase);
         bool isMonitored = args.Contains("--monitored", StringComparer.OrdinalIgnoreCase);
+        WPFLog.Log(
+            $"Program.Main: modeFlags watcher={isWatcher}; monitored={isMonitored}; debugger={Debugger.IsAttached}; "
+            + $"noWatcherEnv={Environment.GetEnvironmentVariable("BTAWPF_NO_WATCHER") ?? "<null>"}");
 
         if (isWatcher)
         {
@@ -91,6 +102,7 @@ internal static class Program
             // First launch without flags - spawn watcher and exit.
             // The watcher will launch the app with --monitored.
             // Skip this when debugger is attached so we can debug directly.
+            WPFLog.Log("Program.Main: launching watcher and exiting");
             CrashHandler.LaunchWatcherDetached();
             return 0;
         }
@@ -109,6 +121,7 @@ internal static class Program
             {
                 _selfInstanceCoordinator = SingleInstanceCoordinator.AcquireOrTakeover();
                 _selfInstanceCoordinator.RecordMonitoredPID(Environment.ProcessId);
+                WPFLog.Log("Program.Main: self-owned single-instance monitor recorded");
                 AppDomain.CurrentDomain.ProcessExit += (_, _) =>
                 {
                     try { _selfInstanceCoordinator?.Dispose(); }
@@ -118,6 +131,8 @@ internal static class Program
             catch (Exception ex)
             {
                 WPFLog.Log($"Program.Main: SingleInstanceCoordinator.AcquireOrTakeover failed: {ex.Message}");
+                WPFLog.Flush();
+                return 1;
             }
         }
 
@@ -142,6 +157,30 @@ internal static class Program
         App app = new();
         app.InitializeComponent();
         return app.Run();
+    }
+
+    private static void LogStartupIdentity(string[] args)
+    {
+        try
+        {
+            string processPath = Environment.ProcessPath ?? "<null>";
+            FileInfo? fi = File.Exists(processPath) ? new FileInfo(processPath) : null;
+#if DEBUG
+            const string configuration = "Debug";
+#else
+            const string configuration = "Release";
+#endif
+            WPFLog.Log(
+                $"StartupIdentity: pid={Environment.ProcessId}; args=[{string.Join(' ', args)}]; "
+                + $"appGuid={AppIdentity.AppGuid}; trayIconGuid={AppIdentity.TrayIconGuid}; "
+                + $"processPath='{processPath}'; baseDir='{AppContext.BaseDirectory}'; cwd='{Environment.CurrentDirectory}'; "
+                + $"configuration={configuration}; build={BuildInfo.BuildNumber}; "
+                + $"fileWriteUtc={fi?.LastWriteTimeUtc.ToString("O") ?? "<missing>"}; fileLen={fi?.Length.ToString() ?? "<missing>"}");
+        }
+        catch (Exception ex)
+        {
+            WPFLog.Log($"StartupIdentity failed: {ex.Message}");
+        }
     }
 
     private static int? ParseWatcherPID(string[] args)
@@ -233,4 +272,80 @@ internal static class Program
         if (TryGetArgValue(args, "--scope") is { } scope) return WindowsUninstallRegistry.ParseScopeArg(scope);
         return WindowsUninstallRegistry.Scope.CurrentUser;
     }
+
+    /// <summary>
+    /// Headless install entry point. Drives the same InstallationService methods as the
+    /// Settings buttons. Returns 0 on success, 1 on failure, 2 on usage error.
+    /// </summary>
+    private static int RunInstall(string? scope)
+    {
+        if (scope is null) return PrintInstallUsage("Missing scope argument after --install");
+
+        switch (scope.ToLowerInvariant())
+        {
+            case "local":
+            {
+                InstallResult result = InstallationService.InstallToLocalAppData();
+                string msg = result.Success
+                    ? $"Installed to {InstallationService.LocalAppDataInstallExecutable}"
+                    : $"Local install failed: {result.ErrorMessage}";
+                WriteInstallMessage(msg, error: !result.Success);
+                return result.Success ? 0 : 1;
+            }
+            case "system":
+            {
+                InstallResult result = InstallationService.InstallSystemWide();
+                string msg;
+                if (result.Success)
+                    msg = $"Installed to {InstallationService.ProgramFilesInstallExecutable}";
+                else if (result.UserCancelled)
+                    msg = "System install cancelled (UAC prompt declined)";
+                else
+                    msg = $"System install failed: {result.ErrorMessage}";
+                WriteInstallMessage(msg, error: !result.Success);
+                return result.Success ? 0 : 1;
+            }
+            default:
+                return PrintInstallUsage($"Unknown scope '{scope}'");
+        }
+    }
+
+    private static int PrintInstallUsage(string? reason)
+    {
+        string usage =
+            "Usage: --install <system|local>" + Environment.NewLine +
+            "  system  Install to %ProgramFiles%\\TrayAppWPF (triggers UAC)" + Environment.NewLine +
+            "  local   Install to %LOCALAPPDATA%\\TrayAppWPF (no UAC)";
+        string body = reason is null ? usage : $"{reason}{Environment.NewLine}{Environment.NewLine}{usage}";
+        WriteInstallMessage(body, error: true);
+        return 2;
+    }
+
+    // WinExe has no console at startup. AttachConsole(ATTACH_PARENT_PROCESS) reattaches stdout /
+    // stderr to the cmd / PowerShell that spawned us so .bat scripts see the message. WPFLog
+    // mirrors it to disk so Explorer launches (no parent console) still leave a paper trail.
+    private static void WriteInstallMessage(string text, bool error)
+    {
+        WPFLog.Log($"Program.RunInstall: {text}");
+        try
+        {
+            if (AttachConsole(ATTACH_PARENT_PROCESS))
+            {
+                // Default Console writers were bound to NUL handles at WinExe startup; rebind
+                // them against the freshly-attached console.
+                Console.SetOut(new StreamWriter(Console.OpenStandardOutput()) { AutoFlush = true });
+                Console.SetError(new StreamWriter(Console.OpenStandardError()) { AutoFlush = true });
+                (error ? Console.Error : Console.Out).WriteLine(text);
+            }
+        }
+        catch
+        {
+            // best-effort; WPFLog above already captured it
+        }
+    }
+
+    private const int ATTACH_PARENT_PROCESS = -1;
+    [DllImport("kernel32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool AttachConsole(int dwProcessId);
 }

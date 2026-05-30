@@ -494,7 +494,7 @@ public partial class GeneralPage : UserControl
                         InstallLocalAppDataStatusText,
                         InstallLocalAppDataButton,
                         UninstallLocalAppDataButton,
-                        InstallationService.LocalAppDataInstallExe,
+                        InstallationService.LocalAppDataInstallExecutable,
                         elevated: false);
                     break;
                 case InstallScope.ProgramFiles:
@@ -502,7 +502,7 @@ public partial class GeneralPage : UserControl
                         InstallProgramFilesStatusText,
                         InstallProgramFilesButton,
                         UninstallProgramFilesButton,
-                        InstallationService.ProgramFilesInstallExe,
+                        InstallationService.ProgramFilesInstallExecutable,
                         elevated: true);
                     break;
                 case InstallScope.WindowsStore:
@@ -601,7 +601,7 @@ public partial class GeneralPage : UserControl
                     title: LocalizationManager.Instance["Settings_General_InstallConfirm_Title"],
                     message: string.Format(
                         LocalizationManager.Instance["Settings_General_InstallConfirm_Message_Format"],
-                        InstallationService.LocalAppDataInstallExe),
+                        InstallationService.LocalAppDataInstallExecutable),
                     confirmText: LocalizationManager.Instance["Settings_General_Install_Button"],
                     cancelText: LocalizationManager.Instance["Settings_General_Cancel_Button"]);
                 if (!ok) return;
@@ -642,7 +642,7 @@ public partial class GeneralPage : UserControl
                     title: LocalizationManager.Instance["Settings_General_InstallSystemWideConfirm_Title"],
                     message: string.Format(
                         LocalizationManager.Instance["Settings_General_InstallSystemWideConfirm_Message_Format"],
-                        InstallationService.ProgramFilesInstallExe),
+                        InstallationService.ProgramFilesInstallExecutable),
                     confirmText: LocalizationManager.Instance["Settings_General_Install_Button"],
                     cancelText: LocalizationManager.Instance["Settings_General_Cancel_Button"]);
                 if (!ok) return;

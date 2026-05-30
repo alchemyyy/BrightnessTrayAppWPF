@@ -3,11 +3,12 @@ namespace BrightnessTrayAppWPF;
 /// <summary>
 /// Immutable app identity used for path- and name-agnostic single-instance detection.
 /// Keyed by a fixed GUID so renaming or moving the .exe cannot defeat it.
-/// Distinct from the tray-icon GUID in ShellNotifyIcon.
+/// Distinct from the tray-icon GUID used by ShellNotifyIcon.
 /// </summary>
 internal static class AppIdentity
 {
     public const string AppGuid = "5DC33F2E-6129-4FF2-BD72-626F13B76115";
+    public const string TrayIconGuid = "5dea405c-0dd0-49bf-9373-89addcdce928";
 
     public static string SingleInstanceMutexName => $"Local\\BrightnessTrayApp-Watcher-{AppGuid}";
     public static string PIDMmfName              => $"Local\\BrightnessTrayApp-WatcherPID-{AppGuid}";

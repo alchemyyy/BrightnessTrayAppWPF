@@ -12,6 +12,9 @@ using BrightnessTrayAppWPF.Models;
 using BrightnessTrayAppWPF.Services;
 using BrightnessTrayAppWPF.Visuals;
 using Point = System.Windows.Point;
+// net10's WinForms ref now ships ContextMenu/MenuItem too; pin the WPF types.
+using ContextMenu = System.Windows.Controls.ContextMenu;
+using MenuItem = System.Windows.Controls.MenuItem;
 
 namespace BrightnessTrayAppWPF.WPF;
 
@@ -36,6 +39,8 @@ public partial class App
     private SettingsWindow? _settingsWindow;
     private GlobalHotkeyService? _hotkeyService;
     private UpdateCheckService? _updateCheckService;
+    private string? _lastTrayValueDiagnostic;
+    private DateTime _lastTrayValueDiagnosticUtc;
     // Highest version we've already raised a tray balloon for in this process lifetime.
     // Resets on every restart so the user gets one more chance to notice an unseen update.
     private int _lastNotifiedUpdateVersion;
@@ -764,6 +769,7 @@ public partial class App
 
         // Rebuild now that Monitors is available.
         _contextMenu = CreateContextMenu();
+        RequestTrayRefresh();
     }
 
     private void RestoreStartupUndockedFlyoutIfRequested()
@@ -1291,11 +1297,29 @@ public partial class App
         RequestTrayRefresh();
     }
 
-    private void RequestTrayRefresh() => _trayIconManager?.Update(GetBrightnessAndTooltip);
+    private void RequestTrayRefresh()
+    {
+        try
+        {
+            WPFLog.Log(
+                $"TrayTrace.Request: trayNull={_trayIconManager == null}; flyoutNull={_activeFlyout == null}; "
+                + $"flyoutVisible={_activeFlyout?.IsVisible.ToString() ?? "<null>"}; "
+                + $"monitors={_activeFlyout?.Monitors.Count.ToString() ?? "<null>"}; dispatcher={Dispatcher.CheckAccess()}");
+        }
+        catch (Exception ex)
+        {
+            WPFLog.Log($"TrayTrace.Request failed: {ex.Message}");
+        }
+
+        _trayIconManager?.Update(GetBrightnessAndTooltip);
+    }
 
     private (int brightness, string tooltip) GetBrightnessAndTooltip()
     {
-        int brightness = _activeFlyout?.Monitors is { Count: > 0 } monitors
+        List<MonitorInfo> monitors = _activeFlyout?.Monitors is { Count: > 0 } source
+            ? [.. source]
+            : [];
+        int brightness = monitors.Count > 0
             ? ComputeTrackedIconBrightness(monitors)
             : 100;
         string tooltip = string.Format(
@@ -1306,7 +1330,41 @@ public partial class App
                 LocalizationManager.Instance["Tray_Tooltip_NightLight_Format"], NightLightProvider.GetStrength());
         }
 
+        LogTrayValueDiagnostic(brightness, tooltip, monitors);
         return (brightness, tooltip);
+    }
+
+    private void LogTrayValueDiagnostic(int brightness, string tooltip, List<MonitorInfo> monitors)
+    {
+        try
+        {
+            string monitorState = monitors.Count == 0
+                ? "<none>"
+                : string.Join(" | ", monitors.Select(m =>
+                    $"{m.Name}:{m.SliderState}:b={m.RoundedBrightness}:eff={m.EffectiveRoundedBrightness}:target={Math.Round(m.CurveTargetBrightness)}:hasTarget={m.HasCurveTargetBrightness}:failed={m.IsFailed}:part={m.IsParticipatingInMaster}"));
+            string snapshot =
+                $"brightness={brightness}; tooltip='{tooltip.Replace("\r", "\\r").Replace("\n", "\\n")}'; "
+                + $"flyoutNull={_activeFlyout == null}; flyoutVisible={_activeFlyout?.IsVisible.ToString() ?? "<null>"}; "
+                + $"curve={_activeFlyout?.IsBrightnessCurveEnabled.ToString() ?? "<null>"}; "
+                + $"disabledPeriod={_activeFlyout?.IsInCurveDisabledPeriod.ToString() ?? "<null>"}; "
+                + $"tracking={_appSettings?.DynamicIconBrightnessTracking}; enabledOnly={_appSettings?.DynamicIconTrackEnabledOnly}; "
+                + $"monitors={monitorState}";
+
+            DateTime now = DateTime.UtcNow;
+            bool important = string.IsNullOrWhiteSpace(tooltip) || monitors.Count == 0 || brightness <= 1;
+            if (!important
+                && snapshot == _lastTrayValueDiagnostic
+                && now - _lastTrayValueDiagnosticUtc < TimeSpan.FromSeconds(30))
+                return;
+
+            _lastTrayValueDiagnostic = snapshot;
+            _lastTrayValueDiagnosticUtc = now;
+            WPFLog.Log("TrayDiag.Value: " + snapshot);
+        }
+        catch (Exception ex)
+        {
+            WPFLog.Log($"TrayDiag.Value failed: {ex.Message}");
+        }
     }
 
     private int ComputeTrackedIconBrightness(IEnumerable<MonitorInfo> monitors)
@@ -1314,26 +1372,29 @@ public partial class App
         bool enabledOnly = _appSettings?.DynamicIconTrackEnabledOnly ?? false;
         List<MonitorInfo> pool = enabledOnly
             ? [.. monitors.Where(m => m.IsParticipatingInMaster)]
-            : [.. monitors];
+            : [.. monitors.Where(m => !m.IsFailed)];
 
         if (pool.Count == 0) return 100;
 
-        // Effective value: curve target when a curve is driving the row, slider value otherwise.
+        // Effective value: curve target only when the curve is actively writing the row, slider value otherwise.
         // The icon needs to reflect what the bus is actually doing, not the slider's manual position -
         // in absolute mode the slider stays put while the curve walks the hardware,
         // so reading m.Brightness here would freeze the icon at the user's last manual value.
-        // Released and sleep-period rows have IsCurveDriven false and fall back to slider,
-        // which is correct because the bus tracks the slider in those states too.
+        // MonitorInfo.EffectiveRoundedBrightness is the single source for that split:
+        // CurveActive reads CurveTargetBrightness after the evaluator has seeded it;
+        // CurveSleeping / CurveReleased / Enabled and unseeded CurveActive rows read Brightness.
+        // Failed rows are excluded above because their current hardware brightness is unknown and may be a
+        // transient 0 from an unsuccessful DDC acquisition.
         MasterSliderMode mode = _appSettings?.DynamicIconBrightnessTracking ?? MasterSliderMode.Average;
-        static double EffectiveValue(MonitorInfo m) =>
-            m.IsCurveDriven ? m.CurveTargetBrightness : m.Brightness;
+        static int EffectiveValue(MonitorInfo m) => m.EffectiveRoundedBrightness;
         double value = mode switch
         {
             MasterSliderMode.Lowest => pool.Min(EffectiveValue),
             MasterSliderMode.Highest => pool.Max(EffectiveValue),
             _ => pool.Average(EffectiveValue),
         };
-        return (int)Math.Round(value);
+        if (!double.IsFinite(value)) return 100;
+        return (int)Math.Round(Math.Clamp(value, 0.0, 100.0));
     }
 
     private void OpenSettings()

@@ -147,9 +147,13 @@
                 </Setter.Value>
             </Setter>
             <Style.Triggers>
-                <DataTrigger Binding="{Binding SliderState}" Value="{x:Static models:SliderState.CurveActive}">
+                <MultiDataTrigger>
+                    <MultiDataTrigger.Conditions>
+                        <Condition Binding="{Binding SliderState}" Value="{x:Static models:SliderState.CurveActive}"/>
+                        <Condition Binding="{Binding HasCurveTargetBrightness}" Value="True"/>
+                    </MultiDataTrigger.Conditions>
                     <Setter Property="Background" Value="Transparent"/>
-                </DataTrigger>
+                </MultiDataTrigger>
             </Style.Triggers>
         </Style>
 
@@ -224,9 +228,13 @@
                                     <Style TargetType="Border">
                                         <Setter Property="Visibility" Value="Collapsed"/>
                                         <Style.Triggers>
-                                            <DataTrigger Binding="{Binding SliderState}" Value="{x:Static models:SliderState.CurveActive}">
+                                            <MultiDataTrigger>
+                                                <MultiDataTrigger.Conditions>
+                                                    <Condition Binding="{Binding SliderState}" Value="{x:Static models:SliderState.CurveActive}"/>
+                                                    <Condition Binding="{Binding HasCurveTargetBrightness}" Value="True"/>
+                                                </MultiDataTrigger.Conditions>
                                                 <Setter Property="Visibility" Value="Visible"/>
-                                            </DataTrigger>
+                                            </MultiDataTrigger>
                                         </Style.Triggers>
                                     </Style>
                                 </Border.Style>
@@ -288,9 +296,9 @@
                                  Two independent triggers gate Visibility (default Collapsed):
                                  the brightness curve drives the indicator on master + every individual row,
                                  and the night-light curve drives the indicator on the night-light row.
-                                 Both require a row that's actually curve-driven (HasCurveTarget=true)
+                                 Both require a row that's actually curve-driven (HasCurveTargetBrightness=true)
                                  and that the disabled period isn't passing through.
-                                 Released individuals (HasCurveTarget=false) drop out by that route alone.
+                                 Released individuals (HasCurveTargetBrightness=false) drop out by that route alone.
                                  Width=18 keeps the inner glyph centered inside its container; X translation comes
                                  from SliderTrackPercentConverter with ConverterParameter=-9, so the Grid's left edge
                                  sits at percent * trackWidth - 9 and the glyph's center lands on the percentage point
@@ -324,9 +332,13 @@
                                                  Per-row state (master vs night-light) already encodes which curve
                                                  column drives this row, so the previous IsBrightnessCurveEnabled /
                                                  IsNightLightCurveEnabled split is redundant and was dropped. -->
-                                            <DataTrigger Binding="{Binding IsCurveDriven}" Value="True">
+                                            <MultiDataTrigger>
+                                                <MultiDataTrigger.Conditions>
+                                                    <Condition Binding="{Binding IsCurveDriven}" Value="True"/>
+                                                    <Condition Binding="{Binding HasCurveTargetBrightness}" Value="True"/>
+                                                </MultiDataTrigger.Conditions>
                                                 <Setter Property="Visibility" Value="Visible"/>
-                                            </DataTrigger>
+                                            </MultiDataTrigger>
                                         </Style.Triggers>
                                     </Style>
                                 </Grid.Style>
@@ -730,13 +742,35 @@
                             </Button>
 
                             <!-- Row label.
+                                 Name TextBlock + inline-rename TextBox share a Grid cell: double-clicking the name
+                                 (individual monitor rows only - master / nightlight short-circuit in the handler)
+                                 swaps the TextBlock for the TextBox, focused and selected. Enter or focus-loss commits;
+                                 Escape cancels. The sibling-by-type lookup in code-behind expects this Grid parent.
                                  Trailing Kelvin TextBlock is only visible on the nightlight row when ShowNightLightKelvinLabel is on. -->
                             <StackPanel Grid.Row="0" Grid.Column="1"
                                         Orientation="Horizontal"
                                         VerticalAlignment="Center">
-                                <TextBlock Text="{Binding Name}"
-                                           FontSize="15"
-                                           Foreground="{DynamicResource ThemeForeground}"/>
+                                <Grid>
+                                    <TextBlock x:Name="MonitorNameText"
+                                               Text="{Binding Name}"
+                                               Tag="{Binding}"
+                                               FontSize="15"
+                                               Background="Transparent"
+                                               Foreground="{DynamicResource ThemeForeground}"
+                                               MouseLeftButtonDown="MonitorNameText_MouseLeftButtonDown"/>
+                                    <TextBox x:Name="MonitorNameEdit"
+                                             Visibility="Collapsed"
+                                             FontSize="15"
+                                             Background="Transparent"
+                                             Foreground="{DynamicResource ThemeForeground}"
+                                             CaretBrush="{DynamicResource ThemeForeground}"
+                                             BorderThickness="0"
+                                             Padding="0"
+                                             Margin="0"
+                                             VerticalAlignment="Center"
+                                             KeyDown="MonitorNameEdit_KeyDown"
+                                             LostKeyboardFocus="MonitorNameEdit_LostKeyboardFocus"/>
+                                </Grid>
                                 <TextBlock FontSize="15"
                                            Foreground="{DynamicResource ThemeForeground}">
                                     <TextBlock.Text>
@@ -1011,18 +1045,38 @@
                                 <!-- Value label: shows the actual current brightness applied to the hardware,
                                      not the slider thumb's position.
                                      EffectiveRoundedBrightness returns CurveTargetBrightness rounded
-                                     when the curve is driving this row, otherwise RoundedBrightness
-                                     — so when curve mode is engaged the number tracks the curve-driven hardware value
+                                     when the curve is actively driving this row and has a seeded target,
+                                     otherwise RoundedBrightness. When curve mode is engaged the number tracks the curve-driven hardware value
                                      (where the indicator glyph sits) instead of lying about what the bus is doing. -->
-                                <TextBlock Grid.Column="1"
-                                           Text="{Binding EffectiveRoundedBrightness}"
-                                           FontSize="20"
-                                           FontWeight="Normal"
-                                           Foreground="{DynamicResource ThemeForeground}"
-                                           VerticalAlignment="Center"
-                                           Margin="8,-4,0,0"
-                                           MinWidth="32"
-                                           TextAlignment="Right"/>
+                                <Grid Grid.Column="1"
+                                      MinWidth="32"
+                                      VerticalAlignment="Center"
+                                      Margin="8,-4,0,0">
+                                    <TextBlock x:Name="BrightnessValueText"
+                                               Text="{Binding EffectiveRoundedBrightness}"
+                                               FontSize="20"
+                                               FontWeight="Normal"
+                                               Background="Transparent"
+                                               Foreground="{DynamicResource ThemeForeground}"
+                                               VerticalAlignment="Center"
+                                               TextAlignment="Right"
+                                               MouseLeftButtonDown="BrightnessValueText_MouseLeftButtonDown"/>
+                                    <TextBox x:Name="BrightnessValueEdit"
+                                             Visibility="Collapsed"
+                                             MinWidth="42"
+                                             FontSize="20"
+                                             FontWeight="Normal"
+                                             Background="{DynamicResource ThemeBackground}"
+                                             Foreground="{DynamicResource ThemeForeground}"
+                                             CaretBrush="{DynamicResource ThemeForeground}"
+                                             BorderBrush="{DynamicResource ThemeBorder}"
+                                             BorderThickness="1"
+                                             Padding="2,0"
+                                             VerticalAlignment="Center"
+                                             TextAlignment="Right"
+                                             KeyDown="BrightnessValueEdit_KeyDown"
+                                             LostKeyboardFocus="BrightnessValueEdit_LostKeyboardFocus"/>
+                                </Grid>
                             </Grid>
                         </Grid>
                     </DataTemplate>

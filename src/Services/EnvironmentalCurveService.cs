@@ -319,6 +319,11 @@ public sealed class EnvironmentalCurveService : IDisposable
     public void ClearCurveTargets()
     {
         if (_disposed) return;
+        _masterMonitor.ClearCurveTargetBrightness();
+        _nightLightMonitor.ClearCurveTargetBrightness();
+        foreach (MonitorInfo monitor in _monitors)
+            monitor.ClearCurveTargetBrightness();
+
         _masterMonitor.SliderState = SliderStateMachine.OnCurveDisengaged(_masterMonitor.SliderState);
         _nightLightMonitor.SliderState = SliderStateMachine.OnCurveDisengaged(_nightLightMonitor.SliderState);
         foreach (MonitorInfo monitor in _monitors)
@@ -337,9 +342,9 @@ public sealed class EnvironmentalCurveService : IDisposable
     {
         if (_disposed) return;
         bool inDisabled = _isInDisabledPeriod;
-        _masterMonitor.SliderState = SliderStateMachine.OnCurveEngaged(_masterMonitor.SliderState, inDisabled);
+        SetCurveStateWithSeed(_masterMonitor, SliderStateMachine.OnCurveEngaged(_masterMonitor.SliderState, inDisabled));
         foreach (MonitorInfo monitor in _monitors)
-            monitor.SliderState = SliderStateMachine.OnCurveEngaged(monitor.SliderState, inDisabled);
+            SetCurveStateWithSeed(monitor, SliderStateMachine.OnCurveEngaged(monitor.SliderState, inDisabled));
     }
 
     /// <summary>Symmetric counterpart to <see cref="EngageBrightnessCurveStates"/> for the night-light row.</summary>
@@ -347,7 +352,7 @@ public sealed class EnvironmentalCurveService : IDisposable
     {
         if (_disposed) return;
         bool inDisabled = _isInDisabledPeriod;
-        _nightLightMonitor.SliderState = SliderStateMachine.OnCurveEngaged(_nightLightMonitor.SliderState, inDisabled);
+        SetCurveStateWithSeed(_nightLightMonitor, SliderStateMachine.OnCurveEngaged(_nightLightMonitor.SliderState, inDisabled));
     }
 
     /// <summary>
@@ -358,6 +363,10 @@ public sealed class EnvironmentalCurveService : IDisposable
     public void DisengageBrightnessCurveStates()
     {
         if (_disposed) return;
+        _masterMonitor.ClearCurveTargetBrightness();
+        foreach (MonitorInfo monitor in _monitors)
+            monitor.ClearCurveTargetBrightness();
+
         _masterMonitor.SliderState = SliderStateMachine.OnCurveDisengaged(_masterMonitor.SliderState);
         foreach (MonitorInfo monitor in _monitors)
             monitor.SliderState = SliderStateMachine.OnCurveDisengaged(monitor.SliderState);
@@ -369,6 +378,7 @@ public sealed class EnvironmentalCurveService : IDisposable
     public void DisengageNightLightCurveStates()
     {
         if (_disposed) return;
+        _nightLightMonitor.ClearCurveTargetBrightness();
         _nightLightMonitor.SliderState = SliderStateMachine.OnCurveDisengaged(_nightLightMonitor.SliderState);
     }
 
@@ -401,7 +411,7 @@ public sealed class EnvironmentalCurveService : IDisposable
         // arm that would relax that. Same gate covers IsHardwareFunctional which is `!= Failed` today.
         if (m.SliderState == SliderState.Failed || !m.IsHardwareFunctional) return;
 
-        m.SliderState = m.SliderState switch
+        SliderState next = m.SliderState switch
         {
             SliderState.Enabled =>
                 // Newly arrived (recovery, hot-plug, profile-load) - promote into curve control.
@@ -410,6 +420,17 @@ public sealed class EnvironmentalCurveService : IDisposable
             SliderState.CurveSleeping when !inDisabled => SliderState.CurveActive,
             _ => m.SliderState
         };
+        SetCurveStateWithSeed(m, next);
+    }
+
+    private static void SetCurveStateWithSeed(MonitorInfo monitor, SliderState next)
+    {
+        bool wasCurveDriven = monitor.SliderState is SliderState.CurveActive or SliderState.CurveSleeping;
+        bool willBeCurveDriven = next is SliderState.CurveActive or SliderState.CurveSleeping;
+        if (willBeCurveDriven && !wasCurveDriven)
+            monitor.SeedCurveTargetBrightnessFromSlider();
+
+        monitor.SliderState = next;
     }
 
     /// <summary>

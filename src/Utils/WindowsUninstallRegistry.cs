@@ -44,18 +44,18 @@ public static class WindowsUninstallRegistry
     {
         try
         {
-            string installExe = Path.Combine(installDir, "BrightnessTrayAppWPF.exe");
+            string installExecutable = Path.Combine(installDir, "BrightnessTrayAppWPF.exe");
             using RegistryKey key = OpenRoot(scope).CreateSubKey(SubKeyPath, writable: true);
 
             key.SetValue("DisplayName", DisplayName, RegistryValueKind.String);
             key.SetValue("DisplayVersion", buildNumber.ToString(), RegistryValueKind.String);
             key.SetValue("Publisher", Publisher, RegistryValueKind.String);
             key.SetValue("InstallLocation", installDir, RegistryValueKind.String);
-            key.SetValue("DisplayIcon", installExe, RegistryValueKind.String);
+            key.SetValue("DisplayIcon", installExecutable, RegistryValueKind.String);
             key.SetValue("HelpLink", HelpLink, RegistryValueKind.String);
             key.SetValue("URLInfoAbout", HelpLink, RegistryValueKind.String);
             key.SetValue("UninstallString",
-                $"\"{installExe}\" --uninstall \"{installDir}\" --scope {ScopeArg(scope)}",
+                $"\"{installExecutable}\" --uninstall \"{installDir}\" --scope {ScopeArg(scope)}",
                 RegistryValueKind.String);
             key.SetValue("NoModify", 1, RegistryValueKind.DWord);
             key.SetValue("NoRepair", 1, RegistryValueKind.DWord);
@@ -63,9 +63,9 @@ public static class WindowsUninstallRegistry
             // Best-effort EstimatedSize (in KB) so Add/Remove Programs shows a size.
             try
             {
-                if (File.Exists(installExe))
+                if (File.Exists(installExecutable))
                 {
-                    long bytes = new FileInfo(installExe).Length;
+                    long bytes = new FileInfo(installExecutable).Length;
                     key.SetValue("EstimatedSize", (int)(bytes / 1024L), RegistryValueKind.DWord);
                 }
             }

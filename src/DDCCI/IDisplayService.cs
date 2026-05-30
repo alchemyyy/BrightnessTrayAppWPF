@@ -63,7 +63,8 @@ public interface IDisplayService
 
     /// <summary>
     /// Re-acquires the HMONITOR / HDC for an existing <see cref="DDCMonitor"/> by re-enumerating
-    /// and matching on its adapter <see cref="DDCMonitor.Name"/>.
+    /// and matching stable identity first: <see cref="DDCMonitor.DeviceID"/>, then EDID identity,
+    /// then adapter <see cref="DDCMonitor.Name"/> as a logged fallback.
     /// Use as a soft recovery step when DDC/CI calls persistently fail on an otherwise-present monitor
     /// (the handle may have gone stale after a sleep cycle or GPU driver hiccup).
     /// The DDC/CI spec has no "reset the bus" primitive, but a freshly-enumerated handle often unsticks a monitor

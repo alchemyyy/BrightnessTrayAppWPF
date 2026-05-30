@@ -70,7 +70,7 @@ internal static class WPFLog
             if (!_initialized) return;
 
             string timestamp = DateTime.Now.ToString(TimestampFmt);
-            string formatted = "[" + timestamp + "] " + (message ?? string.Empty) + "\n";
+            string formatted = "[" + timestamp + " pid=" + Environment.ProcessId + " tid=" + Environment.CurrentManagedThreadId + "] " + (message ?? string.Empty) + "\n";
 
             lock (_gate)
             {

@@ -2,6 +2,7 @@ using System.Collections.ObjectModel;
 using System.Collections.Specialized;
 using System.ComponentModel;
 using System.Diagnostics;
+using System.Globalization;
 using System.Runtime.CompilerServices;
 using System.Windows;
 using System.Windows.Controls;
@@ -22,6 +23,7 @@ using MouseEventArgs = System.Windows.Input.MouseEventArgs;
 using Point = System.Windows.Point;
 using Size = System.Windows.Size;
 using Slider = System.Windows.Controls.Slider;
+using TextBox = System.Windows.Controls.TextBox;
 
 namespace BrightnessTrayAppWPF.WPF;
 
@@ -203,6 +205,8 @@ public partial class BrightnessFlyout : Window, INotifyPropertyChanged
     /// </summary>
     public event Action<double>? PreviewSweepProgress;
     private Slider? _draggingSlider;
+    private bool _masterSliderGesturePrepared;
+    private bool _syncingMasterDrivenSliderVisual;
     private double ScrollWheelStep => _appSettings?.FlyoutScrollWheelStep ?? 2;
 
     // Ctrl+wheel jumps by this fraction of the slider's range per notch (10%).
@@ -711,6 +715,7 @@ public partial class BrightnessFlyout : Window, INotifyPropertyChanged
         }
 
         CheckAndUpdateUnsavedChanges();
+        BrightnessUpdated?.Invoke();
     }
 
     private void OnInitialMonitorEnrollmentRefreshed()
@@ -1054,7 +1059,17 @@ public partial class BrightnessFlyout : Window, INotifyPropertyChanged
         // so piggybacking on it covers both regimes with one trigger and keeps the icon in sync
         // with what the bus is actually doing.
         if (e.PropertyName == nameof(MonitorInfo.EffectiveRoundedBrightness))
+        {
+            if (sender is MonitorInfo monitor)
+            {
+                WPFLog.Log(
+                    $"TrayTrace.Signal: source=EffectiveRoundedBrightness; name='{monitor.Name}'; state={monitor.SliderState}; "
+                    + $"b={monitor.RoundedBrightness}; eff={monitor.EffectiveRoundedBrightness}; "
+                    + $"target={Math.Round(monitor.CurveTargetBrightness)}; hasTarget={monitor.HasCurveTargetBrightness}; "
+                    + $"flyoutVisible={IsVisible}");
+            }
             BrightnessUpdated?.Invoke();
+        }
 
         if (e.PropertyName is not (nameof(MonitorInfo.Brightness)
                                 or nameof(MonitorInfo.IsPoweredOn)
@@ -1183,17 +1198,18 @@ public partial class BrightnessFlyout : Window, INotifyPropertyChanged
                 if (!monitor.IsParticipatingInMaster) continue;
 
                 double unclamped = MasterMonitor.Brightness + monitor.Offset;
-                // Round the propagated value so each individual slider lands on an integer position;
-                // direct user dragging on an individual slider can still produce fractional Brightness,
-                // but master-driven values must match the int that save / RoundedBrightness will apply.
-                double clamped = Math.Round(Math.Clamp(unclamped, 0, 100));
+                // Keep the propagated slider value fractional during the drag. The gesture-start
+                // snapshot floors existing fractional monitor baselines once, so offsets do not
+                // compound prior slider residue, while the drag itself stays smooth.
+                double clamped = Math.Clamp(unclamped, 0, 100);
                 monitor.Brightness = clamped;
                 monitor.VirtualBrightness = unclamped;
+                UpdateVisibleMonitorSliderValue(monitor, clamped);
 
                 // Disabled-period side-channel: setter-driven write was suspended, so push the value
                 // to hardware directly. EnqueueDirectBrightness bypasses the suspension counter by design.
                 if (suspendForDisabledPeriod)
-                    _monitorService.EnqueueDirectBrightness(monitor, (int)clamped);
+                    _monitorService.EnqueueDirectBrightness(monitor, monitor.RoundedBrightness);
             }
         }
         finally
@@ -1360,6 +1376,86 @@ public partial class BrightnessFlyout : Window, INotifyPropertyChanged
         {
             double source = preserve ? monitor.VirtualBrightness : monitor.LastUserBrightness;
             monitor.Offset = source - MasterMonitor.LastUserBrightness;
+        }
+    }
+
+    private void BeginMasterSliderGesture()
+    {
+        if (_masterSliderGesturePrepared) return;
+
+        FloorMonitorBaselinesForMasterGesture();
+        CaptureOffsetsFromMaster();
+        _masterSliderGesturePrepared = true;
+    }
+
+    private void EndMasterSliderGesture(Slider slider)
+    {
+        if (slider.Tag is MonitorInfo { IsMaster: true })
+            _masterSliderGesturePrepared = false;
+    }
+
+    private void FloorMonitorBaselinesForMasterGesture()
+    {
+        bool preserve = _appSettings?.PreserveMasterSliderOffsets == true;
+        bool suspendForCurveMasterOverride = IsBrightnessCurveEnabled
+            && (_isInCurveDisabledPeriod || MasterMonitor.IsCurveReleased);
+        IDisposable? hardwareWriteSuspension =
+            suspendForCurveMasterOverride ? _monitorService.SuspendHardwareWrites() : null;
+
+        bool wasSuppressingPropagation = _suppressPropagation;
+        _suppressPropagation = true;
+        try
+        {
+            foreach (MonitorInfo monitor in Monitors)
+            {
+                if (!monitor.IsParticipatingInMaster) continue;
+
+                double source = preserve ? monitor.VirtualBrightness : monitor.LastUserBrightness;
+                double flooredSource = Math.Floor(source);
+                double flooredSliderBrightness = Math.Clamp(flooredSource, 0.0, 100.0);
+
+                monitor.Brightness = flooredSliderBrightness;
+                monitor.LastUserBrightness = flooredSliderBrightness;
+                monitor.VirtualBrightness = preserve ? flooredSource : flooredSliderBrightness;
+                UpdateVisibleMonitorSliderValue(monitor, flooredSliderBrightness);
+            }
+        }
+        finally
+        {
+            _suppressPropagation = wasSuppressingPropagation;
+            hardwareWriteSuspension?.Dispose();
+        }
+    }
+
+    private void PropagateMasterSliderValue(double value)
+    {
+        bool wasSuppressingPropagation = _suppressPropagation;
+        _suppressPropagation = true;
+        try
+        {
+            MasterMonitor.Brightness = value;
+            ApplyMasterToEnabledMonitors();
+        }
+        finally
+        {
+            _suppressPropagation = wasSuppressingPropagation;
+        }
+    }
+
+    private void UpdateVisibleMonitorSliderValue(MonitorInfo monitor, double value)
+    {
+        Slider? slider = FindSliderForMonitor(monitor);
+        if (slider == null || Math.Abs(slider.Value - value) < 0.000001) return;
+
+        bool wasSyncing = _syncingMasterDrivenSliderVisual;
+        _syncingMasterDrivenSliderVisual = true;
+        try
+        {
+            slider.Value = value;
+        }
+        finally
+        {
+            _syncingMasterDrivenSliderVisual = wasSyncing;
         }
     }
 
@@ -1695,8 +1791,14 @@ public partial class BrightnessFlyout : Window, INotifyPropertyChanged
 
     private void BrightnessSlider_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
     {
+        if (_syncingMasterDrivenSliderVisual) return;
+
         BrightnessChanged = true;
         BrightnessUpdated?.Invoke();
+
+        if (sender is Slider { Tag: MonitorInfo { IsMaster: true } } masterSlider
+            && _masterSliderGesturePrepared)
+            PropagateMasterSliderValue(masterSlider.Value);
 
         // Sole night-light SetStrength site for slider-driven changes - covers user drags
         // (firsthand) and programmatic writes (via the TwoWay binding pushing Brightness onto Slider.Value,
@@ -1749,7 +1851,7 @@ public partial class BrightnessFlyout : Window, INotifyPropertyChanged
 
         // Master-drag-start offset snapshot. Runs for both thumb-drag and track-click paths
         // since both eventually move the master value.
-        if (slider.Tag is MonitorInfo { IsMaster: true }) CaptureOffsetsFromMaster();
+        if (slider.Tag is MonitorInfo { IsMaster: true }) BeginMasterSliderGesture();
 
         // H-10: mark the row as user-dragging for any subsequent curve write path.
         // PreviewMouseLeftButtonDown fires for both thumb-press and track-click,
@@ -1800,6 +1902,7 @@ public partial class BrightnessFlyout : Window, INotifyPropertyChanged
         // Thumb drags also fire MouseLeftButtonUp at the slider level via routed-event bubbling,
         // so this branch covers them too (Thumb_DragCompleted is the backup for capture-lost scenarios).
         if (slider.Tag is MonitorInfo monitor) monitor.IsDragging = false;
+        EndMasterSliderGesture(slider);
 
         if (_draggingSlider != slider) return;
 
@@ -1821,7 +1924,11 @@ public partial class BrightnessFlyout : Window, INotifyPropertyChanged
     /// </summary>
     private void Slider_ThumbDragStarted(object sender, DragStartedEventArgs e)
     {
-        if (sender is Slider { Tag: MonitorInfo monitor }) monitor.IsDragging = true;
+        if (sender is Slider { Tag: MonitorInfo monitor } slider)
+        {
+            if (monitor.IsMaster) BeginMasterSliderGesture();
+            monitor.IsDragging = true;
+        }
     }
 
     /// <summary>
@@ -1832,7 +1939,11 @@ public partial class BrightnessFlyout : Window, INotifyPropertyChanged
     /// </summary>
     private void Slider_ThumbDragCompleted(object sender, DragCompletedEventArgs e)
     {
-        if (sender is Slider { Tag: MonitorInfo monitor }) monitor.IsDragging = false;
+        if (sender is Slider { Tag: MonitorInfo monitor } slider)
+        {
+            monitor.IsDragging = false;
+            EndMasterSliderGesture(slider);
+        }
     }
 
     private void MonitorGrid_PreviewMouseWheel(object sender, MouseWheelEventArgs e)
@@ -1891,6 +2002,7 @@ public partial class BrightnessFlyout : Window, INotifyPropertyChanged
     private void StopDragging(Slider slider)
     {
         _draggingSlider = null;
+        EndMasterSliderGesture(slider);
         slider.ReleaseMouseCapture();
     }
 
@@ -1905,6 +2017,158 @@ public partial class BrightnessFlyout : Window, INotifyPropertyChanged
             if (result != null) return result;
         }
         return null;
+    }
+
+    private Slider? FindSliderForMonitor(MonitorInfo monitor)
+    {
+        foreach (Slider slider in FindVisualChildren<Slider>(MonitorList))
+        {
+            if (ReferenceEquals(slider.Tag, monitor)) return slider;
+        }
+
+        return null;
+    }
+
+    private static IEnumerable<T> FindVisualChildren<T>(DependencyObject parent) where T : DependencyObject
+    {
+        for (int i = 0; i < VisualTreeHelper.GetChildrenCount(parent); i++)
+        {
+            DependencyObject child = VisualTreeHelper.GetChild(parent, i);
+            if (child is T typedChild) yield return typedChild;
+
+            foreach (T descendant in FindVisualChildren<T>(child))
+                yield return descendant;
+        }
+    }
+
+    private void BrightnessValueText_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+    {
+        if (e.ClickCount != 2) return;
+        if (sender is not TextBlock label) return;
+
+        Slider? slider = FindNearestSlider(label);
+        if (!IsSliderAcceptingUserInput(slider)) return;
+
+        TextBox? edit = FindSiblingValueEditor(label);
+        if (edit == null) return;
+
+        edit.Text = label.Text;
+        edit.Tag = slider;
+        label.Visibility = Visibility.Collapsed;
+        edit.Visibility = Visibility.Visible;
+        edit.Focus();
+        edit.SelectAll();
+        e.Handled = true;
+    }
+
+    private void BrightnessValueEdit_KeyDown(object sender, KeyEventArgs e)
+    {
+        if (sender is not TextBox box) return;
+        if (e.Key == Key.Escape)
+        {
+            CancelBrightnessValueEdit(box);
+            e.Handled = true;
+            return;
+        }
+
+        if (e.Key != Key.Enter) return;
+        CommitBrightnessValueEdit(box);
+        e.Handled = true;
+    }
+
+    private void BrightnessValueEdit_LostKeyboardFocus(object sender, KeyboardFocusChangedEventArgs e)
+    {
+        if (sender is not TextBox box) return;
+        if (box.Visibility != Visibility.Visible) return;
+        CommitBrightnessValueEdit(box);
+    }
+
+    private void CommitBrightnessValueEdit(TextBox box)
+    {
+        Slider? slider = box.Tag as Slider ?? FindNearestSlider(box);
+        string text = box.Text;
+        CollapseBrightnessValueEdit(box);
+
+        if (slider == null || !IsSliderAcceptingUserInput(slider)) return;
+        if (!TryParseSliderPercent(text, out double value)) return;
+
+        ApplyBrightnessValueEdit(slider, value);
+    }
+
+    private void ApplyBrightnessValueEdit(Slider slider, double value)
+    {
+        double clamped = Math.Clamp(value, slider.Minimum, slider.Maximum);
+        MonitorInfo? monitor = slider.Tag as MonitorInfo;
+        if (monitor != null) DisengageCurveForUserAdjustment(monitor);
+
+        if (monitor?.IsMaster == true) BeginMasterSliderGesture();
+        try
+        {
+            slider.Value = clamped;
+        }
+        finally
+        {
+            if (monitor?.IsMaster == true) EndMasterSliderGesture(slider);
+        }
+    }
+
+    private static void CancelBrightnessValueEdit(TextBox box) => CollapseBrightnessValueEdit(box);
+
+    private static void CollapseBrightnessValueEdit(TextBox box)
+    {
+        box.Tag = null;
+        box.Visibility = Visibility.Collapsed;
+
+        TextBlock? label = FindSiblingValueLabel(box);
+        if (label != null) label.Visibility = Visibility.Visible;
+    }
+
+    private static TextBox? FindSiblingValueEditor(FrameworkElement element)
+    {
+        if (element.Parent is not Grid parent) return null;
+        foreach (object child in parent.Children)
+            if (child is TextBox box) return box;
+        return null;
+    }
+
+    private static TextBlock? FindSiblingValueLabel(FrameworkElement element)
+    {
+        if (element.Parent is not Grid parent) return null;
+        foreach (object child in parent.Children)
+            if (child is TextBlock tb) return tb;
+        return null;
+    }
+
+    private static Slider? FindNearestSlider(FrameworkElement element)
+    {
+        DependencyObject? current = element;
+        while (current != null)
+        {
+            if (current is Grid grid)
+            {
+                foreach (object child in grid.Children)
+                    if (child is Slider slider) return slider;
+            }
+
+            current = VisualTreeHelper.GetParent(current);
+        }
+
+        return null;
+    }
+
+    private static bool IsSliderAcceptingUserInput(Slider? slider) =>
+        slider is { IsEnabled: true, IsHitTestVisible: true, IsVisible: true };
+
+    private static bool TryParseSliderPercent(string text, out double value)
+    {
+        string trimmed = text.Trim();
+        if (trimmed.EndsWith('%'))
+            trimmed = trimmed[..^1].Trim();
+
+        bool parsed = double.TryParse(trimmed, NumberStyles.Float, CultureInfo.CurrentCulture, out value)
+            || double.TryParse(trimmed, NumberStyles.Float, CultureInfo.InvariantCulture, out value);
+
+        return parsed && !double.IsNaN(value) && !double.IsInfinity(value);
     }
 
     private void PowerButton_Click(object sender, RoutedEventArgs e)
@@ -2375,6 +2639,140 @@ public partial class BrightnessFlyout : Window, INotifyPropertyChanged
         }
     }
 
+    // Inline rename: double-clicking the row's name TextBlock swaps it for the sibling TextBox in
+    // the same Grid cell, seeded with the current resolved name. Master and NightLight rows aren't
+    // user-renamable (they aren't physical panels with an EDIDKey to key the override against), so
+    // we early-return on them. Single clicks intentionally bubble through to whatever the row container
+    // does with them - we only stamp e.Handled on the actual rename-entry double-click.
+    private void MonitorNameText_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+    {
+        if (e.ClickCount != 2) return;
+        if (sender is not TextBlock tb || tb.Tag is not MonitorInfo monitor) return;
+        if (monitor.IsMaster || monitor.IsNightLight) return;
+        if (string.IsNullOrEmpty(monitor.EDIDKey)) return;
+
+        TextBox? edit = FindSiblingNameEditor(tb);
+        if (edit == null) return;
+
+        edit.Text = monitor.Name;
+        edit.Tag = monitor;
+        tb.Visibility = Visibility.Collapsed;
+        edit.Visibility = Visibility.Visible;
+        edit.Focus();
+        edit.SelectAll();
+        e.Handled = true;
+    }
+
+    // Enter commits, Escape cancels. Both paths collapse the editor; the LostKeyboardFocus handler's
+    // visibility guard then short-circuits the duplicate commit that would otherwise fire as focus
+    // moves away from the now-hidden TextBox.
+    private void MonitorNameEdit_KeyDown(object sender, KeyEventArgs e)
+    {
+        if (sender is not TextBox box) return;
+        if (e.Key == Key.Escape)
+        {
+            CancelMonitorNameEdit(box);
+            e.Handled = true;
+            return;
+        }
+        if (e.Key != Key.Enter) return;
+        CommitMonitorNameEdit(box);
+        e.Handled = true;
+    }
+
+    // Click-outside commit. Skipped when our own Commit/Cancel already collapsed the box - that
+    // collapse also fires LostKeyboardFocus, and we don't want to re-enter the commit path.
+    private void MonitorNameEdit_LostKeyboardFocus(object sender, KeyboardFocusChangedEventArgs e)
+    {
+        if (sender is not TextBox box) return;
+        if (box.Visibility != Visibility.Visible) return;
+        CommitMonitorNameEdit(box);
+    }
+
+    // Persists the edit through the same MonitorOverrides path the Settings > Monitors page uses:
+    // an entry keyed by EDIDKey carries the override Name; empty / whitespace clears it and the
+    // resolver falls back to OriginalName. Calls Save + RaiseChanged so MonitorService picks the
+    // edit up via ApplyNameOverridesToExisting and the bound TextBlock updates live.
+    // Empty-row drop matches MonitorsPage.UpdateMonitorOverride so a cleared rename can also remove
+    // the whole MonitorOverrides row when nothing else on it is set.
+    private void CommitMonitorNameEdit(TextBox box)
+    {
+        MonitorInfo? monitor = box.Tag as MonitorInfo;
+        box.Tag = null;
+        box.Visibility = Visibility.Collapsed;
+
+        TextBlock? label = FindSiblingNameLabel(box);
+        if (label != null) label.Visibility = Visibility.Visible;
+
+        if (monitor == null) return;
+        if (string.IsNullOrEmpty(monitor.EDIDKey)) return;
+        if (_appSettings == null) return;
+
+        string trimmed = box.Text.Trim();
+        MonitorOverrideEntry? entry = _appSettings.MonitorOverrides
+            .FirstOrDefault(m => m.ID == monitor.EDIDKey);
+
+        if (entry == null)
+        {
+            if (trimmed.Length == 0) return;
+            _appSettings.MonitorOverrides.Add(new MonitorOverrideEntry
+            {
+                ID = monitor.EDIDKey,
+                Name = trimmed,
+            });
+        }
+        else
+        {
+            if (entry.Name == trimmed) return;
+            entry.Name = trimmed;
+
+            if (string.IsNullOrEmpty(entry.Name)
+                && string.IsNullOrEmpty(entry.PowerOffVcpOverride)
+                && string.IsNullOrEmpty(entry.BrightnessVcpOverride)
+                && entry.NormCurvePoints.Count == 0
+                && entry is
+                {
+                    ValidationDwellMs: <= 0,
+                    BrightnessDwellMs: <= 0,
+                    MinBrightness: <= 0,
+                    MaxBrightness: >= 100,
+                })
+                _appSettings.MonitorOverrides.Remove(entry);
+        }
+
+        _appSettings.Save();
+        _appSettings.RaiseChanged();
+    }
+
+    // Escape path: drop the edit without touching MonitorOverrides. The collapse below triggers
+    // LostKeyboardFocus, whose visibility guard then no-ops.
+    private static void CancelMonitorNameEdit(TextBox box)
+    {
+        box.Tag = null;
+        box.Visibility = Visibility.Collapsed;
+
+        TextBlock? label = FindSiblingNameLabel(box);
+        if (label != null) label.Visibility = Visibility.Visible;
+    }
+
+    // Sibling-by-type lookup inside the row's name Grid. The Grid holds exactly one TextBlock and
+    // one TextBox, so the first child of the requested type is unambiguous.
+    private static TextBox? FindSiblingNameEditor(FrameworkElement element)
+    {
+        if (element.Parent is not Grid parent) return null;
+        foreach (object child in parent.Children)
+            if (child is TextBox box) return box;
+        return null;
+    }
+
+    private static TextBlock? FindSiblingNameLabel(FrameworkElement element)
+    {
+        if (element.Parent is not Grid parent) return null;
+        foreach (object child in parent.Children)
+            if (child is TextBlock tb) return tb;
+        return null;
+    }
+
     /// <summary>
     /// Shows or updates the single in-flight recovery tooltip anchored to a warning-glyph
     /// monitor icon. Bypasses the style-bound hover tooltip so the message shows immediately
@@ -2764,13 +3162,13 @@ public partial class BrightnessFlyout : Window, INotifyPropertyChanged
 
         if (monitor.IsMaster)
         {
-            monitor.SliderState = SliderStateMachine.OnUserReengage(monitor.SliderState, _isInCurveDisabledPeriod);
+            ReengageCurveReleasedMonitor(monitor);
             ReengageIndividualBrightnessCurveOverridesFromMaster();
         }
         else if (monitor.IsNightLight)
-            monitor.SliderState = SliderStateMachine.OnUserReengage(monitor.SliderState, _isInCurveDisabledPeriod);
+            ReengageCurveReleasedMonitor(monitor);
         else if (!IsMasterStopwatchBlockingReengage())
-            monitor.SliderState = SliderStateMachine.OnUserReengage(monitor.SliderState, _isInCurveDisabledPeriod);
+            ReengageCurveReleasedMonitor(monitor);
         else
             _curveStopwatchReengageBlockedByMaster.Add(CurveStopwatchKeyFor(monitor));
 
@@ -2791,11 +3189,21 @@ public partial class BrightnessFlyout : Window, INotifyPropertyChanged
         {
             if (monitor.SliderState != SliderState.CurveReleased) continue;
 
-            monitor.SliderState = SliderStateMachine.OnUserReengage(monitor.SliderState, _isInCurveDisabledPeriod);
+            ReengageCurveReleasedMonitor(monitor);
             UpdateCurveStopwatchVisibility(monitor);
         }
 
         _curveStopwatchReengageBlockedByMaster.Clear();
+    }
+
+    private void ReengageCurveReleasedMonitor(MonitorInfo monitor)
+    {
+        SliderState next = SliderStateMachine.OnUserReengage(monitor.SliderState, _isInCurveDisabledPeriod);
+        if (next is SliderState.CurveActive or SliderState.CurveSleeping
+            && monitor.SliderState is not (SliderState.CurveActive or SliderState.CurveSleeping))
+            monitor.SeedCurveTargetBrightnessFromSlider();
+
+        monitor.SliderState = next;
     }
 
     private void CurveStopwatchButton_Click(object sender, RoutedEventArgs e)
@@ -2897,7 +3305,7 @@ public partial class BrightnessFlyout : Window, INotifyPropertyChanged
         // without an early return on the second one, the curve would un-toggle on the same gesture that re-engaged it.
         if (e.ClickCount >= 2 && monitor.IsCurveReleased)
         {
-            monitor.SliderState = SliderStateMachine.OnUserReengage(monitor.SliderState, _isInCurveDisabledPeriod);
+            ReengageCurveReleasedMonitor(monitor);
             if (monitor is { IsMaster: false, IsNightLight: false })
             {
                 // Recapture this row's offset relative to the current master so the curve's master + offset write

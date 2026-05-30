@@ -5,6 +5,8 @@ using BrightnessTrayAppWPF.Models;
 using BrightnessTrayAppWPF.Visuals;
 using Color = System.Windows.Media.Color;
 using Point = System.Windows.Point;
+// net10's WinForms ref now ships ContextMenu/MenuItem too; pin the WPF type.
+using ContextMenu = System.Windows.Controls.ContextMenu;
 
 namespace BrightnessTrayAppWPF;
 
@@ -26,6 +28,8 @@ public sealed class TrayIconManager : IDisposable
 
     // Callback to get fresh brightness/tooltip when cooldown ends
     private Func<(int brightness, string tooltip)>? _getValues;
+    private long _updateSequence;
+    private long _applySequence;
 
     /// <summary>
     /// Cooldown period between icon updates in milliseconds.
@@ -208,6 +212,7 @@ public sealed class TrayIconManager : IDisposable
         try
         {
             (_, string tooltip) = _getValues();
+            WPFLog.Log($"TrayTrace.Manager.TooltipPopup: len={tooltip.Length}; tip='{EscapeTip(tooltip)}'; shell={_shellIcon.DiagnosticState}");
             _shellIcon.SetTooltip(tooltip);
         }
         catch (Exception ex)
@@ -229,22 +234,29 @@ public sealed class TrayIconManager : IDisposable
     // at the consumer surface.
     public void Update(Func<(int brightness, string tooltip)> getValues)
     {
+        long sequence = ++_updateSequence;
         if (!_dispatcher.CheckAccess())
         {
+            WPFLog.Log($"TrayTrace.Manager.Update[{sequence}]: marshal to dispatcher; shutdown={_dispatcher.HasShutdownStarted}");
             if (_dispatcher.HasShutdownStarted) return;
             _ = _dispatcher.BeginInvoke(() => Update(getValues));
             return;
         }
 
         _getValues = getValues;
+        WPFLog.Log(
+            $"TrayTrace.Manager.Update[{sequence}]: entered; cooldown={_isOnCooldown}; pending={_updatePending}; "
+            + $"disposed={_disposed}; shell={_shellIcon.DiagnosticState}");
 
         if (_isOnCooldown)
         {
             _updatePending = true;
+            WPFLog.Log($"TrayTrace.Manager.Update[{sequence}]: deferred by cooldown; pending=true");
             return;
         }
 
         (int brightness, string tooltip) = getValues();
+        WPFLog.Log($"TrayTrace.Manager.Update[{sequence}]: values brightness={brightness}; tipLen={tooltip.Length}; tip='{EscapeTip(tooltip)}'");
         ApplyUpdate(brightness, tooltip);
         _ = StartCooldown();
     }
@@ -259,20 +271,30 @@ public sealed class TrayIconManager : IDisposable
 
     private void ApplyUpdate(int brightnessPercent, string tooltip)
     {
+        long sequence = ++_applySequence;
         // Belt-and-braces guard: callers that dodge the dispatcher (e.g. the pending-update path of StartCooldown)
         // can still race a concurrent Dispose. Renderer.CreateIcon also guards _disposed, but bailing here avoids
         // touching the shell icon at all.
-        if (_disposed) return;
+        if (_disposed)
+        {
+            WPFLog.Log($"TrayTrace.Manager.Apply[{sequence}]: skipped disposed");
+            return;
+        }
 
         // Lock display brightness to 50% in static mode (tooltip still reflects real brightness).
         int displayBrightness = _iconStyle == TrayIconStyle.Static ? 50 : brightnessPercent;
 
         // Renderer returns null if no visual change needed.
         Icon? icon = _renderer.CreateIcon(displayBrightness);
+        WPFLog.Log(
+            $"TrayTrace.Manager.Apply[{sequence}]: brightness={brightnessPercent}; display={displayBrightness}; "
+            + $"style={_iconStyle}; iconCreated={icon != null}; iconHandle={FormatHandle(icon?.Handle ?? IntPtr.Zero)}; "
+            + $"tipLen={tooltip.Length}; tip='{EscapeTip(tooltip)}'; shellBefore={_shellIcon.DiagnosticState}");
         if (icon != null) _shellIcon.SetIcon(icon);
 
         // ShellIcon checks for change internally.
         _shellIcon.SetTooltip(tooltip);
+        WPFLog.Log($"TrayTrace.Manager.Apply[{sequence}]: shellAfter={_shellIcon.DiagnosticState}");
     }
 
     private async Task StartCooldown()
@@ -280,19 +302,26 @@ public sealed class TrayIconManager : IDisposable
         try
         {
             _isOnCooldown = true;
+            WPFLog.Log($"TrayTrace.Manager.Cooldown: start ms={UpdateCooldownMs}");
             await Task.Delay(UpdateCooldownMs);
 
             // If Dispose ran during the delay, bail before touching the renderer or shell icon.
             // CreateIcon would otherwise allocate and leak a GDI handle through the disposed pipeline (audit_11 F4).
-            if (_disposed) return;
+            if (_disposed)
+            {
+                WPFLog.Log("TrayTrace.Manager.Cooldown: skipped disposed after delay");
+                return;
+            }
 
             _isOnCooldown = false;
+            WPFLog.Log($"TrayTrace.Manager.Cooldown: ended; pending={_updatePending}; hasValues={_getValues != null}");
 
             // If updates came in during cooldown, get fresh values now.
             if (_updatePending && _getValues != null)
             {
                 _updatePending = false;
                 (int brightness, string tooltip) = _getValues();
+                WPFLog.Log($"TrayTrace.Manager.Cooldown: trailing values brightness={brightness}; tipLen={tooltip.Length}; tip='{EscapeTip(tooltip)}'");
                 ApplyUpdate(brightness, tooltip);
                 _ = StartCooldown();
             }
@@ -313,4 +342,9 @@ public sealed class TrayIconManager : IDisposable
         _renderer.Dispose();
         _shellIcon.Dispose();
     }
+
+    private static string FormatHandle(IntPtr handle) => $"0x{handle.ToInt64():X}";
+
+    private static string EscapeTip(string text) =>
+        text.Replace("\r", "\\r").Replace("\n", "\\n");
 }

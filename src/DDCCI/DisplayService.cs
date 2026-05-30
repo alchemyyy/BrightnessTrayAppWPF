@@ -22,6 +22,9 @@ namespace BrightnessTrayAppWPF.DDCCI;
 /// </summary>
 public class DisplayService : IDisplayService
 {
+    private readonly object _abandonedOpsGate = new();
+    private readonly Dictionary<string, Task> _abandonedOpsByMonitor = new(StringComparer.Ordinal);
+
     /// <inheritdoc />
     public int OperationTimeoutMs { get; set; } = TimeConstants.DisplayServiceOperationTimeoutMs;
 
@@ -154,6 +157,7 @@ public class DisplayService : IDisplayService
         // Capabilities are optional - many monitors don't expose one even when VCP read/write works fine.
         // Soft failure with a descriptive error.
         DDCCallOutcome<string> outcome = RunWithTimeout(
+            monitor,
             () => TryWithPhysicalMonitor<string>(monitor, handle =>
             {
                 if (!Dxva2.GetCapabilitiesStringLength(handle, out uint length) || length == 0)
@@ -199,7 +203,7 @@ public class DisplayService : IDisplayService
         IEnumerable<INode> rootChildren = root.Nodes ?? [];
         INode? vcpNode = rootChildren
             .RecursiveSelect(n => n.Nodes ?? [])
-            .FirstOrDefault(n => n.Value == "vcp");
+            .FirstOrDefault(n => string.Equals(n.Value, "vcp", StringComparison.OrdinalIgnoreCase));
 
         if (vcpNode?.Nodes == null)
         {
@@ -217,6 +221,7 @@ public class DisplayService : IDisplayService
         CancellationToken ct = default)
     {
         DDCCallOutcome<(uint Cur, uint Max)> outcome = RunWithTimeout(
+            monitor,
             () => TryWithPhysicalMonitor(monitor, handle =>
             {
                 if (!Dxva2.GetVCPFeatureAndVCPFeatureReply(handle, code, IntPtr.Zero, out uint c, out uint m))
@@ -239,6 +244,7 @@ public class DisplayService : IDisplayService
         DDCMonitor monitor, byte code, uint value, out string? error, CancellationToken ct = default)
     {
         DDCCallOutcome<bool> outcome = RunWithTimeout(
+            monitor,
             () => TryWithPhysicalMonitor(monitor, handle =>
             {
                 if (!Dxva2.SetVCPFeature(handle, code, value))
@@ -258,7 +264,7 @@ public class DisplayService : IDisplayService
     private IEnumerable<VCPCapability> ReadCapabilities(
         DDCMonitor monitor, INode vcpNode, INodeFormatter formatter, CancellationToken ct)
     {
-        foreach (INode capabilityNode in vcpNode.Nodes!.Where(c => c.Nodes == null))
+        foreach (INode capabilityNode in vcpNode.Nodes!)
         {
             if (!byte.TryParse(
                     capabilityNode.Value, NumberStyles.HexNumber, CultureInfo.InvariantCulture, out byte code))
@@ -283,10 +289,23 @@ public class DisplayService : IDisplayService
     {
         if (string.IsNullOrEmpty(monitor.Name)) return false;
 
+        Dictionary<string, int> friendlyByAdapter = CCD.BuildFriendlyDisplayNumberMap();
+        string targetDeviceID = monitor.DeviceID;
+        string targetSerial = monitor.EDIDSerial;
+        string targetManufacturer = monitor.EDIDManufacturerId;
+        string targetProduct = monitor.EDIDProductCode;
+
         IntPtr updatedHandle = IntPtr.Zero;
         IntPtr updatedHdc = IntPtr.Zero;
+        string updatedName = monitor.Name;
+        string updatedDeviceID = monitor.DeviceID;
+        int updatedDisplayNumber = monitor.DisplayNumber;
         int updatedX = monitor.X;
         int updatedY = monitor.Y;
+        string updatedSerial = monitor.EDIDSerial;
+        string updatedFriendlyName = monitor.FriendlyName;
+        string updatedManufacturer = monitor.EDIDManufacturerId;
+        string updatedProduct = monitor.EDIDProductCode;
 
         if (!User32Monitor.EnumDisplayMonitors(IntPtr.Zero, IntPtr.Zero, Callback, IntPtr.Zero))
         {
@@ -298,8 +317,16 @@ public class DisplayService : IDisplayService
 
         monitor.Handle = updatedHandle;
         monitor.HDC = updatedHdc;
+        monitor.Name = updatedName;
+        monitor.DeviceID = updatedDeviceID;
+        monitor.DisplayNumber = updatedDisplayNumber;
         monitor.X = updatedX;
         monitor.Y = updatedY;
+        monitor.EDIDSerial = updatedSerial;
+        monitor.FriendlyName = updatedFriendlyName;
+        monitor.EDIDManufacturerId = updatedManufacturer;
+        monitor.EDIDProductCode = updatedProduct;
+        DDCMonitorDatabase.ApplyProfile(monitor);
         return true;
 
         bool Callback(IntPtr hMonitor, IntPtr hdc, ref User32Monitor.Rect rect, IntPtr data)
@@ -308,14 +335,56 @@ public class DisplayService : IDisplayService
             if (!User32Monitor.GetMonitorInfo(new HandleRef(null, hMonitor), info)) return true;
 
             string adapterName = new string(info.szDevice).TrimEnd('\0');
-            if (!string.Equals(adapterName, monitor.Name, StringComparison.Ordinal)) return true;
+            string deviceID = ResolveDeviceID(adapterName);
+            byte[]? edid = ReadEDID(adapterName);
+            string serial = edid == null ? string.Empty : EDIDParser.ExtractSerial(edid);
+            string manufacturer = edid == null ? string.Empty : EDIDParser.ExtractManufacturerId(edid);
+            string product = string.Empty;
+            string friendlyName = string.Empty;
+            if (edid != null)
+            {
+                ushort productCode = EDIDParser.ExtractProductCode(edid);
+                product = productCode == 0 ? string.Empty : productCode.ToString("X4", CultureInfo.InvariantCulture);
+                friendlyName = EDIDParser.ExtractMonitorName(edid);
+            }
+
+            bool stableDeviceMatch = HasStableDeviceID(targetDeviceID)
+                && HasStableDeviceID(deviceID)
+                && string.Equals(deviceID, targetDeviceID, StringComparison.Ordinal);
+            bool edidMatch = !string.IsNullOrEmpty(targetSerial)
+                && string.Equals(serial, targetSerial, StringComparison.Ordinal)
+                && (string.IsNullOrEmpty(targetManufacturer)
+                    || string.Equals(manufacturer, targetManufacturer, StringComparison.Ordinal))
+                && (string.IsNullOrEmpty(targetProduct)
+                    || string.Equals(product, targetProduct, StringComparison.Ordinal));
+            bool adapterFallbackMatch = string.Equals(adapterName, monitor.Name, StringComparison.Ordinal);
+
+            if (!stableDeviceMatch && !edidMatch && !adapterFallbackMatch) return true;
+
+            if (adapterFallbackMatch && !stableDeviceMatch && !edidMatch)
+            {
+                WPFLog.Log(
+                    $"DisplayService.RefreshHandle: using adapter-name fallback for '{monitor.Name}' "
+                    + $"(targetDevice='{targetDeviceID}', newDevice='{deviceID}')");
+            }
 
             updatedHandle = hMonitor;
             updatedHdc = hdc;
+            updatedName = adapterName;
+            updatedDeviceID = deviceID;
+            updatedDisplayNumber = CCD.ResolveFriendlyDisplayNumber(adapterName, friendlyByAdapter);
             updatedX = rect.left;
             updatedY = rect.top;
+            updatedSerial = serial;
+            updatedFriendlyName = friendlyName;
+            updatedManufacturer = manufacturer;
+            updatedProduct = product;
             return false; // match found - stop enumeration
         }
+
+        static bool HasStableDeviceID(string deviceID) =>
+            !string.IsNullOrEmpty(deviceID)
+            && !deviceID.StartsWith(@"\\.\", StringComparison.Ordinal);
     }
 
     /// <summary>
@@ -336,11 +405,21 @@ public class DisplayService : IDisplayService
     /// so a sequence-level deadline can still terminate the chain.
     /// </summary>
     private DDCCallOutcome<T> RunWithTimeout<T>(
-        Func<DDCCallOutcome<T>> op, string opLabel, CancellationToken ct = default)
+        DDCMonitor monitor, Func<DDCCallOutcome<T>> op, string opLabel, CancellationToken ct = default)
     {
         // Pre-check the sequence-level token: a budgeted-out sequence short-circuits without paying for a Task.Run.
         if (ct.IsCancellationRequested)
             return DDCCallOutcome<T>.WithError($"DDC op '{opLabel}' cancelled by sequence deadline.");
+
+        string monitorKey = DDCGateKey(monitor);
+        if (TryGetActiveAbandonedOp(monitorKey, out _))
+        {
+            string message =
+                $"DDC op '{opLabel}' deferred because a prior timed-out op for '{monitorKey}' "
+                + "is still releasing physical-monitor handles.";
+            WPFLog.Log($"DisplayService: {message}");
+            return DDCCallOutcome<T>.WithError(message);
+        }
 
         int timeoutMs = OperationTimeoutMs;
         if (timeoutMs <= 0 && !ct.CanBeCanceled)
@@ -376,23 +455,26 @@ public class DisplayService : IDisplayService
             WPFLog.Log(
                 $"DisplayService: {opLabel} cancelled by sequence deadline; "
                 + "abandoning op (handles will be released when it eventually completes).");
-            ObserveAbandoned(operationTask, opLabel);
+            TrackAbandoned(monitorKey, operationTask, opLabel);
             return DDCCallOutcome<T>.WithError($"DDC op '{opLabel}' cancelled by sequence deadline.");
         }
 
         WPFLog.Log(
             $"DisplayService: {opLabel} exceeded {timeoutMs}ms timeout; "
             + "abandoning op (handles will be released when it eventually completes).");
-        ObserveAbandoned(operationTask, opLabel);
+        TrackAbandoned(monitorKey, operationTask, opLabel);
         return DDCCallOutcome<T>.WithError($"DDC op '{opLabel}' exceeded {timeoutMs}ms timeout.");
     }
 
     /// <summary>
-    /// Logs when an abandoned op eventually finishes,
-    /// so recurring timeout/cancellation patterns show up in trace output instead of vanishing silently.
+    /// Tracks an abandoned op until it finishes, preventing later DDC calls from opening fresh
+    /// physical-monitor handles against the same panel while the timed-out dxva2 call is still unwinding.
     /// </summary>
-    private static void ObserveAbandoned<T>(Task<DDCCallOutcome<T>> task, string opLabel)
+    private void TrackAbandoned<T>(string monitorKey, Task<DDCCallOutcome<T>> task, string opLabel)
     {
+        lock (_abandonedOpsGate)
+            _abandonedOpsByMonitor[monitorKey] = task;
+
         _ = task.ContinueWith(t =>
         {
             if (t.IsFaulted)
@@ -406,7 +488,36 @@ public class DisplayService : IDisplayService
                 WPFLog.Log(
                     $"DisplayService: abandoned op '{opLabel}' completed post-abandonment (handles released).");
             }
+
+            lock (_abandonedOpsGate)
+            {
+                if (_abandonedOpsByMonitor.TryGetValue(monitorKey, out Task? active)
+                    && ReferenceEquals(active, task))
+                    _abandonedOpsByMonitor.Remove(monitorKey);
+            }
         }, TaskScheduler.Default);
+    }
+
+    private bool TryGetActiveAbandonedOp(string monitorKey, out Task? task)
+    {
+        lock (_abandonedOpsGate)
+        {
+            if (!_abandonedOpsByMonitor.TryGetValue(monitorKey, out task))
+                return false;
+
+            if (!task.IsCompleted) return true;
+
+            _abandonedOpsByMonitor.Remove(monitorKey);
+            task = null;
+            return false;
+        }
+    }
+
+    private static string DDCGateKey(DDCMonitor monitor)
+    {
+        if (!string.IsNullOrWhiteSpace(monitor.DeviceID)) return monitor.DeviceID;
+        if (!string.IsNullOrWhiteSpace(monitor.EDIDSerial)) return $"edid:{monitor.EDIDSerial}";
+        return string.IsNullOrWhiteSpace(monitor.Name) ? "<unknown-monitor>" : monitor.Name;
     }
 
     /// <summary>

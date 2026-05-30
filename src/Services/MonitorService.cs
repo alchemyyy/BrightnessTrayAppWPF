@@ -10,8 +10,9 @@ namespace BrightnessTrayAppWPF.Services;
 
 /// <summary>
 /// Legacy per-monitor recovery actions retained for explicit targeted probes.
-/// The normal DDC fallback path now calls <see cref="MonitorService.Refresh"/> so it matches
-/// startup/topology acquisition.
+/// The normal DDC fallback path now calls <see cref="MonitorService.TryRecoverMonitor"/> with
+/// <see cref="RefreshHandle"/> so it refreshes only the stuck monitor instead of tearing down
+/// healthy rows.
 /// </summary>
 public enum DDCRecoveryAction
 {
@@ -54,8 +55,8 @@ public sealed class MonitorService : IDisposable
     // Per-monitor DDC mutex registry.
     // Every dxva2 call against a given physical monitor goes through WithDDCLock(...) keyed by DeviceID so a recovery
     // probe and a slider-driven write can't interleave on the bus.
-    // Layer 1's per-op timeout bounds how long any one acquirer can hold the lock; without that bound the mutex would
-    // risk serial UI-thread freezes.
+    // Layer 1's per-op timeout bounds the caller wait; DisplayService also suppresses same-monitor overlap while an
+    // abandoned timed-out dxva2 task is still releasing its physical-monitor handles.
     private readonly Dictionary<string, SemaphoreSlim> _ddcLocks = new(StringComparer.Ordinal);
     private readonly Lock _ddcLocksGate = new();
 
@@ -257,7 +258,13 @@ public sealed class MonitorService : IDisposable
     {
         if (string.IsNullOrEmpty(edidKey)) return;
         if (!map.TryGetValue(edidKey, out MonitorOverrideEntry? ov)) return;
-        if (TryParseVcpCode(ov.BrightnessVcpOverride, out byte code)) ddc.BrightnessCode = code;
+        if (TryParseVcpCode(ov.BrightnessVcpOverride, out byte code))
+        {
+            ddc.BrightnessCode = code;
+            WPFLog.Log(
+                $"MonitorService: brightness VCP override for '{ddc.Name}' "
+                + $"raw='{ov.BrightnessVcpOverride}' parsed=0x{code:X2}");
+        }
     }
 
     private static bool TryParseVcpCode(string? text, out byte code)
@@ -269,8 +276,51 @@ public sealed class MonitorService : IDisposable
         if (firstToken.StartsWith("0x", StringComparison.OrdinalIgnoreCase))
             return byte.TryParse(firstToken[2..], NumberStyles.HexNumber, CultureInfo.InvariantCulture, out code);
 
-        return byte.TryParse(firstToken, NumberStyles.Integer, CultureInfo.InvariantCulture, out code)
-               || byte.TryParse(firstToken, NumberStyles.HexNumber, CultureInfo.InvariantCulture, out code);
+        return byte.TryParse(firstToken, NumberStyles.HexNumber, CultureInfo.InvariantCulture, out code);
+    }
+
+    private static bool TryParsePowerOverride(string? text, (byte Code, byte? Value)? fallback, out byte code, out byte value)
+    {
+        code = 0;
+        value = 0;
+        if (string.IsNullOrWhiteSpace(text)) return false;
+
+        string[] tokens = text.Split([' ', '\t', ','], StringSplitOptions.RemoveEmptyEntries);
+        if (tokens.Length == 0) return false;
+        if (!TryParseVcpCode(tokens[0], out code)) return false;
+
+        if (tokens.Length > 1)
+        {
+            if (!TryParseVcpCode(tokens[1], out value)) return false;
+            return true;
+        }
+
+        if (fallback is { } f && f.Code == code && f.Value is { } fallbackValue)
+        {
+            value = fallbackValue;
+            return true;
+        }
+
+        return false;
+    }
+
+    private bool TryResolvePowerOffOverride(DDCMonitor ddc, PowerOffLevel level, out byte code, out byte value)
+    {
+        (code, value) = ddc.ResolvePowerOff(level);
+        string edidKey = ComputeEDIDKey(ddc);
+        if (string.IsNullOrEmpty(edidKey)) return false;
+        if (!BuildMonitorOverrideEntryMap().TryGetValue(edidKey, out MonitorOverrideEntry? ov)) return false;
+
+        (byte Code, byte Value) fallback = ddc.ResolvePowerOff(level);
+        if (!TryParsePowerOverride(ov.PowerOffVcpOverride, (fallback.Code, fallback.Value), out byte parsedCode, out byte parsedValue))
+            return false;
+
+        code = parsedCode;
+        value = parsedValue;
+        WPFLog.Log(
+            $"MonitorService: power-off VCP override for '{ddc.Name}' "
+            + $"raw='{ov.PowerOffVcpOverride}' parsed=0x{code:X2}=0x{value:X2}");
+        return true;
     }
 
     /// <summary>
@@ -783,12 +833,18 @@ public sealed class MonitorService : IDisposable
                     entry.DDC.Handle = ddc.Handle;
                     entry.DDC.HDC = ddc.HDC;
                     entry.DDC.Name = ddc.Name;
+                    entry.DDC.DeviceID = ddc.DeviceID;
                     entry.DDC.DisplayNumber = ddc.DisplayNumber;
                     entry.DDC.X = ddc.X;
                     entry.DDC.Y = ddc.Y;
                     entry.DDC.EDIDSerial = ddc.EDIDSerial;
                     entry.DDC.FriendlyName = ddc.FriendlyName;
+                    entry.DDC.EDIDManufacturerId = ddc.EDIDManufacturerId;
+                    entry.DDC.EDIDProductCode = ddc.EDIDProductCode;
                     entry.DDC.BrightnessCode = ddc.BrightnessCode;
+                    entry.DDC.ProfileModelName = ddc.ProfileModelName;
+                    entry.DDC.PowerOffCommands = ddc.PowerOffCommands;
+                    entry.DDC.ProfileQuirks = ddc.ProfileQuirks;
 
                     // Use the full retry mechanism (80/160/480 backoff + final-attempt RefreshHandle) so
                     // a single transient read failure (INVALID_DEVICE / INVALID_MESSAGE_CHECKSUM) doesn't
@@ -807,16 +863,26 @@ public sealed class MonitorService : IDisposable
                     }
                     else
                     {
-                        existingInfo.SliderState = SliderStateMachine.OnHardwareFailed();
                         existingInfo.LastDDCError = probe.Error;
-                        if (_entries.Remove(existingInfo.ID, out MonitorEntry? failedEntry))
-                            existingInfo.LastKnownBrightnessMax = NormalizeBrightnessMax(failedEntry.Max);
-                        // Drop any queued write for this monitor - a fresh value applied to a now-demoted entry would
-                        // only generate a doomed retry. An in-flight payload is left to drain on its own (it
-                        // captured the entry's DDC handle and will release cleanly).
-                        _writeThrottler.Drop(existingInfo.ID);
-                        WPFLog.Log(
-                            $"MonitorService: demoted '{ddc.Name}' during Refresh re-probe ({probe.Error})");
+                        if (existingInfo.IsReadDegraded)
+                        {
+                            existingInfo.LastKnownBrightnessMax = NormalizeBrightnessMax(entry.Max);
+                            WPFLog.Log(
+                                $"MonitorService: kept read-degraded '{ddc.Name}' during Refresh re-probe "
+                                + $"({probe.Error})");
+                        }
+                        else
+                        {
+                            existingInfo.SliderState = SliderStateMachine.OnHardwareFailed();
+                            if (_entries.Remove(existingInfo.ID, out MonitorEntry? failedEntry))
+                                existingInfo.LastKnownBrightnessMax = NormalizeBrightnessMax(failedEntry.Max);
+                            // Drop any queued write for this monitor - a fresh value applied to a now-demoted entry would
+                            // only generate a doomed retry. An in-flight payload is left to drain on its own (it
+                            // captured the entry's DDC handle and will release cleanly).
+                            _writeThrottler.Drop(existingInfo.ID);
+                            WPFLog.Log(
+                                $"MonitorService: demoted '{ddc.Name}' during Refresh re-probe ({probe.Error})");
+                        }
                     }
                 }
                 else
@@ -856,8 +922,9 @@ public sealed class MonitorService : IDisposable
                         // when curves are engaged, instead of going Enabled first and getting harmonized after by the
                         // curve service's MonitorsRefreshed handler (which fired a second PropertyChanged per row and
                         // produced visible master jitter on cold start).
-                        existingInfo.SliderState = SliderStateMachine.OnHardwareRecovered(
+                        SliderState recoveredState = SliderStateMachine.OnHardwareRecovered(
                             existingInfo.SliderState, curveEngagedAtPromote, inDisabledAtPromote);
+                        SetRecoveredSliderState(existingInfo, recoveredState);
                         existingInfo.LastDDCError = null;
                         acquired.Add(existingInfo);
                         WPFLog.Log($"MonitorService: promoted '{ddc.Name}' to DDC/CI-supported");
@@ -903,9 +970,11 @@ public sealed class MonitorService : IDisposable
                 IsPoweredOn = true,
                 LastDDCError = supported ? null : newRead.Error,
                 IconGlyph = "\uE7F4",
-                SliderState = initialSliderState,
             };
             info.InitializeBrightnessFromHardware(seededBrightness);
+            if (initialSliderState is SliderState.CurveActive or SliderState.CurveSleeping)
+                info.SeedCurveTargetBrightnessFromSlider();
+            info.SliderState = initialSliderState;
 
             if (supported)
             {
@@ -985,6 +1054,16 @@ public sealed class MonitorService : IDisposable
     {
         if (!IsBrightnessCurveEnabledForHardware()) return SliderState.Enabled;
         return IsBrightnessCurveDisabledPeriodActive() ? SliderState.CurveSleeping : SliderState.CurveActive;
+    }
+
+    private static void SetRecoveredSliderState(MonitorInfo monitor, SliderState recoveredState)
+    {
+        if (recoveredState is SliderState.CurveActive or SliderState.CurveSleeping
+            && monitor.SliderState is not (SliderState.CurveActive or SliderState.CurveSleeping)
+            && !monitor.HasCurveTargetBrightness)
+            monitor.SeedCurveTargetBrightnessFromSlider();
+
+        monitor.SliderState = recoveredState;
     }
 
     private bool ShouldSuppressSliderBrightnessWrite(MonitorInfo monitor)
@@ -1647,8 +1726,9 @@ public sealed class MonitorService : IDisposable
         // in CurveActive / CurveSleeping rather than Enabled (same H-03 fan-out rationale as PromoteRecovered).
         bool curveEngagedAtPromote = IsBrightnessCurveEnabledForHardware();
         bool inDisabledAtPromote = IsBrightnessCurveDisabledPeriodActive();
-        info.SliderState = SliderStateMachine.OnHardwareRecovered(
+        SliderState recoveredState = SliderStateMachine.OnHardwareRecovered(
             info.SliderState, curveEngagedAtPromote, inDisabledAtPromote);
+        SetRecoveredSliderState(info, recoveredState);
         info.IsReadDegraded = true;
         info.LastDDCError = readError;
         info.WasEverDDCCapable = true;
@@ -1707,7 +1787,7 @@ public sealed class MonitorService : IDisposable
         // VESA default to those would not turn them off (in fact 0xE1=0 turns them on).
         // Goes through the per-monitor mutex
         // so it can't interleave with a brightness write or recovery probe in flight at the same instant.
-        (byte powerCode, byte powerValue) = target.ResolvePowerOff(PowerOffLevel.Hard);
+        _ = TryResolvePowerOffOverride(target, PowerOffLevel.Hard, out byte powerCode, out byte powerValue);
         (bool ok, string? writeErr) = WithDDCLock(target, () =>
         {
             bool wrote = _display.TrySetVCPFeature(target, powerCode, powerValue, out string? e);
@@ -1735,7 +1815,7 @@ public sealed class MonitorService : IDisposable
 
         // Another thread (Refresh, an interleaved recovery tick) may have already promoted this monitor -
         // check before clobbering.
-        if (info.IsHardwareFunctional) return;
+        if (info is { IsHardwareFunctional: true, IsReadDegraded: false }) return;
 
         int pct = max == 0 ? 0 : (int)Math.Round(current * 100.0 / max);
         uint brightnessMax = NormalizeBrightnessMax(max);
@@ -1762,8 +1842,9 @@ public sealed class MonitorService : IDisposable
         // Same Failed -> right-curve-state transition the Refresh-promotion path uses, plumbed with the live
         // curve flags so the row lands in one PropertyChanged fan-out instead of two (see Refresh inline block
         // comment for the master-jitter rationale).
-        info.SliderState = SliderStateMachine.OnHardwareRecovered(
+        SliderState recoveredState = SliderStateMachine.OnHardwareRecovered(
             info.SliderState, curveEngagedAtPromote, inDisabledAtPromote);
+        SetRecoveredSliderState(info, recoveredState);
         info.IsReadDegraded = false;
         info.LastDDCError = null;
         info.WasEverDDCCapable = true;
@@ -1794,14 +1875,20 @@ public sealed class MonitorService : IDisposable
 
         if (!_entries.TryGetValue(monitor.ID, out MonitorEntry? entry)) return;
 
+        PowerOffLevel offLevel = _settings.PowerOffMode switch
+        {
+            PowerOffMode.Soft => PowerOffLevel.Soft,
+            PowerOffMode.Hard => PowerOffLevel.Hard,
+            _ => PowerOffLevel.Sleep,
+        };
         (byte code, byte value) = on
             ? entry.DDC.ResolvePowerOn()
-            : entry.DDC.ResolvePowerOff(_settings.PowerOffMode switch
-            {
-                PowerOffMode.Soft => PowerOffLevel.Soft,
-                PowerOffMode.Hard => PowerOffLevel.Hard,
-                _ => PowerOffLevel.Sleep,
-            });
+            : TryResolvePowerOffOverride(entry.DDC, offLevel, out byte overrideCode, out byte overrideValue)
+                ? (overrideCode, overrideValue)
+                : entry.DDC.ResolvePowerOff(offLevel);
+        WPFLog.Log(
+            $"MonitorService: SetPowerState '{entry.DDC.Name}' on={on}; code=0x{code:X2}; value=0x{value:X2}; "
+            + $"mode={_settings.PowerOffMode}");
         (bool ok, string? errorMessage) = await WithDDCLockAsync(entry.DDC, () =>
         {
             bool wrote = _display.TrySetVCPFeature(entry.DDC, code, value, out string? e);
@@ -2083,6 +2170,13 @@ public sealed class MonitorService : IDisposable
         int attempts = Math.Max(1, _settings.ValidationAttempts);
         int finalDwellMs = Math.Max(0, _validationDwellMs);
 
+        if (IsReadDegraded(entry.ID))
+        {
+            WPFLog.Log(
+                $"MonitorService: skipping read-back verification for read-degraded '{entry.DDC.Name}'");
+            return;
+        }
+
         for (int attempt = 0; attempt < attempts; attempt++)
         {
             if (_disposed || _draining || ctx.HasReplacement) return;
@@ -2145,9 +2239,29 @@ public sealed class MonitorService : IDisposable
             return;
         }
 
+        if (IsReadDegraded(entry.ID))
+        {
+            WPFLog.Log(
+                $"MonitorService: verify exhausted for read-degraded '{entry.DDC.Name}', "
+                + "keeping write-capable state");
+            return;
+        }
+
         WPFLog.Log(
             $"MonitorService: verification exhausted for '{entry.DDC.Name}' - target raw={expectedRaw}");
         DemoteOnDDCFailure(entry, "Brightness write was not acknowledged after retry - DDC/CI link is unresponsive.");
+    }
+
+    private bool IsReadDegraded(string monitorID)
+    {
+        if (string.IsNullOrEmpty(monitorID)) return false;
+        return _dispatcher.CheckAccess() ? Snapshot() : _dispatcher.Invoke(Snapshot);
+
+        bool Snapshot()
+        {
+            MonitorInfo? info = Monitors.FirstOrDefault(m => m.ID == monitorID);
+            return info?.IsReadDegraded == true;
+        }
     }
 
     /// <summary>
