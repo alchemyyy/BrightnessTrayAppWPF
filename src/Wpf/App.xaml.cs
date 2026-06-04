@@ -314,6 +314,10 @@ public partial class App
         try { StartWatcherMonitor(); }
         catch (Exception ex) { WPFLog.Log($"App.OnStartup: StartWatcherMonitor failed: {ex.Message}"); }
 
+        // TEMP-MEMTEST: drive flyout/settings open-close cycles to measure retained idle memory. Remove after diagnosis.
+        if (Environment.GetCommandLineArgs().Any(a => string.Equals(a, "--memtest", StringComparison.OrdinalIgnoreCase)))
+            Dispatcher.BeginInvoke(new Action(RunMemTest), DispatcherPriority.ApplicationIdle);
+
         // if (false)
         // {
         //     Dispatcher.BeginInvoke(() =>
@@ -322,6 +326,96 @@ public partial class App
         //         _settingsWindow?.SelectTab(DebugDefaultTab);
         //     }, DispatcherPriority.ApplicationIdle);
         // }
+    }
+
+    // TEMP-MEMTEST: reproduces "background memory after windows closed". Drives the real
+    // ShowBrightnessFlyout()/OpenSettings() paths, hides/closes each window like a real dismiss,
+    // forces a full GC, and logs working set + private bytes + managed heap per cycle so a
+    // managed object-retention leak (managed grows) is distinguishable from a native/bitmap leak
+    // (WS/Priv grow, managed flat). Enabled only via the --memtest CLI arg.
+    private async void RunMemTest()
+    {
+        string logPath = Environment.GetEnvironmentVariable("BTA_MEMLOG")
+            ?? System.IO.Path.Combine(System.IO.Path.GetTempPath(), "bta-memtest.log");
+
+        void Sample(string tag)
+        {
+            System.Diagnostics.Process p = System.Diagnostics.Process.GetCurrentProcess();
+            p.Refresh();
+            double managed = GC.GetTotalMemory(false) / 1048576.0;
+            string line = string.Format(
+                "{0,-20} WS={1,7:0.0}  Priv={2,7:0.0}  Managed={3,7:0.0}",
+                tag, p.WorkingSet64 / 1048576.0, p.PrivateMemorySize64 / 1048576.0, managed);
+            System.IO.File.AppendAllText(logPath, line + Environment.NewLine);
+        }
+
+        void FullGC()
+        {
+            GC.Collect(2, GCCollectionMode.Forced, blocking: true, compacting: true);
+            GC.WaitForPendingFinalizers();
+            GC.Collect(2, GCCollectionMode.Forced, blocking: true, compacting: true);
+        }
+
+        void CloseWindows<T>() where T : Window
+        {
+            System.Collections.Generic.List<Window> snapshot = new System.Collections.Generic.List<Window>();
+            foreach (Window w in Windows) if (w is T) snapshot.Add(w);
+            foreach (Window w in snapshot) w.Close();
+        }
+
+        void HideWindows<T>() where T : Window
+        {
+            System.Collections.Generic.List<Window> snapshot = new System.Collections.Generic.List<Window>();
+            foreach (Window w in Windows) if (w is T) snapshot.Add(w);
+            foreach (Window w in snapshot) w.Hide();
+        }
+
+        try
+        {
+            System.IO.File.AppendAllText(logPath, "==== memtest run ====" + Environment.NewLine);
+            await Task.Delay(6000);
+            FullGC(); await Task.Delay(500);
+            Sample("baseline");
+
+            for (int i = 1; i <= 6; i++)
+            {
+                ShowBrightnessFlyout();
+                await Task.Delay(1200);
+                HideWindows<BrightnessFlyout>();
+                await Task.Delay(700);
+                FullGC(); await Task.Delay(300);
+                Sample($"after flyout #{i}");
+            }
+
+            for (int i = 1; i <= 4; i++)
+            {
+                OpenSettings();
+                await Task.Delay(2000);
+                CloseWindows<SettingsWindow>();
+                await Task.Delay(1500);
+                FullGC(); await Task.Delay(400);
+                Sample($"after settings #{i}");
+            }
+
+            // Phase 3: hammer the display-topology / DDC re-acquire path (sleep/wake / hotplug burst).
+            // This is the most-changed always-running code in the large update; a per-event native
+            // handle/buffer leak or re-subscription would accumulate here like a long real session.
+            Sample("topo-start");
+            for (int i = 1; i <= 40; i++)
+            {
+                OnDisplayTopologyChanged();
+                await Task.Delay(700);
+                if (i % 5 == 0) { FullGC(); await Task.Delay(250); Sample($"after topo #{i}"); }
+            }
+
+            FullGC(); await Task.Delay(500);
+            Sample("final");
+            System.IO.File.AppendAllText(logPath, "==== memtest done ====" + Environment.NewLine);
+        }
+        catch (Exception ex)
+        {
+            System.IO.File.AppendAllText(logPath, "memtest ERROR: " + ex + Environment.NewLine);
+        }
     }
 
     /// <summary>
